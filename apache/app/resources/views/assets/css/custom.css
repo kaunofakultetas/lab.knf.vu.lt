@@ -1,0 +1,98 @@
+.logbox {
+	background-color: #78003F!important;
+}
+
+#loginlogo { 
+	padding:30px;
+	max-width:400px!important;
+}
+
+#login {
+	background-color: #78003F!important;
+	border:0!important;
+}
+ 
+.cyber-navbar {
+   background-color: #78003F!important;
+} 
+
+.logo {
+	max-width:100px!important;
+}
+
+.logo_icon {
+	max-width:40px!important;
+}
+
+.timeleft {
+	background-color:#292ba3!important;
+}
+
+.ddtr { display:none; }
+
+.xxsd {
+	display:block; padding-right:10px!important;
+}
+
+.timestamp {
+	display:block!important;
+}
+
+.first-place, .second-place, .third-place {
+	font-size:20px!important;
+	display:inline-block;
+	padding-bottom:5px;
+}
+
+.first-place {
+	color:#fcb103;
+}
+
+.second-place {
+	color:darkgray;
+	font-size:25px!important;
+}
+
+.third-place {
+	color:brown;
+}
+
+
+.first-place2, .second-place2, .third-place2 {  
+    
+}
+
+.first-place2 {
+	color:#fcb103;
+}
+
+.second-place2 {
+	color:darkgray; 
+}
+
+.third-place2 {
+	color:brown;
+}
+
+.ft-place {
+	font-size:20px!important;
+	display:inline-block;
+	padding-bottom:5px;
+	color:black!important;
+}
+.ft-place2 { 
+	color:black!important;
+}
+
+.clear {
+	clear:both;
+}
+
+.float-left {
+	float:left!important;
+}
+
+.float-right {
+	float:right!important;
+} 
+

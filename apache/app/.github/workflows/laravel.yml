@@ -1,0 +1,36 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - 20230727
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+        with:
+          node-version: '14'
+
+      - name: Set Up SSH Key
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+
+      - name: Deploy to Server
+        env:
+          SERVER_IP: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          APP_PATH: ${{ secrets.APP_PATH }}
+          SSH_PASS: ${{ secrets.SSH_PASS }}
+        run: |   
+          echo "$SSH_PASS" | ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -p $SSH_PORT $SSH_USER@$SERVER_IP "cd $APP_PATH && sudo -S git pull origin 20230727" 
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/id_rsa -p $SSH_PORT $SSH_USER@$SERVER_IP "npx webpack-cli --progress --config=node_modules/laravel-mix/setup/webpack.config.js"
+          

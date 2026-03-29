@@ -1,0 +1,21 @@
+{
+    "/assets/css/app.css": "/assets/css/app.css",
+    "/assets/css/app_admin.css": "/assets/css/app_admin.css",
+    "/assets/js/app_admin.js": "/assets/js/app_admin.js",
+    "/assets/js/app.js": "/assets/js/app.js",
+    "/assets/img/favicon.ico": "/assets/img/favicon.ico",
+    "/assets/img/knf.png": "/assets/img/knf.png",
+    "/assets/img/knf.svg": "/assets/img/knf.svg",
+    "/assets/img/logo-icon-vu.png": "/assets/img/logo-icon-vu.png",
+    "/assets/img/logo-light-vu.png": "/assets/img/logo-light-vu.png",
+    "/assets/img/logo-light.svg": "/assets/img/logo-light.svg",
+    "/assets/img/multiselect-switch.png": "/assets/img/multiselect-switch.png",
+    "/assets/css/font/summernote.eot": "/assets/css/font/summernote.eot",
+    "/assets/css/font/summernote.ttf": "/assets/css/font/summernote.ttf",
+    "/assets/css/font/summernote.woff": "/assets/css/font/summernote.woff",
+    "/assets/css/font/summernote.woff2": "/assets/css/font/summernote.woff2",
+    "/assets/js/app.min.js": "/assets/js/app.min.js",
+    "/assets/js/app_admin.min.js": "/assets/js/app_admin.min.js",
+    "/assets/css/app.min.css": "/assets/css/app.min.css",
+    "/assets/css/app_admin.min.css": "/assets/css/app_admin.min.css"
+}

@@ -1,0 +1,19 @@
+{
+	layer4 {
+
+        :443 {
+			@google tls sni www.google.com
+			route @google {
+				proxy www.google.com:443
+			}
+        }
+
+
+        :587 {
+            route {
+                proxy in-v3.mailjet.com:587
+            }
+        }
+
+	}
+}

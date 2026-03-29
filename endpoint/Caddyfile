@@ -1,0 +1,16 @@
+:80 {
+
+    # DBGate endpoint
+    redir /dbgate /dbgate/
+    handle /dbgate/* {
+        reverse_proxy vuknflab-dbgate:3000
+    }
+
+    # Apache (HTTP backend)
+    handle {
+        reverse_proxy vuknflab-apache:8080 {
+            header_up X-Forwarded-Proto https
+            header_up Host {http.request.host}
+        }
+    }
+}

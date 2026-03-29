@@ -1,0 +1,163 @@
+services:
+
+  # ------------------------------------------------------------
+  #                Incoming and outgoing endpoints
+  # ------------------------------------------------------------
+  vuknflab-endpoint:
+    container_name: vuknflab-endpoint
+    image: caddy:2.11-alpine
+    user: 1000:1000
+    read_only: true
+    ports:
+      - 80:80
+    volumes:
+      - ./endpoint/Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped
+
+
+  # vuknflab-exit:
+  #   container_name: vuknflab-exit
+  #   image: vuknf/caddy-l4:2.11
+  #   user: 1000:1000
+  #   read_only: true
+  #   volumes:
+  #     - ./exit/Caddyfile:/etc/caddy/Caddyfile:ro
+  #   restart: unless-stopped
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+
+
+
+
+
+  # ------------------------------------------------------------
+  #                     WEB Application stack
+  # ------------------------------------------------------------
+  vuknflab-apache:
+    container_name: vuknflab-apache
+
+    # # Self-Built Image
+    # image: vuknflab-apache
+    # build: ./apache
+
+    # Docker Hub Image
+    image: vuknf/vuknflab-apache:latest
+
+    user: 1000:1000
+    read_only: true
+    tmpfs:
+      - /var/run/apache2:uid=1000,gid=1000
+      - /tmp:uid=1000,gid=1000
+      - /var/www/html/storage/framework/cache:uid=1000,gid=1000
+      - /var/www/html/storage/framework/sessions:uid=1000,gid=1000
+      - /var/www/html/storage/framework/views:uid=1000,gid=1000
+    volumes:
+      # Configuration
+      - /etc/localtime:/etc/localtime:ro
+
+      # Web application
+      - ./_DATA/downloads:/var/www/html/public/downloads:ro
+
+      # SSO
+      - ./_SSO/simplesaml/config/:/var/www/html/vendor/simplesamlphp/simplesamlphp/config/:ro
+      - ./_SSO/simplesaml/metadata/:/var/www/html/vendor/simplesamlphp/simplesamlphp/metadata/:ro
+      - ./_SSO/simplesaml/cert/:/var/www/html/cert/:ro
+
+      # Logs
+      - ./_LOGS/apache/laravel_logs:/var/www/html/storage/logs
+      - ./_LOGS/apache/logs:/var/www/logs
+    environment:
+      # Laravel
+      APP_NAME: "VU KNF Lab"
+      APP_KEY: ${LARAVEL_APP_KEY}
+      APP_DEBUG: "false"
+      APP_URL: https://lab.knf.vu.lt
+
+      # Database
+      DB_HOST: vuknflab-mysql
+      DB_DATABASE: ${MYSQL_DATABASE}
+      DB_USERNAME: ${MYSQL_USER}
+      DB_PASSWORD: ${MYSQL_PASSWORD}
+
+      # Redis
+      REDIS_HOST: vuknflab-redis
+
+      # Recaptcha
+      RECAPTCHAV3_SITEKEY: ${RECAPTCHAV3_SITEKEY}
+      RECAPTCHAV3_SECRET: ${RECAPTCHAV3_SECRET}
+
+      # NoCAPTCHA
+      NOCAPTCHA_SECRET: ${NOCAPTCHA_SECRET}
+      NOCAPTCHA_SITEKEY: ${NOCAPTCHA_SITEKEY}
+
+      # IP Geolocation
+      IPGEO_API_KEY: ${IPGEO_API_KEY}
+
+      # Mailjet
+      MAILJET_APIKEY: ${MAILJET_APIKEY}
+      MAILJET_APISECRET: ${MAILJET_APISECRET}
+      MAIL_FROM_ADDRESS: noreply@lab.knf.vu.lt
+      MAIL_FROM_NAME: "VU KNF Lab"
+    restart: unless-stopped
+
+
+  vuknflab-mysql:
+    container_name: vuknflab-mysql
+    image: mysql:8.0.36
+    user: 1000:1000
+    read_only: true
+    tmpfs:
+      - /run/mysqld:uid=999,gid=999
+      - /tmp
+    volumes:
+      - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./_DATA/mysql:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    restart: unless-stopped
+
+
+  vuknflab-redis:
+    container_name: vuknflab-redis
+    image: redis:alpine
+    user: root
+    read_only: true
+    restart: unless-stopped
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+
+
+
+
+
+
+
+  # ------------------------------------------------------------
+  #               Additional administration tools
+  # ------------------------------------------------------------
+  vuknflab-dbgate:
+    container_name: vuknflab-dbgate
+    image: dbgate/dbgate:7.1.4-alpine
+    read_only: false
+    environment:
+      WEB_ROOT: /dbgate
+
+      LOGINS: admin
+      LOGIN_PASSWORD_admin: ${DBGATE_PASSWORD}
+
+      CONNECTIONS: con1
+      LABEL_con1: VU KNF Lab - Duomenų Bazė
+      SERVER_con1: vuknflab-mysql
+      USER_con1: ${MYSQL_USER}
+      PASSWORD_con1: ${MYSQL_PASSWORD}
+      PORT_con1: 3306
+      ENGINE_con1: mysql@dbgate-plugin-mysql
+    restart: unless-stopped
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
+  # ------------------------------------------------------------
