@@ -95,7 +95,8 @@ CREATE TABLE `cyber_challenges_submitted` (
   `points_given` int NOT NULL,
   `created` datetime NOT NULL,
   `ip` varchar(255) NOT NULL,
-  PRIMARY KEY (`id`)
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_challenge_unique` (`user_id`, `challenge_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `cyber_challenges_history` (
