@@ -47,8 +47,15 @@ class PartnersController extends BaseController
      */
     public function store(Request $request)
     {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'picture' => 'required|file|image|mimes:jpg,jpeg,png,gif,webp|max:2048',
+        ]);
+
         $file = $request->file('picture');
-        $file_name = md5(sha1(md5(time()))) . '.' . $file->getClientOriginalExtension();
+        $ext = $file->guessExtension() ?: 'png';
+        if ($ext === 'jpeg') $ext = 'jpg';
+        $file_name = md5(sha1(md5(time()))) . '.' . $ext;
         
         $file->move(storage_path('app/public'), $file_name);
         
@@ -86,9 +93,17 @@ class PartnersController extends BaseController
      * @return \Illuminate\Http\Response
      */
     public function update(Request $request)
-    { 
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'picture' => 'required|file|image|mimes:jpg,jpeg,png,gif,webp|max:2048',
+            'uid' => 'required|integer',
+        ]);
+
         $file = $request->file('picture');
-        $file_name = md5(sha1(md5(time()))) . '.' . $file->getClientOriginalExtension();
+        $ext = $file->guessExtension() ?: 'png';
+        if ($ext === 'jpeg') $ext = 'jpg';
+        $file_name = md5(sha1(md5(time()))) . '.' . $ext;
         
         $file->move(storage_path('app/public'), $file_name);
         
@@ -104,7 +119,6 @@ class PartnersController extends BaseController
         session()->flash('success', 'Updated!');
         
         return back();
-        
     }
 
     /**
