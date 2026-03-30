@@ -269,6 +269,11 @@ class ChallengesController extends BaseController
     
     public function file_store(Request $request){
         
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'file_url' => 'required|url:http,https|max:2048',
+        ]);
+
         ChallengesFiles::create([
             'challenge_id'=>$request->get('uid'),
             'name'=>$request->get('name'),
@@ -282,6 +287,11 @@ class ChallengesController extends BaseController
     
     public function file_update(Request $request){
         
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'file_url' => 'required|url:http,https|max:2048',
+        ]);
+
         ChallengesFiles::where(['id'=>$request->get('uid')])->update([
             'name'=>$request->get('name'),
             'file_url'=>$request->get('file_url')]);
