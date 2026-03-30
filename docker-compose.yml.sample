@@ -57,7 +57,8 @@ services:
       - /etc/localtime:/etc/localtime:ro
 
       # Web application
-      - ./_DATA/downloads:/var/www/html/public/downloads:ro
+      - ./_DATA/apache/downloads:/var/www/html/public/downloads:ro
+      - ./_DATA/apache/public:/var/www/html/storage/app/public:ro
 
       # SSO
       - ./_SSO/simplesaml/config/:/var/www/html/vendor/simplesamlphp/simplesamlphp/config/:ro

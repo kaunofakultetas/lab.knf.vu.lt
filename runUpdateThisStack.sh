@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Data directories
-mkdir -p _DATA/downloads
+mkdir -p _DATA/apache/downloads
+mkdir -p _DATA/apache/public
 mkdir -p _DATA/mysql
 
 # Logs directories
