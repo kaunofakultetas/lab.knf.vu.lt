@@ -200,19 +200,19 @@ Route::prefix('control-panel')->group(function(){
    
    Route::get('/challenges/delete/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'destroy'])->middleware(['auth.admin:admins','r_exists:challenge_owned']);
    
-   Route::post('/challenges/update', [App\Http\Controllers\Admins\ChallengesController::class, 'update'])->middleware(['auth.admin:admins']);
+   Route::post('/challenges/update', [App\Http\Controllers\Admins\ChallengesController::class, 'update'])->middleware(['auth.admin:admins','r_exists:challenge_owned_uid']);
    
-   Route::post('/challenges/categories/store', [App\Http\Controllers\Admins\ChallengesController::class, 'categories_store'])->middleware(['auth.admin:admins'])->name('admin.challenges.categories.store');
+   Route::post('/challenges/categories/store', [App\Http\Controllers\Admins\ChallengesController::class, 'categories_store'])->middleware(['auth.admin:admins','r_exists:challenge_owned_uid'])->name('admin.challenges.categories.store');
 
    Route::get('/challenges/files/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'file_list'])->middleware(['auth.admin:admins','r_exists:challenge_owned']);
    
-   Route::post('/challenges_file/store', [App\Http\Controllers\Admins\ChallengesController::class, 'file_store'])->middleware(['auth.admin:admins']);
+   Route::post('/challenges_file/store', [App\Http\Controllers\Admins\ChallengesController::class, 'file_store'])->middleware(['auth.admin:admins','r_exists:challenge_owned_uid']);
    
    Route::post('/challenges_file/update', [App\Http\Controllers\Admins\ChallengesController::class, 'file_update'])->middleware(['auth.admin:admins','r_exists:challenge_owned_uid']);
    
    Route::get('/challenges/files/delete/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'file_destroy'])->middleware(['auth.admin:admins','r_exists:challenge_owned']);
    
-   Route::get('/challenges/status/{status}/{challenge_id}', [App\Http\Controllers\Admins\ChallengesController::class, 'status'])->middleware(['auth.admin:admins'])->name('admin.challenges.status');
+   Route::get('/challenges/status/{status}/{challenge_id}', [App\Http\Controllers\Admins\ChallengesController::class, 'status'])->middleware(['auth.admin:admins', 'perms'])->name('admin.challenges.status');
    
 }); 
 
