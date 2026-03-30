@@ -144,7 +144,8 @@ services:
   vuknflab-dbgate:
     container_name: vuknflab-dbgate
     image: dbgate/dbgate:7.1.4-alpine
-    read_only: false
+    user: root
+    read_only: true
     environment:
       WEB_ROOT: /dbgate
 
