@@ -2058,7 +2058,7 @@ document.addEventListener('DOMContentLoaded', function () {
       // inject local SVG sprite (using only 'icons/orion-svg-sprite.svg' path)
       // while using file:// protocol
       // pls don't forget to change to your domain :)
-      injectSvgSprite('https://bootstraptemple.com/files/icons/orion-svg-sprite.svg'); 
+      injectSvgSprite('/static/icons/orion-svg-sprite.svg'); 
 
       
       

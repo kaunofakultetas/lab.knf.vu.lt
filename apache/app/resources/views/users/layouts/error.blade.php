@@ -9,12 +9,13 @@
     <meta name="robots" content="noindex,nofollow">  
     
     <link href="/assets/img/favicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon" />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins:300,400,700"> 
+    <link rel="stylesheet" href="/static/fonts/poppins.css"> 
+    <link rel="stylesheet" href="/static/fontawesome/6/css/all.min.css">
     <link rel="stylesheet" href="/assets/css/app.min.css">
   
     <!-- Tweaks for older IEs--><!--[if lt IE 9]>
-        <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
-        <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script><![endif]-->
+        <script src="/static/js/html5shiv-3.7.3.min.js"></script>
+        <script src="/static/js/respond-1.4.2.min.js"></script><![endif]-->
   </head>
   <body>
   
@@ -23,8 +24,7 @@
      
      
     <script src="/assets/js/app.min.js"></script> 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.min.js" integrity="sha384-cVKIPhGWiC2Al4u+LWgxfKTRIcfu0JTxR+EQDz/bgldoEyl4H0zUF0QKbrJ0EcQF" crossorigin="anonymous"></script>
-    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.1/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+    <script src="/static/js/bootstrap-5.0.2.min.js"></script>
    
    
    @if(session('success'))

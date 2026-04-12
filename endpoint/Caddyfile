@@ -3,26 +3,27 @@
         # ------------------------------------------------------------
         #                         Security headers
         # ------------------------------------------------------------
-        # SECURITY: Block other applications from accessing the application at the Caddy level
-        @foreign expression `{http.request.header.Origin} != "" && !{http.request.header.Origin}.endsWith("://" + {http.request.host})`
+        # SECURITY: Block other applications from accessing the application at the Caddy level 
+        # ALLOW: https://sso.vu.lt (SSO)
+        @foreign expression `{http.request.header.Origin} != "" && !{http.request.header.Origin}.endsWith("://" + {http.request.host}) && {http.request.header.Origin} != "https://sso.vu.lt"`
         respond @foreign 403
 
-        # # SECURITY: Restricts the scripts in the browser from communicating with external sources
-        # header Content-Security-Policy "
-        #     default-src         'self';
-        #     script-src          'self' 'unsafe-inline' 'unsafe-eval';
-        #     style-src           'self' 'unsafe-inline';
-        #     img-src             'self' data:;
-        #     font-src            'self' data:;
-        #     connect-src         'self';
-        #     frame-ancestors     'self';
-        #     frame-src           'self';
-        #     child-src           'self';
-        #     form-action         'self';
-        #     base-uri            'self';
-        #     worker-src          'self';
-        #     upgrade-insecure-requests;
-        # "
+        # SECURITY: Restricts the scripts in the browser from communicating with external sources
+        header Content-Security-Policy "
+            default-src         'self';
+            script-src          'self' 'unsafe-inline' 'unsafe-eval';
+            style-src           'self' 'unsafe-inline';
+            img-src             'self' data:;
+            font-src            'self' data:;
+            connect-src         'self';
+            frame-ancestors     'self';
+            frame-src           'self' https://assets.pinterest.com/ext/embed.html;
+            child-src           'self';
+            form-action         'self';
+            base-uri            'self';
+            worker-src          'self';
+            upgrade-insecure-requests;
+        "
 
         # SECURITY: Force HTTPS for this domain
         header Strict-Transport-Security "max-age=31536000"
@@ -43,6 +44,12 @@
             }
         }
 
+
+        # Self-hosted static CDN replacement
+        handle /static/* {
+            uri strip_prefix /static
+            reverse_proxy vuknflab-static:80
+        }
 
         # Apache (HTTP backend)
         handle {
