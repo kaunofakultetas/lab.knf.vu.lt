@@ -9,6 +9,7 @@
         respond @foreign 403
 
         # SECURITY: Restricts the scripts in the browser from communicating with external sources
+        # ALLOW: https://assets.pinterest.com/ext/embed.html (Pinterest in iframe)
         header Content-Security-Policy "
             default-src         'self';
             script-src          'self' 'unsafe-inline' 'unsafe-eval';
