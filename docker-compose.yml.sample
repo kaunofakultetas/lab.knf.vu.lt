@@ -103,6 +103,17 @@ services:
     restart: unless-stopped
 
 
+  vuknflab-static:
+    container_name: vuknflab-static
+    image: caddy:2.11-alpine
+    user: 1000:1000
+    read_only: true
+    volumes:
+      - ./static/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./static/files:/srv:ro
+    restart: unless-stopped
+
+
   vuknflab-mysql:
     container_name: vuknflab-mysql
     image: mysql:8.0.36
