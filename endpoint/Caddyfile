@@ -12,13 +12,13 @@
         # ALLOW: https://assets.pinterest.com/ext/embed.html (Pinterest in iframe)
         header Content-Security-Policy "
             default-src         'self';
-            script-src          'self' 'unsafe-inline' 'unsafe-eval';
+            script-src          'self' 'unsafe-inline' 'unsafe-eval' https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/releases/;
             style-src           'self' 'unsafe-inline';
-            img-src             'self' data:;
+            img-src             'self' data: https://www.google.com/;
             font-src            'self' data:;
-            connect-src         'self';
+            connect-src         'self' https://www.google.com/recaptcha/;
             frame-ancestors     'self';
-            frame-src           'self' https://assets.pinterest.com/ext/embed.html;
+            frame-src           'self' https://assets.pinterest.com/ext/embed.html https://www.google.com/recaptcha/;
             child-src           'self';
             form-action         'self';
             base-uri            'self';
