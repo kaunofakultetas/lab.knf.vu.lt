@@ -154,7 +154,7 @@ services:
   # ------------------------------------------------------------
   vuknflab-dbgate:
     container_name: vuknflab-dbgate
-    image: dbgate/dbgate:7.1.4-alpine
+    image: dbgate/dbgate:7.2.1-alpine
     user: root
     read_only: true
     environment:
