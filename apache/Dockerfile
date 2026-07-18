@@ -9,7 +9,7 @@ RUN apt-get -y update \
     && docker-php-ext-install intl
 
 # Apache
-RUN a2enmod rewrite
+RUN a2enmod rewrite remoteip
 
 # Install composer and its dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
