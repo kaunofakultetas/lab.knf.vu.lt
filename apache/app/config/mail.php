@@ -1,38 +1,40 @@
 <?php
 
+// -----------------------------------------------------------
+//  [*] config/mail.php — how the app's mails go out
+//
+//  Every mail — the verification and reminder links, new
+//  passwords, the mail templates — goes by SMTP to Mailjet's
+//  relay, in-v3.mailjet.com on port 587 with TLS, as the
+//  image's .env sets. The relay's login is no secret of
+//  that file: it points MAIL_USERNAME and MAIL_PASSWORD at
+//  MAILJET_APIKEY and MAILJET_APISECRET, which
+//  docker-compose.yml passes in from the stack's own .env.
+//  The stack's exit is the one way out to the relay
+//  (exit/Caddyfile, and the host pin of docker-compose.yml).
+//  The sender is noreply@lab.knf.vu.lt, "VU KNF Lab"
+//  (docker-compose.yml). The tests swap the mailer for the
+//  in-memory one (phpunit.xml).
+//
+//  Used by:
+//    - Laravel's mailer — every Mail::to(...)->send() of the
+//      app, the mailables of app/Mail
+// -----------------------------------------------------------
+
+
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Default Mailer
-    |--------------------------------------------------------------------------
-    |
-    | This option controls the default mailer that is used to send any email
-    | messages sent by your application. Alternative mailers may be setup
-    | and used as needed; however, this mailer will be used by default.
-    |
-    */
-
+    // The mailer, from MAIL_MAILER — not set, so smtp; the
+    // .env's MAIL_DRIVER is the old name, which Laravel 10 no
+    // longer reads
     'default' => env('MAIL_MAILER', 'smtp'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Mailer Configurations
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure all of the mailers used by your application plus
-    | their respective settings. Several examples have been configured for
-    | you and you are free to add your own as your application requires.
-    |
-    | Laravel supports a variety of mail "transport" drivers to be used while
-    | sending an e-mail. You will specify which one you are using for your
-    | mailers below. You are free to add additional mailers as required.
-    |
-    | Supported: "smtp", "sendmail", "mailgun", "ses",
-    |            "postmark", "log", "array", "failover"
-    |
-    */
-
+    // The mailers. smtp is the one in use: its host, port
+    // and encryption from the .env, its login the Mailjet API
+    // key and secret the .env refers to. mailjet names no
+    // transport, so no mailer can use it — EmailsController
+    // builds its own Mailjet API client for the list sync.
+    // The rest are Laravel's stock mailers, unused
     'mailers' => [
         'smtp' => [
             'transport' => 'smtp',
@@ -44,29 +46,29 @@ return [
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
         ],
-        
-        'mailjet' => [ 
-            'key' => env('MAILJET_APIKEY'), 
-            'secret' => env('MAILJET_APISECRET'), 
-            'transactional' => [ 
-                'call' => true, 
-                'options' => [ 
-                    'url' => 'api.mailjet.com', 
-                    'version' => 'v3.1', 
-                    'call' => true, 
-                    'secured' => true 
-                ] 
-            ], 
-            'common' => [ 
-                'call' => true, 
-                'options' => [ 
-                    'url' => 'api.mailjet.com', 
-                    'version' => 'v3', 
-                    'call' => true, 
-                    'secured' => true 
-                ] 
-            ] 
-        ], 
+
+        'mailjet' => [
+            'key' => env('MAILJET_APIKEY'),
+            'secret' => env('MAILJET_APISECRET'),
+            'transactional' => [
+                'call' => true,
+                'options' => [
+                    'url' => 'api.mailjet.com',
+                    'version' => 'v3.1',
+                    'call' => true,
+                    'secured' => true
+                ]
+            ],
+            'common' => [
+                'call' => true,
+                'options' => [
+                    'url' => 'api.mailjet.com',
+                    'version' => 'v3',
+                    'call' => true,
+                    'secured' => true
+                ]
+            ]
+        ],
         'ses' => [
             'transport' => 'ses',
         ],
@@ -102,33 +104,15 @@ return [
         ],
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Global "From" Address
-    |--------------------------------------------------------------------------
-    |
-    | You may wish for all e-mails sent by your application to be sent from
-    | the same address. Here, you may specify a name and address that is
-    | used globally for all e-mails that are sent by your application.
-    |
-    */
-
+    // The sender of every mail, from MAIL_FROM_ADDRESS and
+    // MAIL_FROM_NAME
     'from' => [
         'address' => env('MAIL_FROM_ADDRESS', 'noreply@lab.knf.vu.lt'),
         'name' => env('MAIL_FROM_NAME', 'VU KNF Lab'),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Markdown Mail Settings
-    |--------------------------------------------------------------------------
-    |
-    | If you are using Markdown based email rendering, you may configure your
-    | theme and component paths here, allowing you to customize the design
-    | of the emails. Or, you may simply stick with the Laravel defaults!
-    |
-    */
-
+    // The theme and templates of Laravel's Markdown mails,
+    // which the app does not send
     'markdown' => [
         'theme' => 'default',
 
@@ -136,5 +120,4 @@ return [
             resource_path('views/vendor/mail'),
         ],
     ],
-
 ];

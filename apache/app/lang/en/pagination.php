@@ -1,19 +1,21 @@
 <?php
 
+// -----------------------------------------------------------
+//  [*] lang/en/pagination.php — the paginator's links
+//
+//  The previous and next labels of Laravel's page links,
+//  as HTML entities.
+//
+//  Used by:
+//    - Laravel's page links, under the control panel's
+//      lists (admins/users, pages and challenges-users
+//      views)
+// -----------------------------------------------------------
+
+
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Pagination Language Lines
-    |--------------------------------------------------------------------------
-    |
-    | The following language lines are used by the paginator library to build
-    | the simple pagination links. You are free to change them to anything
-    | you want to customize your views to better match your application.
-    |
-    */
-
+    // The two labels
     'previous' => '&laquo; Previous',
     'next' => 'Next &raquo;',
-
 ];

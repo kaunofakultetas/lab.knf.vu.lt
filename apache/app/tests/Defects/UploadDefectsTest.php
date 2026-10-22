@@ -130,8 +130,8 @@ final class UploadDefectsTest extends TestCase
     // same second are stored under the same name, and the
     // second overwrites the first partner's picture. The name
     // is a hash of the current second only
-    // (PartnersController::store and update, line 58 and
-    // 106). Fix: hash something unique, such as a random
+    // (PartnersController::store and update, line 174 and
+    // 248). Fix: hash something unique, such as a random
     // string. Three pairs are tried, so a pair that happens
     // to straddle a second cannot hide the defect.
     //

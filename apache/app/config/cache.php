@@ -1,36 +1,31 @@
 <?php
 
+// -----------------------------------------------------------
+//  [*] config/cache.php — Laravel's cache
+//
+//  Laravel's stock cache settings. The app's own cached
+//  data — the leaderboard, the solve feed, the votes — goes
+//  to Redis directly, past this cache; through it go only
+//  Laravel's own users: the sessions, whose redis driver is
+//  built on this store, and the api group's rate limiter.
+//  The image's .env picks the Redis store; the tests use
+//  the in-memory one (phpunit.xml).
+//
+//  Used by:
+//    - Laravel's cache and rate limiter
+// -----------------------------------------------------------
+
+
 use Illuminate\Support\Str;
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Default Cache Store
-    |--------------------------------------------------------------------------
-    |
-    | This option controls the default cache connection that gets used while
-    | using this caching library. This connection is used when another is
-    | not explicitly specified when executing a given caching function.
-    |
-    */
-
+    // The store, from CACHE_DRIVER — redis, by the .env
     'default' => env('CACHE_DRIVER', 'file'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Cache Stores
-    |--------------------------------------------------------------------------
-    |
-    | Here you may define all of the cache "stores" for your application as
-    | well as their drivers. You may even define multiple stores for the
-    | same cache driver to group types of items stored in your caches.
-    |
-    | Supported drivers: "apc", "array", "database", "file",
-    |         "memcached", "redis", "dynamodb", "octane", "null"
-    |
-    */
-
+    // The stores Laravel offers; redis keeps its keys in
+    // Redis database 1, the cache connection of
+    // config/database.php
     'stores' => [
 
         'apc' => [
@@ -62,7 +57,7 @@ return [
                 env('MEMCACHED_PASSWORD'),
             ],
             'options' => [
-                // Memcached::OPT_CONNECT_TIMEOUT => 2000,
+                // Empty: the extension's defaults
             ],
             'servers' => [
                 [
@@ -91,20 +86,8 @@ return [
         'octane' => [
             'driver' => 'octane',
         ],
-
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Cache Key Prefix
-    |--------------------------------------------------------------------------
-    |
-    | When utilizing the APC, database, memcached, Redis, or DynamoDB cache
-    | stores there might be other applications using the same cache. For
-    | that reason, you may prefix every cache key to avoid collisions.
-    |
-    */
-
+    // The prefix of every cache key, made from APP_NAME
     'prefix' => env('CACHE_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_cache_'),
-
 ];

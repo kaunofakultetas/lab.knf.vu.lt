@@ -97,7 +97,7 @@ final class ChallengeDefectsTest extends TestCase
     //
     // Known bug LAB-07 (medium): saving a challenge hands it
     // to whoever saved it. Admins\ChallengesController::update
-    // (line 147) writes the editing admin's id into
+    // (line 341) writes the editing admin's id into
     // created_by, so when a main admin corrects a lab admin's
     // challenge, the lab admin can no longer open, change or
     // delete it. Fix: leave created_by out of the update.
@@ -143,7 +143,7 @@ final class ChallengeDefectsTest extends TestCase
     // of clearing the categories — the old ones are deleted
     // first, then count() fails on the missing item list
     // (Admins\ChallengesController::categories_store, line
-    // 192). Fix: treat a missing list as an empty one.
+    // 453). Fix: treat a missing list as an empty one.
     //
     // Used by:
     //   - PHPUnit — the Defects suite (runTests.sh)
@@ -239,7 +239,7 @@ final class ChallengeDefectsTest extends TestCase
     // Known bug LAB-10 (low): a challenge form missing a
     // required field ends in a server error instead of coming
     // back with errors. Admins\ChallengesController::store
-    // (line 94) builds a validator and never asks it, so the
+    // (line 245) builds a validator and never asks it, so the
     // insert fails on the NOT NULL columns. Fix: validate the
     // request.
     //

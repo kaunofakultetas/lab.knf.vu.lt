@@ -1,33 +1,25 @@
 <?php
 
+// -----------------------------------------------------------
+//  [*] config/queue.php — Laravel's job queue
+//
+//  Laravel's stock queue settings, with the sync connection
+//  the image's .env picks: a queued job runs at once, in the
+//  request. The app queues nothing anyway — every mail is
+//  sent during its request — and runs no queue worker.
+//
+//  Used by:
+//    - Laravel's queue, which nothing in the app uses
+// -----------------------------------------------------------
+
+
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Default Queue Connection Name
-    |--------------------------------------------------------------------------
-    |
-    | Laravel's queue API supports an assortment of back-ends via a single
-    | API, giving you convenient access to each back-end using the same
-    | syntax for every one. Here you may define a default connection.
-    |
-    */
-
+    // The connection, from QUEUE_CONNECTION — sync, by the
+    // .env and in the tests
     'default' => env('QUEUE_CONNECTION', 'sync'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Queue Connections
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure the connection information for each server that
-    | is used by your application. A default configuration has been added
-    | for each back-end shipped with Laravel. You are free to add more.
-    |
-    | Drivers: "sync", "database", "beanstalkd", "sqs", "redis", "null"
-    |
-    */
-
+    // The connections Laravel offers
     'connections' => [
 
         'sync' => [
@@ -70,24 +62,13 @@ return [
             'block_for' => null,
             'after_commit' => false,
         ],
-
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Failed Queue Jobs
-    |--------------------------------------------------------------------------
-    |
-    | These options configure the behavior of failed queue job logging so you
-    | can control which database and table are used to store the jobs that
-    | have failed. You may change them to any database / table you wish.
-    |
-    */
-
+    // Where failed jobs would be kept: the failed_jobs table
+    // of the schema
     'failed' => [
         'driver' => env('QUEUE_FAILED_DRIVER', 'database-uuids'),
         'database' => env('DB_CONNECTION', 'mysql'),
         'table' => 'failed_jobs',
     ],
-
 ];

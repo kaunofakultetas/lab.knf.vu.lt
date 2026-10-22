@@ -126,7 +126,7 @@ final class SsoDefectsTest extends TestCase
     // under a username equal to some VU user id — s1234567,
     // say — locks that VU user out of the lab: the first SSO
     // login tries to create an account with the VU user id as
-    // username (UserAuthController::check_member, line 82),
+    // username (UserAuthController::check_member, line 265),
     // hits the unique username index and ends in a server
     // error, every time. Fix: give the SSO account a username
     // that is still free.

@@ -67,7 +67,7 @@ final class RaceDefectsTest extends TestCase
     // Known bug LAB-22 (low): two answers a player gets right
     // at the same moment — two tabs, two challenges — can
     // lose one challenge's points. submit_answer
-    // (Users\ChallengesController, line 155) reads the
+    // (Users\ChallengesController, line 340) reads the
     // player's points, adds in PHP and writes the sum back, so
     // a solve booked between the read and the write is
     // overwritten. The other tab's 25-point solve is booked
@@ -112,7 +112,7 @@ final class RaceDefectsTest extends TestCase
     //
     // Known bug LAB-23 (low): two votes on a challenge at the
     // same moment can count as one. vote()
-    // (Users\ChallengesController, line 206) reads the counter
+    // (Users\ChallengesController, line 410) reads the counter
     // from Redis, adds one in PHP and writes it back; another
     // player's vote lands between the read and the write.
     // Fix: Redis INCR.

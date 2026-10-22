@@ -1,35 +1,38 @@
 #!/usr/bin/env php
 <?php
 
+// -----------------------------------------------------------
+//  [*] artisan — the console entry point
+//
+//  Laravel's command line: builds the app
+//  (bootstrap/app.php) and runs the command named in its
+//  arguments through the console kernel; the command's
+//  status becomes the exit code. The image build runs it
+//  once — composer install calls package:discover, which
+//  writes the package manifest to bootstrap/cache — and
+//  nothing runs it after that: no migration, no seeder, no
+//  schedule. It lies outside public/, so Apache never
+//  serves it. Laravel 10's stock file, unchanged.
+//
+//  Used by:
+//    - composer install in apache/Dockerfile — the
+//      post-autoload-dump script of composer.json runs
+//      package:discover
+// -----------------------------------------------------------
+
+
+// The moment the command started; nothing in the app reads
+// it
 define('LARAVEL_START', microtime(true));
 
-/*
-|--------------------------------------------------------------------------
-| Register The Auto Loader
-|--------------------------------------------------------------------------
-|
-| Composer provides a convenient, automatically generated class loader
-| for our application. We just need to utilize it! We'll require it
-| into the script here so that we do not have to worry about the
-| loading of any of our classes manually. It's great to relax.
-|
-*/
-
+// Composer's class loader, then the application as
+// bootstrap/app.php builds it
 require __DIR__.'/vendor/autoload.php';
 
 $app = require_once __DIR__.'/bootstrap/app.php';
 
-/*
-|--------------------------------------------------------------------------
-| Run The Artisan Application
-|--------------------------------------------------------------------------
-|
-| When we run the console application, the current CLI command will be
-| executed in this console and the response sent back to a terminal
-| or another output device for the developers. Here goes nothing!
-|
-*/
-
+// The console kernel runs the command the arguments name
+// and returns its exit status
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 
 $status = $kernel->handle(
@@ -37,17 +40,8 @@ $status = $kernel->handle(
     new Symfony\Component\Console\Output\ConsoleOutput
 );
 
-/*
-|--------------------------------------------------------------------------
-| Shutdown The Application
-|--------------------------------------------------------------------------
-|
-| Once Artisan has finished running, we will fire off the shutdown events
-| so that any final work may be done by the application before we shut
-| down the process. This is the last thing to happen to the request.
-|
-*/
-
+// The kernel's closing work, then the status as the
+// process's exit code
 $kernel->terminate($input, $status);
 
 exit($status);

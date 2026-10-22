@@ -1,36 +1,29 @@
 <?php
 
+// -----------------------------------------------------------
+//  [*] config/view.php — the Blade views
+//
+//  Where the views are and where Blade keeps them compiled.
+//  In production the compiled folder is a tmpfs
+//  (docker-compose.yml), so each container compiles its
+//  views afresh.
+//
+//  Used by:
+//    - Laravel's view factory — every view() of the app
+// -----------------------------------------------------------
+
+
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | View Storage Paths
-    |--------------------------------------------------------------------------
-    |
-    | Most templating systems load templates from disk. Here you may specify
-    | an array of paths that should be checked for your views. Of course
-    | the usual Laravel view path has already been registered for you.
-    |
-    */
-
+    // The folders the views are looked up in
     'paths' => [
         resource_path('views'),
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Compiled View Path
-    |--------------------------------------------------------------------------
-    |
-    | This option determines where all the compiled Blade templates will be
-    | stored for your application. Typically, this is within the storage
-    | directory. However, as usual, you are free to change this value.
-    |
-    */
-
+    // The folder of the compiled views, from
+    // VIEW_COMPILED_PATH or else storage/framework/views
     'compiled' => env(
         'VIEW_COMPILED_PATH',
         realpath(storage_path('framework/views'))
     ),
-
 ];

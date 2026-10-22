@@ -65,7 +65,7 @@ final class AdminDefectsTest extends TestCase
     //
     // Known bug LAB-11 (medium): deleting a player account
     // ends in a server error. Admins\UsersController::destroy
-    // (line 166) deletes the account, then clears its group
+    // (line 377) deletes the account, then clears its group
     // memberships by a user_id column cyber_users_groups does
     // not have — memberships are stored by vu_id. The account
     // is gone, its memberships stay, and the admin sees an

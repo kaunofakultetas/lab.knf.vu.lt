@@ -1,55 +1,40 @@
 <?php
 
+// -----------------------------------------------------------
+//  [*] config/logging.php — where Laravel's log goes
+//
+//  Laravel's stock log settings, as the image's .env picks
+//  them: the stack channel, which writes everything from
+//  debug up to storage/logs/laravel.log — the
+//  _LOGS/apache/laravel_logs folder of the host in
+//  production. The app itself logs nothing; the log holds
+//  the exceptions the handler reports. PHP's deprecation
+//  notices go to the null channel, so nowhere.
+//
+//  Used by:
+//    - Laravel's logger — the exception handler's reports
+// -----------------------------------------------------------
+
+
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Default Log Channel
-    |--------------------------------------------------------------------------
-    |
-    | This option defines the default log channel that gets used when writing
-    | messages to the logs. The name specified in this option should match
-    | one of the channels defined in the "channels" configuration array.
-    |
-    */
-
+    // The channel, from LOG_CHANNEL — stack, by the .env
     'default' => env('LOG_CHANNEL', 'stack'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Deprecations Log Channel
-    |--------------------------------------------------------------------------
-    |
-    | This option controls the log channel that should be used to log warnings
-    | regarding deprecated PHP and library features. This allows you to get
-    | your application ready for upcoming major versions of dependencies.
-    |
-    */
-
+    // Where deprecation notices go, from
+    // LOG_DEPRECATIONS_CHANNEL — null, by the .env
     'deprecations' => [
         'channel' => env('LOG_DEPRECATIONS_CHANNEL', 'null'),
         'trace' => false,
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Log Channels
-    |--------------------------------------------------------------------------
-    |
-    | Here you may configure the log channels for your application. Out of
-    | the box, Laravel uses the Monolog PHP logging library. This gives
-    | you a variety of powerful log handlers / formatters to utilize.
-    |
-    | Available Drivers: "single", "daily", "slack", "syslog",
-    |                    "errorlog", "monolog",
-    |                    "custom", "stack"
-    |
-    */
-
+    // The channels Laravel offers; stack sends everything to
+    // single, at the level LOG_LEVEL sets — debug, by the
+    // .env
     'channels' => [
         'stack' => [
             'driver' => 'stack',
@@ -118,5 +103,4 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
     ],
-
 ];

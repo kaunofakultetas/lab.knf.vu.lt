@@ -1,51 +1,50 @@
 <?php
 
+// -----------------------------------------------------------
+//  [*] public/index.php — the front controller
+//
+//  Every web request that names no file under public/ ends
+//  here: Apache's DocumentRoot is public/, and
+//  public/.htaccess rewrites every other path to this
+//  script. It shows the maintenance page while artisan down
+//  is in force, loads Composer's autoloader, builds the app
+//  (bootstrap/app.php), hands the request to the HTTP
+//  kernel — the global middleware, the routes, the
+//  controllers — sends the response back, then lets the
+//  kernel finish its after-response work. Laravel 10's
+//  stock file, unchanged.
+//
+//  Used by:
+//    - Apache — every request public/.htaccess rewrites
+//    - ApacheTest (tests/Http) — the front page and the
+//      pretty addresses, over HTTP
+// -----------------------------------------------------------
+
+
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Http\Request;
 
+// The moment the request started; nothing in the app reads
+// it
 define('LARAVEL_START', microtime(true));
 
-/*
-|--------------------------------------------------------------------------
-| Check If The Application Is Under Maintenance
-|--------------------------------------------------------------------------
-|
-| If the application is in maintenance / demo mode via the "down" command
-| we will load this file so that any pre-rendered content can be shown
-| instead of starting the framework, which could cause an exception.
-|
-*/
-
+// The page artisan down leaves behind, shown instead of the
+// app while maintenance mode is on
 if (file_exists($maintenance = __DIR__.'/../storage/framework/maintenance.php')) {
     require $maintenance;
 }
 
-/*
-|--------------------------------------------------------------------------
-| Register The Auto Loader
-|--------------------------------------------------------------------------
-|
-| Composer provides a convenient, automatically generated class loader for
-| this application. We just need to utilize it! We'll simply require it
-| into the script here so we don't need to manually load our classes.
-|
-*/
-
+// Composer's class loader, for the app's classes and the
+// vendor packages
 require __DIR__.'/../vendor/autoload.php';
 
-/*
-|--------------------------------------------------------------------------
-| Run The Application
-|--------------------------------------------------------------------------
-|
-| Once we have the application, we can handle the incoming request using
-| the application's HTTP kernel. Then, we will send the response back
-| to this client's browser, allowing them to enjoy our application.
-|
-*/
-
+// The application, as bootstrap/app.php builds it
 $app = require_once __DIR__.'/../bootstrap/app.php';
 
+// The request, captured from PHP's globals, goes through
+// the HTTP kernel; the response goes back to the browser,
+// and terminate runs what waits for the response to be
+// sent
 $kernel = $app->make(Kernel::class);
 
 $response = $kernel->handle(

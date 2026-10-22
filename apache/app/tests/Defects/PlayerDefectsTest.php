@@ -131,7 +131,7 @@ final class PlayerDefectsTest extends TestCase
     // without the " - " separator — the settings form accepts
     // any text — breaks every player page, the login page
     // included. The sidebar middleware of Users\BaseController
-    // (line 64) splits the range and reads the second half
+    // (line 146) splits the range and reads the second half
     // unchecked; the error page cannot render either, as its
     // layout reads the variable that middleware never got to
     // share, so the exception escapes Laravel's handler and
@@ -169,7 +169,7 @@ final class PlayerDefectsTest extends TestCase
     // Known bug LAB-04 (low): a numeric flag is also accepted
     // in any spelling of the same number — "1e2", "100.0" or
     // "0100" for 100 — because ChallengesController::
-    // submit_answer (line 145) compares with ==, which PHP
+    // submit_answer (line 331) compares with ==, which PHP
     // turns into a numeric comparison for numeric strings.
     // Fix: compare with ===.
     //

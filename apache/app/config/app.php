@@ -1,164 +1,95 @@
 <?php
 
+// -----------------------------------------------------------
+//  [*] config/app.php — the application's core settings
+//
+//  The app's name, environment and debug switch, the URL,
+//  the time zone and languages, the encryption key, and the
+//  service providers and facade aliases every request and
+//  artisan run boots with. Laravel 10's stock file, changed
+//  in three defaults — the name, the URL and the Vilnius
+//  time zone — and in the packages it adds: laravel/ui,
+//  laravelcollective/html (the Form and Html facades the
+//  views build their forms with), the reCAPTCHA v3 rule
+//  (josiasmontag/laravel-recaptchav3) and
+//  barryvdh/laravel-dompdf (PDF), which nothing uses.
+//
+//  In production the values come from the environment the
+//  vuknflab-apache service gets in docker-compose.yml —
+//  APP_NAME, APP_KEY, APP_DEBUG ("false") and APP_URL — and
+//  from the .env file the image carries, which sets APP_ENV
+//  to production. The app also reads APP_URL itself with
+//  env(), in 49 controllers, mails and views, to build its
+//  links.
+//
+//  Used by:
+//    - Laravel at boot, on every request and artisan run —
+//      the providers, aliases, time zone, languages, key and
+//      debug switch
+// -----------------------------------------------------------
+
+
 use Illuminate\Support\Facades\Facade;
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Application Name
-    |--------------------------------------------------------------------------
-    |
-    | This value is the name of your application. This value is used when the
-    | framework needs to place the application's name in a notification or
-    | any other location as required by the application or its packages.
-    |
-    */
-
+    // The app's name, from APP_NAME; the same variable names
+    // the session cookie and the cache and Redis key prefixes
+    // (config/session.php, cache.php, database.php)
     'name' => env('APP_NAME', 'VU KNF Lab'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Application Environment
-    |--------------------------------------------------------------------------
-    |
-    | This value determines the "environment" your application is currently
-    | running in. This may determine how you prefer to configure various
-    | services the application utilizes. Set this in your ".env" file.
-    |
-    */
-
+    // The environment's name, from APP_ENV — production, by
+    // the image's .env; the tests switch it to testing
+    // (phpunit.xml)
     'env' => env('APP_ENV', 'production'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Application Debug Mode
-    |--------------------------------------------------------------------------
-    |
-    | When your application is in debug mode, detailed error messages with
-    | stack traces will be shown on every error that occurs within your
-    | application. If disabled, a simple generic error page is shown.
-    |
-    */
-
+    // Debug mode shows the code and stack trace of every
+    // error; off unless APP_DEBUG turns it on, and
+    // docker-compose.yml sets "false"
     'debug' => (bool) env('APP_DEBUG', false),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Application URL
-    |--------------------------------------------------------------------------
-    |
-    | This URL is used by the console to properly generate URLs when using
-    | the Artisan command line tool. You should set this to the root of
-    | your application so that it is used when running Artisan tasks.
-    |
-    */
-
+    // The site's root URL, from APP_URL; artisan builds its
+    // links from it, a web request from the request itself
     'url' => env('APP_URL', 'https://lab.knf.vu.lt'),
 
+    // The host asset() links point at, from ASSET_URL — not
+    // set, so the request's own
     'asset_url' => env('ASSET_URL'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Application Timezone
-    |--------------------------------------------------------------------------
-    |
-    | Here you may specify the default timezone for your application, which
-    | will be used by the PHP date and date-time functions. We have gone
-    | ahead and set this to a sensible default for you out of the box.
-    |
-    */
-
+    // PHP's time zone, set by Laravel at boot: every date the
+    // app writes — solves, logins, feedback — is Vilnius time
     'timezone' => 'Europe/Vilnius',
 
-    /*
-    |--------------------------------------------------------------------------
-    | Application Locale Configuration
-    |--------------------------------------------------------------------------
-    |
-    | The application locale determines the default locale that will be used
-    | by the translation service provider. You are free to set this value
-    | to any of the locales which will be supported by the application.
-    |
-    */
-
+    // The one language of the site, and the language a
+    // missing translation falls back to
     'locale' => 'en',
-
-    /*
-    |--------------------------------------------------------------------------
-    | Application Fallback Locale
-    |--------------------------------------------------------------------------
-    |
-    | The fallback locale determines the locale to use when the current one
-    | is not available. You may change the value to correspond to any of
-    | the language folders that are provided through your application.
-    |
-    */
 
     'fallback_locale' => 'en',
 
-    /*
-    |--------------------------------------------------------------------------
-    | Faker Locale
-    |--------------------------------------------------------------------------
-    |
-    | This locale will be used by the Faker PHP library when generating fake
-    | data for your database seeds. For example, this will be used to get
-    | localized telephone numbers, street address information and more.
-    |
-    */
-
+    // The language Faker's sample data is made in, for the
+    // database factories
     'faker_locale' => 'en_US',
 
-    /*
-    |--------------------------------------------------------------------------
-    | Encryption Key
-    |--------------------------------------------------------------------------
-    |
-    | This key is used by the Illuminate encrypter service and should be set
-    | to a random, 32 character string, otherwise these encrypted strings
-    | will not be safe. Please do this before deploying an application!
-    |
-    */
-
+    // The key of Laravel's encrypter — cookies included — from
+    // APP_KEY, and its cipher
     'key' => env('APP_KEY'),
 
     'cipher' => 'AES-256-CBC',
 
-    /*
-    |--------------------------------------------------------------------------
-    | Maintenance Mode Driver
-    |--------------------------------------------------------------------------
-    |
-    | These configuration options determine the driver used to determine and
-    | manage Laravel's "maintenance mode" status. The "cache" driver will
-    | allow maintenance mode to be controlled across multiple machines.
-    |
-    | Supported drivers: "file", "cache"
-    |
-    */
-
+    // Maintenance mode (artisan down) is kept in a file of
+    // the container, so it ends with the container
     'maintenance' => [
         'driver' => 'file',
-        // 'store'  => 'redis',
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Autoloaded Service Providers
-    |--------------------------------------------------------------------------
-    |
-    | The service providers listed here will be automatically loaded on the
-    | request to your application. Feel free to add your own services to
-    | this array to grant expanded functionality to your applications.
-    |
-    */
-
+    // The service providers booted on every request: Laravel's
+    // own, then the app's and the packages'.
+    // BroadcastServiceProvider is switched off, as the app
+    // broadcasts nothing; laravel/ui's provider is booted but
+    // no route uses it
     'providers' => [
 
-        /*
-         * Laravel Framework Service Providers...
-         */
+        // Laravel's own
         Illuminate\Auth\AuthServiceProvider::class,
         Illuminate\Broadcasting\BroadcastServiceProvider::class,
         Illuminate\Bus\BusServiceProvider::class,
@@ -182,39 +113,22 @@ return [
         Illuminate\Validation\ValidationServiceProvider::class,
         Illuminate\View\ViewServiceProvider::class,
 
-        /*
-         * Package Service Providers...
-         */
-
-        /*
-         * Application Service Providers...
-         */
+        // The app's, and the packages'
         App\Providers\AppServiceProvider::class,
         App\Providers\AuthServiceProvider::class,
-        // App\Providers\BroadcastServiceProvider::class,
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
         Laravel\Ui\UiServiceProvider::class,
-        Collective\Html\HtmlServiceProvider::class,   
+        Collective\Html\HtmlServiceProvider::class,
         Lunaweb\RecaptchaV3\Providers\RecaptchaV3ServiceProvider::class,
         Barryvdh\DomPDF\ServiceProvider::class,
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Class Aliases
-    |--------------------------------------------------------------------------
-    |
-    | This array of class aliases will be registered when this application
-    | is started. However, feel free to register as many as you wish as
-    | the aliases are "lazy" loaded so they don't hinder performance.
-    |
-    */
-
+    // The facade aliases: Laravel's, plus the forms' Form and
+    // Html and the unused PDF
     'aliases' => Facade::defaultAliases()->merge([
         'Form' => Collective\Html\FormFacade::class,
-        'Html' => Collective\Html\HtmlFacade::class, 
+        'Html' => Collective\Html\HtmlFacade::class,
         'PDF' => Barryvdh\DomPDF\Facade::class,
     ])->toArray(),
-
 ];

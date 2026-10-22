@@ -1,38 +1,39 @@
 <?php
 
+// -----------------------------------------------------------
+//  [*] config/database.php — MySQL and Redis
+//
+//  The connections the app talks to: the stack's MySQL
+//  (vuknflab-mysql), whose schema mysql/init.sql creates —
+//  the app has no migrations — and the stack's Redis
+//  (vuknflab-redis), which holds the sessions, Laravel's
+//  cache and the app's own keys: the cached leaderboard,
+//  the solve feed and the votes. The host, database, user
+//  and password come from docker-compose.yml; the port and
+//  the Redis client (predis) from the image's .env.
+//
+//  Used by:
+//    - Laravel's database and Redis layers — every model,
+//      DB:: and Redis:: call of the app
+// -----------------------------------------------------------
+
+
 use Illuminate\Support\Str;
 
 return [
 
-    /*
-    |--------------------------------------------------------------------------
-    | Default Database Connection Name
-    |--------------------------------------------------------------------------
-    |
-    | Here you may specify which of the database connections below you wish
-    | to use as your default connection for all database work. Of course
-    | you may use many connections at once using the Database library.
-    |
-    */
-
+    // The connection the models use, from DB_CONNECTION —
+    // mysql, by the .env
     'default' => env('DB_CONNECTION', 'mysql'),
 
-    /*
-    |--------------------------------------------------------------------------
-    | Database Connections
-    |--------------------------------------------------------------------------
-    |
-    | Here are each of the database connections setup for your application.
-    | Of course, examples of configuring each database platform that is
-    | supported by Laravel is shown below to make development simple.
-    |
-    |
-    | All database work in Laravel is done through the PHP PDO facilities
-    | so make sure you have the driver for your particular database of
-    | choice installed on your machine before you begin development.
-    |
-    */
-
+    // The connections Laravel offers; only mysql is used.
+    // strict is off, so Laravel sets no sql_mode but
+    // NO_ENGINE_SUBSTITUTION: the leaderboards' grouped
+    // queries may read columns they do not aggregate (as in
+    // LAB-01), and an insert that leaves out a NOT NULL column
+    // gets its type's empty value — the empty password of the
+    // SSO accounts — while an explicit NULL still fails
+    // (LAB-10, LAB-14)
     'connections' => [
 
         'sqlite' => [
@@ -89,36 +90,17 @@ return [
             'charset' => 'utf8',
             'prefix' => '',
             'prefix_indexes' => true,
-            // 'encrypt' => env('DB_ENCRYPT', 'yes'),
-            // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
-
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Migration Repository Table
-    |--------------------------------------------------------------------------
-    |
-    | This table keeps track of all the migrations that have already run for
-    | your application. Using this information, we can determine which of
-    | the migrations on disk haven't actually been run in the database.
-    |
-    */
-
+    // The migrations table Laravel would keep — the schema
+    // has it, but no migration exists
     'migrations' => 'migrations',
 
-    /*
-    |--------------------------------------------------------------------------
-    | Redis Databases
-    |--------------------------------------------------------------------------
-    |
-    | Redis is an open source, fast, and advanced key-value store that also
-    | provides a richer body of commands than a typical key-value system
-    | such as APC or Memcached. Laravel makes it easy to dig right in.
-    |
-    */
-
+    // Redis: the client the .env picks (predis), and the
+    // prefix of every key, made from APP_NAME. default, Redis
+    // database 0, holds the sessions and the app's keys;
+    // cache, database 1, Laravel's cache
     'redis' => [
 
         'client' => env('REDIS_CLIENT', 'phpredis'),
@@ -145,7 +127,5 @@ return [
             'port' => env('REDIS_PORT', '6379'),
             'database' => env('REDIS_CACHE_DB', '1'),
         ],
-
     ],
-
 ];
