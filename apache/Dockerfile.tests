@@ -1,0 +1,54 @@
+# -----------------------------------------------------------
+#  [*] Apache — regression test image
+#
+#  The production image, built first by runTests.sh under
+#  the vuknflab-apache-check tag, plus what the suite needs
+#  around the app — nothing inside the app changes. MySQL
+#  8.0.36 and Redis 7.2.3, the servers of the production
+#  stack, come from the Debian builds of the official
+#  images; both are built on Debian bookworm like the PHP
+#  image, so the libraries they link are bookworm's own —
+#  only libaio and libnuma have to be installed, and MySQL's
+#  private protobuf library comes along with it. PHPUnit
+#  and Mockery go to /opt/test-tools, never into the app's
+#  vendor, which stays exactly what ships. The build
+#  context is app/: the suite is kept out of the production
+#  image by .dockerignore and copied in here.
+#
+#  Used by:
+#    - runTests.sh (this folder)
+# -----------------------------------------------------------
+ARG BASE=vuknflab-apache-check
+FROM ${BASE}
+
+USER root
+
+
+# MySQL 8.0.36 server and client, with the libraries they link
+COPY --from=mysql:8.0.36-debian /usr/sbin/mysqld /usr/sbin/mysqld
+COPY --from=mysql:8.0.36-debian /usr/bin/mysql /usr/bin/mysqladmin /usr/bin/
+COPY --from=mysql:8.0.36-debian /usr/lib/mysql/private /usr/lib/mysql/private
+COPY --from=mysql:8.0.36-debian /usr/share/mysql-8.0 /usr/share/mysql-8.0
+RUN apt-get update &&                                                          \
+    apt-get install -y --no-install-recommends libaio1 libnuma1 &&             \
+    rm -rf /var/lib/apt/lists/*
+
+
+# Redis 7.2.3 server
+COPY --from=redis:7.2.3-bookworm /usr/local/bin/redis-server /usr/local/bin/redis-server
+
+
+# PHPUnit and Mockery, at the versions tests/container/composer.lock pins
+COPY tests/container/composer.json tests/container/composer.lock /opt/test-tools/
+RUN COMPOSER_HOME=/tmp/composer composer install --working-dir=/opt/test-tools \
+        --no-interaction --no-progress --prefer-dist &&                         \
+    rm -rf /tmp/composer
+
+
+# The suite
+COPY --chown=1000:1000 phpunit.xml /var/www/html/phpunit.xml
+COPY --chown=1000:1000 tests /var/www/html/tests
+
+
+USER 1000:1000
+ENTRYPOINT ["sh", "/var/www/html/tests/container/run.sh"]

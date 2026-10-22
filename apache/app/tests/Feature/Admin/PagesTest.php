@@ -1,0 +1,247 @@
+<?php
+
+// -----------------------------------------------------------
+//  [*] PagesTest — writing the content pages
+//
+//  Main admins write the pages /page/{alias} shows to
+//  everyone: a name, free HTML and an alias that must be
+//  unique, prefilled with a fresh UUID on a new page. A page
+//  that would be incomplete or reuse an alias is not stored;
+//  the form comes back without saying why. Reading the pages
+//  is Play\PageTest's.
+//
+//  Used by:
+//    - PHPUnit — the Feature suite (runTests.sh)
+// -----------------------------------------------------------
+
+
+namespace Tests\Feature\Admin;
+
+use App\Models\Pages;
+use PHPUnit\Framework\Attributes\DataProvider;
+use Tests\TestCase;
+
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// PagesTest
+// -----------------------------------------------------------
+//
+// A main admin is signed in unless a test says otherwise.
+//
+// Used by:
+//   - PHPUnit — the Feature suite (runTests.sh)
+// -----------------------------------------------------------
+
+final class PagesTest extends TestCase
+{
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_list_shows_every_page
+    // -----------------------------------------------------------
+    //
+    // Each page is listed by name with edit and delete
+    // actions; an empty list says so.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_list_shows_every_page(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true));
+        $this->get('/control-panel/pages')->assertOk()->assertSee('No Pages');
+
+        $page = Pages::create(['name' => 'Rules of Play', 'content' => '<p>Rules</p>', 'alias' => 'rules']);
+
+        $this->get('/control-panel/pages')
+            ->assertSee('<td>Rules of Play</td>', false)
+            ->assertSee("href=\"/control-panel/pages/edit/{$page->id}\"", false)
+            ->assertSee("/control-panel/pages/delete/{$page->id}", false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_create_form_offers_a_fresh_alias
+    // -----------------------------------------------------------
+    //
+    // The new-page form posts to the store route with a UUID
+    // already in the alias field.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_create_form_offers_a_fresh_alias(): void
+    {
+        $html = $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/pages/create')->getContent();
+
+        $this->assertStringContainsString('action="https://lab.knf.vu.lt/control-panel/pages/store"', $html);
+        $this->assertMatchesRegularExpression('/name="alias" type="text" value="[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"/', $html);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_page_is_stored_and_published_under_its_alias
+    // -----------------------------------------------------------
+    //
+    // The stored page keeps its HTML and is readable at
+    // /page/{alias} at once.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_page_is_stored_and_published_under_its_alias(): void
+    {
+        $response = $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/pages/store', [
+            'name'    => 'Prize Terms',
+            'content' => '<p>Prizes go to the <em>top three</em>.</p>',
+            'alias'   => 'prizes',
+        ]);
+
+        $response->assertRedirect('/control-panel/pages');
+        $response->assertSessionHas('success', 'Created!');
+        $this->get('/page/prizes')->assertSee('<em>top three</em>', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_incomplete_or_clashing_pages_are_not_stored
+    // -----------------------------------------------------------
+    //
+    // A page without a name, content or alias — or with an
+    // alias another page has — is not stored, and the form
+    // comes back.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    #[DataProvider('refusedPages')]
+    public function test_incomplete_or_clashing_pages_are_not_stored(array $fields): void
+    {
+        Pages::create(['name' => 'Existing', 'content' => '<p>x</p>', 'alias' => 'taken']);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/pages/create')
+            ->post('/control-panel/pages/store', array_merge(['name' => 'New', 'content' => '<p>y</p>', 'alias' => 'fresh'], $fields));
+
+        $response->assertRedirect('/control-panel/pages/create');
+        $response->assertSessionMissing('success');
+        $this->assertSame(1, Pages::count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // refusedPages
+    // -----------------------------------------------------------
+    //
+    // The fields that replace a valid page's.
+    //
+    // Used by:
+    //   - test_incomplete_or_clashing_pages_are_not_stored
+    //     (above)
+    // -----------------------------------------------------------
+
+    public static function refusedPages(): array
+    {
+        return [
+            'no name'     => [['name' => '']],
+            'no content'  => [['content' => '']],
+            'no alias'    => [['alias' => '']],
+            'taken alias' => [['alias' => 'taken']],
+        ];
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_page_is_edited_and_deleted
+    // -----------------------------------------------------------
+    //
+    // The edit form carries the page and its id; the update
+    // rewrites it; deleting removes it from /page too.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_page_is_edited_and_deleted(): void
+    {
+        $page = Pages::create(['name' => 'Rules of Play', 'content' => '<p>Old rules</p>', 'alias' => 'rules']);
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->get("/control-panel/pages/edit/{$page->id}")
+            ->assertSee('action="https://lab.knf.vu.lt/control-panel/pages/update"', false)
+            ->assertSee('value="Rules of Play"', false)
+            ->assertSee("name=\"uid\" type=\"hidden\" value=\"{$page->id}\"", false);
+        $this->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'Rules', 'content' => '<p>New rules</p>', 'alias' => 'rules'])
+            ->assertRedirect('/control-panel/pages');
+        $this->get('/page/rules')->assertSee('<p>New rules</p>', false);
+
+        $this->from('/control-panel/pages')->get("/control-panel/pages/delete/{$page->id}")->assertSessionHas('success', 'Deleted!');
+        $this->get('/page/rules')->assertRedirect('/');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_lab_admins_cannot_touch_pages
+    // -----------------------------------------------------------
+    //
+    // Every page route sends a lab admin back with the
+    // permissions error, and the page stays.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_lab_admins_cannot_touch_pages(): void
+    {
+        $page = Pages::create(['name' => 'Rules of Play', 'content' => '<p>Rules</p>', 'alias' => 'rules']);
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
+
+        $this->get("/control-panel/pages/edit/{$page->id}")->assertRedirect('/control-panel/dashboard');
+        $this->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'X', 'content' => 'X', 'alias' => 'rules'])
+            ->assertRedirect('/control-panel/dashboard');
+        $this->post('/control-panel/pages/store', ['name' => 'X', 'content' => 'X', 'alias' => 'x'])->assertRedirect('/control-panel/dashboard');
+        $this->get("/control-panel/pages/delete/{$page->id}")->assertRedirect('/control-panel/dashboard');
+
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->assertSame('Rules of Play', $page->refresh()->name);
+        $this->assertSame(1, Pages::count());
+    }
+}

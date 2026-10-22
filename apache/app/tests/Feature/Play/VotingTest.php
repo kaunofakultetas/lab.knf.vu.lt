@@ -1,0 +1,295 @@
+<?php
+
+// -----------------------------------------------------------
+//  [*] VotingTest — thumbs up and down on a challenge
+//
+//  The vote route counts one thumb per player and challenge
+//  in Redis — ThumbsUp_ and ThumbsDown_ keys per challenge,
+//  and a Vote_ key per challenge and player that locks the
+//  player's buttons. It is a plain GET the page's script
+//  calls, answers with an empty body, and asks for a session
+//  but not for a solve: the buttons sit on the challenge page
+//  too, before the answer.
+//
+//  Used by:
+//    - PHPUnit — the Feature suite (runTests.sh)
+// -----------------------------------------------------------
+
+
+namespace Tests\Feature\Play;
+
+use App\Models\Challenges;
+use App\Models\User;
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Testing\TestResponse;
+use Tests\TestCase;
+
+
+
+
+
+
+
+
+// -----------------------------------------------------------
+// VotingTest
+// -----------------------------------------------------------
+//
+//   vote    — casts a vote as the given player
+//   counter — reads a vote counter of a challenge
+//
+// Used by:
+//   - PHPUnit — the Feature suite (runTests.sh)
+// -----------------------------------------------------------
+
+final class VotingTest extends TestCase
+{
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // vote
+    // -----------------------------------------------------------
+    //
+    // Signs the player in and calls the vote route with the
+    // vote type given — up, down or anything else.
+    //
+    // Used by:
+    //   - the tests below
+    // -----------------------------------------------------------
+
+    private function vote(User $player, string $type, Challenges $challenge): TestResponse
+    {
+        return $this->signIn($player)->get("/user/challenge/vote/{$type}/{$challenge->public_id}");
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // counter
+    // -----------------------------------------------------------
+    //
+    // The ThumbsUp or ThumbsDown count of the challenge, 0
+    // when Redis has none yet.
+    //
+    // Used by:
+    //   - the tests below
+    // -----------------------------------------------------------
+
+    private function counter(string $thumbs, Challenges $challenge): int
+    {
+        return (int) Redis::get("{$thumbs}_{$challenge->public_id}");
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vote_is_counted_and_answered_with_an_empty_page
+    // -----------------------------------------------------------
+    //
+    // An up vote raises the challenge's up count, marks the
+    // player as having voted, and the route answers 200 with
+    // nothing in the body.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vote_is_counted_and_answered_with_an_empty_page(): void
+    {
+        $player = $this->makePlayer();
+        $challenge = $this->makeChallenge();
+
+        $response = $this->vote($player, 'up', $challenge);
+
+        $response->assertOk();
+        $this->assertSame('', $response->getContent());
+        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
+        $this->assertSame(0, $this->counter('ThumbsDown', $challenge));
+        $this->assertSame('1', Redis::get("Vote_{$challenge->public_id}_{$player->id}"));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_down_vote_is_counted_on_its_own_counter
+    // -----------------------------------------------------------
+    //
+    // A down vote raises the down count only.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_down_vote_is_counted_on_its_own_counter(): void
+    {
+        $challenge = $this->makeChallenge();
+
+        $this->vote($this->makePlayer(), 'down', $challenge);
+
+        $this->assertSame(0, $this->counter('ThumbsUp', $challenge));
+        $this->assertSame(1, $this->counter('ThumbsDown', $challenge));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_each_player_votes_once_per_challenge
+    // -----------------------------------------------------------
+    //
+    // A player's second vote on a challenge — the same thumb
+    // or the other one — changes nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_each_player_votes_once_per_challenge(): void
+    {
+        $player = $this->makePlayer();
+        $challenge = $this->makeChallenge();
+
+        $this->vote($player, 'up', $challenge);
+        $this->vote($player, 'up', $challenge);
+        $this->vote($player, 'down', $challenge);
+
+        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
+        $this->assertSame(0, $this->counter('ThumbsDown', $challenge));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_votes_of_different_players_add_up
+    // -----------------------------------------------------------
+    //
+    // Every player has a vote of their own.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_votes_of_different_players_add_up(): void
+    {
+        $challenge = $this->makeChallenge();
+
+        $this->vote($this->makePlayer(), 'up', $challenge);
+        $this->vote($this->makePlayer(), 'up', $challenge);
+        $this->vote($this->makePlayer(), 'down', $challenge);
+
+        $this->assertSame(2, $this->counter('ThumbsUp', $challenge));
+        $this->assertSame(1, $this->counter('ThumbsDown', $challenge));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_votes_are_kept_apart_per_challenge
+    // -----------------------------------------------------------
+    //
+    // Voting on one challenge leaves the player free to vote
+    // on another, and leaves the other's counts alone.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_votes_are_kept_apart_per_challenge(): void
+    {
+        $player = $this->makePlayer();
+        $first = $this->makeChallenge();
+        $second = $this->makeChallenge();
+
+        $this->vote($player, 'up', $first);
+        $this->vote($player, 'down', $second);
+
+        $this->assertSame(1, $this->counter('ThumbsUp', $first));
+        $this->assertSame(0, $this->counter('ThumbsDown', $first));
+        $this->assertSame(1, $this->counter('ThumbsDown', $second));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_unknown_vote_type_uses_up_the_vote
+    // -----------------------------------------------------------
+    //
+    // A type other than up or down counts nothing, yet marks
+    // the player as having voted, so a later real vote is
+    // ignored.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_unknown_vote_type_uses_up_the_vote(): void
+    {
+        $player = $this->makePlayer();
+        $challenge = $this->makeChallenge();
+
+        $this->vote($player, 'sideways', $challenge)->assertOk();
+        $this->vote($player, 'up', $challenge);
+
+        $this->assertSame(0, $this->counter('ThumbsUp', $challenge));
+        $this->assertSame(0, $this->counter('ThumbsDown', $challenge));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_challenge_page_shows_the_counts_and_locks_after_a_vote
+    // -----------------------------------------------------------
+    //
+    // The challenge page — open before the answer — shows the
+    // current counts, with live buttons for a player who has
+    // not voted and disabled ones for a player who has.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_challenge_page_shows_the_counts_and_locks_after_a_vote(): void
+    {
+        $challenge = $this->makeChallenge();
+        $voter = $this->makePlayer();
+        $this->vote($this->makePlayer(), 'up', $challenge);
+        $this->vote($this->makePlayer(), 'up', $challenge);
+
+        $this->signIn($voter)->get("/user/challenge/{$challenge->public_id}")
+            ->assertSee('<span id="thumbs-up-count">2</span>', false)
+            ->assertSee('<span id="thumbs-down-count">0</span>', false)
+            ->assertSee('<button  class="badge border-0 text-white bg-primary thumbs-up"', false);
+
+        $this->vote($voter, 'down', $challenge);
+        $this->get("/user/challenge/{$challenge->public_id}")
+            ->assertSee('<span id="thumbs-down-count">1</span>', false)
+            ->assertSee('<button disabled class="badge border-0 text-white bg-primary thumbs-up"', false);
+    }
+}
