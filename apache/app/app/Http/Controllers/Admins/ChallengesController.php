@@ -130,12 +130,14 @@ class ChallengesController extends BaseController
     // first, 50 to a page of the list, narrowed to those whose
     // name, description or content contains the q query
     // parameter when one is given; the page links keep q. The
-    // view gets the admin's id too, to offer changes on the
-    // admin's own challenges only.
+    // view gets the admin's id too, for the edit and delete
+    // links, which a lab admin gets on its own challenges
+    // only.
     //
     // Used by:
-    //   - the Challenges link of the panel's sidebar, and the
-    //     redirects of store and update
+    //   - the All challenges link of the panel's sidebar
+    //   - the list's own search form and its Clear all link
+    //   - the redirects of store and update
     // -----------------------------------------------------------
 
     public function index(Request $request)

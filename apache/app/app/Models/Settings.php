@@ -4,8 +4,10 @@
 //  [*] Settings — the lab's settings rows
 //
 //  The cyber_settings rows, read by id: 2, reg_open, holds
-//  '1' while registration is open and '0' when it is
-//  closed, and the control panel's settings page writes it.
+//  '1' while registration is open, and the control panel's
+//  settings page writes it — '1' from its ticked box, and
+//  nothing (NULL) from an unticked one, which closes the
+//  registration as any value but '1' does.
 //  Row 1, event_date, is the time range of the one-off
 //  event the lab grew out of; nothing reads it since the
 //  event window was retired. val2 is never used.
@@ -37,8 +39,8 @@ use Illuminate\Database\Eloquent\Model;
 // Columns: name, val1 and val2.
 //
 // Used by:
-//   - Admins\SettingsController, Users\BaseController,
-//     RegStatus and Users\RegisterController
+//   - Admins\SettingsController, RegStatus and
+//     Users\RegisterController
 // -----------------------------------------------------------
 
 class Settings extends Model

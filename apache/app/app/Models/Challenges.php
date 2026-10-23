@@ -9,14 +9,16 @@
 //  may change it); its name, the short descr of the
 //  dashboard and the HTML content of its page; the answer,
 //  the flag a player must send; the points it gives; and
-//  hidden, 1 for a challenge kept off the main dashboard —
-//  its page still opens from a group or by its address.
+//  hidden, 1 for a challenge kept off the main dashboard,
+//  whose page then opens only for the members of a group
+//  it is placed in.
 //
 //  Used by:
 //    - Admins\ChallengesController — the challenge pages of
 //      the control panel
 //    - Users\ChallengesController — the dashboard, the
-//      challenge page and the answers
+//      challenge page, the answers and the votes; the last
+//      three check a hidden one with hiddenFromPlayer
 //    - R_Exists and ValidateChallengeSolved
 //      (Http/Middleware/)
 //    - Admins\UsersGroupsController, Users\GroupsController

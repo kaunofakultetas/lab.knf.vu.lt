@@ -15,8 +15,8 @@
 //
 //  Used by:
 //    - app/Http/Kernel.php — the saml_auth alias
-//    - routes/web.php — GET /cp, the "VU login" button of
-//      the player login page
+//    - routes/web.php — GET /cp, the "Login with VU SSO"
+//      button of the player login page
 // -----------------------------------------------------------
 
 

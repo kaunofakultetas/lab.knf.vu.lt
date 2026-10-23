@@ -82,7 +82,7 @@ return [
     ],
 
     // The service providers booted on every request: Laravel's
-    // own, then the app's and the packages'.
+    // own, then the app's and the packages'. The app's own
     // BroadcastServiceProvider is switched off, as the app
     // broadcasts nothing; laravel/ui's provider is booted but
     // no route uses it

@@ -6,12 +6,12 @@
 //  Laravel's skeleton provider for broadcasting: it would
 //  register the channel authorisation route and load
 //  routes/channels.php. The app broadcasts nothing, and
-//  config/app.php leaves this provider switched off, so
-//  neither ever happens.
+//  config/app.php leaves this provider out of its
+//  providers list, so neither ever happens.
 //
 //  Used by:
-//    - nothing at the moment — config/app.php lists it
-//      switched off
+//    - nothing at the moment — config/app.php leaves it out
+//      of its providers list
 // -----------------------------------------------------------
 
 

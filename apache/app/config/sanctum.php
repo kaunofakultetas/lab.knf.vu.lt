@@ -7,7 +7,8 @@
 //  its /api/user route. Nothing of the lab uses Sanctum: no
 //  token is ever issued, and the api group starts no
 //  session, so the one route behind it turns every client
-//  away with a 401.
+//  away: a 401 for one that asks for JSON, a redirect to
+//  the login page for any other.
 //
 //  Used by:
 //    - Sanctum's guard — auth:sanctum on /api/user

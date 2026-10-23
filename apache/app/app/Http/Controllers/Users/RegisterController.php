@@ -6,11 +6,10 @@
 //  The life of a local account outside the lab: the
 //  registration, behind reCAPTCHA v3 and the registration
 //  switch; the verification link — good for a day — that
-//  activates it; and
-//  the forgotten-password reminder, whose link — good for
-//  an hour — opens a page whose button sets and mails a new
-//  password. VU accounts never come here — the SSO creates
-//  them, and the reminder skips them.
+//  activates it; and the forgotten-password reminder, whose
+//  link — good for an hour — opens a page whose button sets
+//  and mails a new password. VU accounts never come here —
+//  the SSO creates them, and the reminder skips them.
 //
 //    GET  /register              — the registration form
 //    POST /register              — registers an account

@@ -41,8 +41,8 @@ use Tests\TestCase;
 // DashboardTest
 // -----------------------------------------------------------
 //
-// Each test signs in a local player, sets the scene and
-// renders the dashboard once.
+// Each test signs in a player — a VU account where groups
+// matter — sets the scene and renders the dashboard once.
 //
 // Used by:
 //   - PHPUnit — the Feature suite (runTests.sh)

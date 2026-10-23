@@ -13,6 +13,8 @@
 //      challenge, its dialog, store, update and delete
 //    - Users\ChallengesController::show — through
 //      getFilesById
+//    - R_Exists (Http/Middleware/) — the challenge a link
+//      belongs to, for file_owned and file_owned_uid
 // -----------------------------------------------------------
 
 
@@ -38,6 +40,7 @@ use Illuminate\Database\Eloquent\Model;
 // Used by:
 //   - Admins\ChallengesController and
 //     Users\ChallengesController
+//   - R_Exists — the challenge a link belongs to
 // -----------------------------------------------------------
 
 class ChallengesFiles extends Model

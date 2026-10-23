@@ -6,12 +6,16 @@
 //  Laravel's stock English message of every validation
 //  rule, :attribute standing for the field's name. These
 //  are the errors the forms show when the validator refuses
-//  them — the login, registration, reminder, partner, page
-//  and file link forms.
+//  them — the login, registration and reminder forms, and
+//  the control panel's forms of challenges and their file
+//  links, categories, partners, groups with their members
+//  and challenges, accounts, content pages, mail templates
+//  and test mails.
 //
 //  Used by:
-//    - Laravel's validator — every Validator::make,
-//      $this->validate and $request->validate of the app
+//    - Laravel's validator — every check of the app's form
+//      input, through Validator::make and the validate
+//      methods of the controllers and the request
 // -----------------------------------------------------------
 
 

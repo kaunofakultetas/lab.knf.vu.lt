@@ -10,8 +10,8 @@
 //  The password login is still here but no route reaches
 //  it.
 //
-//    GET /control-panel        — the login page
-//    GET /control-panel/login  — the end of the SSO login
+//    GET  /control-panel        — the login page
+//    GET  /control-panel/login  — the end of the SSO login
 //    POST /control-panel/logout — sign-out
 //
 //  Used by:
@@ -137,6 +137,8 @@ class AdminAuthController extends Controller
     // Used by:
     //   - Post_Link() of custom_admin.js — the sign-out link of
     //     the panel's top bar (admins/partials/topnav.blade.php)
+    //   - Post_Link() of custom.js — the same link on a group's
+    //     leaderboard, whose page loads the player layout
     // -----------------------------------------------------------
 
     public function logout()
@@ -166,7 +168,8 @@ class AdminAuthController extends Controller
     // without an admin account back to the login page.
     //
     // Used by:
-    //   - the "Login with VU SSO" button of admins/login.blade.php
+    //   - the "Login with VU SSO" button of
+    //     admins/login.blade.php
     // -----------------------------------------------------------
 
     public function cp_login(Request $request)

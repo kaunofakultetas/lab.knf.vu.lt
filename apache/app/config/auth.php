@@ -11,9 +11,9 @@
 //  once. Sanctum's guard is users too (config/sanctum.php).
 //
 //  Used by:
-//    - Laravel's auth — Auth::guard('users') and
-//      Auth::guard('admins') across the app, and the auth
-//      and auth.admin middleware of routes/web.php
+//    - Laravel's auth — the users and admins guards the app
+//      names across its code, and the auth and auth.admin
+//      middleware of routes/web.php
 // -----------------------------------------------------------
 
 

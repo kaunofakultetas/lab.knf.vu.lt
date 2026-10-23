@@ -10,8 +10,8 @@
 //  run stays green and lists every open defect at its end.
 //  The day a fix lands the test fails on purpose — the cue to
 //  move it into its home file without the id. It is the
-//  PHPUnit form of the expectedFailure convention of the
-//  stack's Python suites.
+//  PHPUnit form of the expectedFailure convention that the
+//  Python suites of the other house stacks follow.
 //
 //  Used by:
 //    - nothing at the moment — the next defect pinned under
@@ -64,7 +64,7 @@ trait KnownDefects
     // fixed and the test now belongs in its home file.
     //
     // Used by:
-    //   - every defect test
+    //   - nothing at the moment — the next defect test pinned
     // -----------------------------------------------------------
 
     protected function assertDefectStillOpen(string $defect, Closure $wanted): void

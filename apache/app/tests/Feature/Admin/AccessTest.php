@@ -7,11 +7,13 @@
 //  do everything. Any other admin — a lab teacher — signs in
 //  the same way but is kept off the routes behind the perms
 //  middleware (categories, partners, pages, emails, settings,
-//  user status and deletion, challenge visibility), which
-//  send it back where it came from with an error, and the
-//  sidebar hides those menus from it. Guests, and players
-//  signed in on the player side, are sent to the admin login
-//  page, which offers the VU SSO only.
+//  account passwords, status and deletion, challenge
+//  visibility), which send it back where it came from with
+//  an error, and the sidebar hides those menus from it.
+//  Guests are sent to the admin login page, which offers
+//  the VU SSO only. Players signed in on the player side
+//  are sent there too, but its guest check passes them on
+//  to their dashboard.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -180,7 +182,8 @@ final class AccessTest extends TestCase
     // -----------------------------------------------------------
     //
     // The pages behind the perms middleware that open without
-    // naming a record.
+    // naming a record, but for the new-category dialog, which
+    // the list leaves out.
     //
     // Used by:
     //   - test_a_main_admin_opens_the_main_only_pages,

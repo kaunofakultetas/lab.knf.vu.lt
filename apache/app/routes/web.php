@@ -101,8 +101,9 @@ Route::post('login', [App\Http\Controllers\Users\UserAuthController::class, 'log
 // switch closes — and the links the mails carry: the
 // verification link, and the password-reminder link, which
 // opens a page whose button posts the reset. validate.verify
-// answers an unknown token with a 404, validate.reset an
-// unknown one or one mailed over an hour ago
+// answers an unknown token, or one mailed over a day ago,
+// with a 404, validate.reset an unknown one or one mailed
+// over an hour ago
 Route::get('register', [App\Http\Controllers\Users\RegisterController::class, 'create'])->name('register_users')->middleware(['guest']);
 
 Route::post('register', [App\Http\Controllers\Users\RegisterController::class, 'store'])->name('create_users')->middleware(['guest', 'reg.status']);

@@ -191,8 +191,8 @@ final class RegistrationTest extends TestCase
     //
     // A valid form creates an individual (type 1), inactive
     // account with a hashed password, no points, no newsletter
-    // and a 50-character verification token, and returns to
-    // the form with the success message.
+    // and the SHA-256 hash of its verification token, and
+    // returns to the form with the success message.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -399,7 +399,7 @@ final class RegistrationTest extends TestCase
     // test_a_taken_email_is_refused
     // -----------------------------------------------------------
     //
-    // One account per email address.
+    // The form refuses an address an account already has.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)

@@ -48,8 +48,10 @@ use App\Models\User;
 // UsersController
 // -----------------------------------------------------------
 //
-// An empty create form goes back with the errors; the
-// password form is not validated.
+// The create form needs a username, an e-mail address and
+// a password of at least 8 characters, the password form
+// such a password; a form without them goes back with the
+// errors.
 //
 //   __construct   — the base's layout data
 //   index         — the accounts page
@@ -105,7 +107,7 @@ class UsersController extends BaseController
     // given; the page links keep q.
     //
     // Used by:
-    //   - the Users link of the panel's sidebar, and the
+    //   - the All users link of the panel's sidebar, and the
     //     redirects of the account actions
     // -----------------------------------------------------------
 

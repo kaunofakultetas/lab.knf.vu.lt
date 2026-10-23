@@ -16,6 +16,12 @@
 //    - GroupExists (Http/Middleware/) and
 //      Users\BaseController — who may open a group, and the
 //      groups of the sidebar
+//    - Users\ChallengesController::hiddenFromPlayer — who
+//      may open a hidden challenge
+//    - Users\GroupsController::group_leaderboard — the
+//      members the group leaderboard ranks
+//    - R_Exists (Http/Middleware/) — the group a member
+//      belongs to, for membership_owned
 // -----------------------------------------------------------
 
 
@@ -39,6 +45,8 @@ use Illuminate\Database\Eloquent\Model;
 // Used by:
 //   - Admins\UsersGroupsController, Admins\UsersController,
 //     GroupExists and Users\BaseController
+//   - Users\ChallengesController, Users\GroupsController
+//     and R_Exists
 // -----------------------------------------------------------
 
 class GroupsUsers extends Model

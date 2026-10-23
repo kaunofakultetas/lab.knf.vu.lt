@@ -10,9 +10,10 @@
 //  connection address and the Client-IP header as it goes),
 //  then Client-IP, then X-Forwarded-For when it holds a
 //  single valid address, and the connection address last.
-//  Every one of those headers comes from the client — the
-//  stack has no Cloudflare in front — so the stored address
-//  is informative, never proof. These tests pin the order.
+//  The Cloudflare and Client-IP headers are trusted by
+//  design: the hosting's upstream in front of the site
+//  rewrites them, so a visitor cannot choose the address
+//  recorded. These tests pin the order.
 //
 //  Used by:
 //    - PHPUnit — the Unit suite (runTests.sh)

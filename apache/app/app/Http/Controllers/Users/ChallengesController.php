@@ -13,7 +13,7 @@
 //    GET  /user/dashboard                                — the dashboard
 //    GET  /user/challenge/{public_id}/{public_group_id?} — a challenge
 //    POST /user/challenge/{public_id}/{public_group_id?} — an answer
-//    GET  /user/challenge/vote/{type}/{public_id}        — a vote
+//    POST /user/challenge/vote/{type}/{public_id}        — a vote
 //    GET  /user/dialog/feedback                          — the dialog
 //    POST /user/feedback                                 — feedback
 //
@@ -117,8 +117,11 @@ class ChallengesController extends BaseController
     // tests render these pages in separate processes.
     //
     // Used by:
-    //   - the Dashboard link of the player top bar, the end of
-    //     every login, and the redirects of the challenge pages
+    //   - the Home link of the player sidebar
+    //     (users/partials/sidebar.blade.php), the end of every
+    //     login, and the redirects of the challenge pages
+    //   - the guest middleware, which sends a signed-in player
+    //     here from the login, registration and password pages
     // -----------------------------------------------------------
 
     public function index(Request $request)

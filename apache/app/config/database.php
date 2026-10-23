@@ -30,10 +30,10 @@ return [
     // strict is off, so Laravel sets no sql_mode but
     // NO_ENGINE_SUBSTITUTION: a grouped query may read
     // columns it does not aggregate, and an insert that
-    // leaves out a NOT NULL column
-    // gets its type's empty value — the empty password of the
-    // SSO accounts — while an explicit NULL still fails, which
-    // is why the control panel's forms check for empty fields
+    // leaves out a NOT NULL column gets its type's empty
+    // value — the empty password of the SSO accounts — while
+    // an explicit NULL still fails, which is why the control
+    // panel's forms check for empty fields
     'connections' => [
 
         'sqlite' => [

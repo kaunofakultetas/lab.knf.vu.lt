@@ -12,10 +12,12 @@
 //  routes are each compared with the reviewed list below —
 //  the lists hardened by the "Fix upload validation" commit
 //  among them. Next to the declarations, every guarded route
-//  is also requested for real by a guest and by a player
-//  session, and must turn them away; and every change the
-//  control panel makes from its lists must refuse to happen
-//  by a plain link.
+//  is also requested for real by a guest and by a session of
+//  the other side — a player at the control panel, an admin
+//  at the player pages — and must turn them away; the API's
+//  one route turns an anonymous client away; and every
+//  change the control panel makes from its lists must refuse
+//  to happen by a plain link.
 //
 //  The routes the dev packages bring into the tests image
 //  (_ignition/*) do not exist in production and are left

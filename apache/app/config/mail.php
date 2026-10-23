@@ -17,8 +17,8 @@
 //  in-memory one (phpunit.xml).
 //
 //  Used by:
-//    - Laravel's mailer — every Mail::to(...)->send() of the
-//      app, the mailables of app/Mail
+//    - Laravel's mailer — every mail the app sends, through
+//      the mailables of app/Mail
 // -----------------------------------------------------------
 
 

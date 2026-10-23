@@ -12,8 +12,8 @@
 //    GET  /                 — the login page
 //    POST /login            — the login form
 //    GET  /cp               — the end of the SSO login
-//    GET  /user/logout      — sign-out
-//    GET  /user/logout_saml — sign-out, from the SSO too
+//    POST /user/logout      — sign-out
+//    POST /user/logout_saml — sign-out, from the SSO too
 //
 //  Used by:
 //    - routes/web.php — the routes above
@@ -103,10 +103,10 @@ class UserAuthController extends BaseController
     // panel — go back to the login page with the error, an
     // account never verified with a fresh verification link
     // mailed, as the first may have expired; a good login
-    // records the time and address and goes on to
-    // the page the player first asked for, or the dashboard.
-    // A refused form comes back with the e-mail refilled; the
-    // password is left out, so it never sits in the session.
+    // records the time and address and goes on to the page
+    // the player first asked for, or the dashboard. A refused
+    // form comes back with the e-mail refilled; the password
+    // is left out, so it never sits in the session.
     //
     // By design the form takes any number of wrong passwords:
     // the route has no rate limit, no lockout and no reCAPTCHA.

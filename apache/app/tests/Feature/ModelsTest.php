@@ -276,8 +276,9 @@ final class ModelsTest extends TestCase
     // test_a_player_is_named_by_username
     // -----------------------------------------------------------
     //
-    // getUsername, which the solve history uses, returns the
-    // username.
+    // getUsername returns the username — its one caller,
+    // submit_answer, builds the history line that
+    // ChallengesHistory then drops.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)

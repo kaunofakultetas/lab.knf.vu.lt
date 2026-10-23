@@ -7,8 +7,8 @@
 //  everyone: a name, free HTML and an alias that must be
 //  unique, prefilled with a fresh UUID on a new page. A page
 //  that would be incomplete or reuse an alias is not stored;
-//  the form comes back without saying why. Reading the pages
-//  is Play\PageTest's.
+//  the form comes back with the errors and what was typed.
+//  Reading the pages is Play\PageTest's.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)

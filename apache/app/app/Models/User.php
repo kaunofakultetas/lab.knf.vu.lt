@@ -13,12 +13,11 @@
 //  points is the sum of the player's solves, kept by
 //  submit_answer and lowered when a challenge is deleted
 //  (Admins\ChallengesController::destroy); user_type is 1
-//  for an individual and 2
-//  for a team. remember_token holds the SHA-256 hash of the
-//  password-reminder token, never Laravel's remember-me one:
-//  the login never asks to be remembered, and
-//  rememberTokenName tells Laravel so, which keeps its
-//  logout off the column.
+//  for an individual and 2 for a team. remember_token holds
+//  the SHA-256 hash of the password-reminder token, never
+//  Laravel's remember-me one: the login never asks to be
+//  remembered, and rememberTokenName tells Laravel so,
+//  which keeps its logout off the column.
 //
 //  Used by:
 //    - config/auth.php — the users provider, behind the
@@ -30,9 +29,8 @@
 //      control panel
 //    - GroupExists, ValidateReset and ValidateVerify
 //      (Http/Middleware/)
-//    - Users\BaseController, Admins\LeaderboardController,
-//      Admins\EmailsController::sync_with_lists and Groups
-//      (this folder)
+//    - Users\BaseController, Admins\LeaderboardController
+//      and Admins\EmailsController::sync_with_lists
 //    - database/factories/UserFactory.php
 // -----------------------------------------------------------
 

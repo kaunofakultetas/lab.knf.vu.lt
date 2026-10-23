@@ -6,7 +6,9 @@
 //  The link table between groups and challenges: one
 //  cyber_groups_challenges row per challenge an admin added
 //  to a group. A group's page lists these challenges, and
-//  its leaderboard counts only their solves.
+//  its leaderboard counts only their solves; a hidden
+//  challenge opens only for the members of a group it is
+//  placed in.
 //
 //  Used by:
 //    - Admins\UsersGroupsController — the group's challenge
@@ -14,7 +16,11 @@
 //    - Admins\ChallengesController::destroy
 //    - Users\GroupsController — the group page and its
 //      leaderboard
+//    - Users\ChallengesController::hiddenFromPlayer — who
+//      may open a hidden challenge
 //    - Groups::groupPointsPercent (this folder)
+//    - R_Exists (Http/Middleware/) — the group a group
+//      challenge belongs to, for group_challenge_owned
 // -----------------------------------------------------------
 
 
@@ -38,6 +44,7 @@ use Illuminate\Database\Eloquent\Model;
 // Used by:
 //   - Admins\UsersGroupsController, Admins\ChallengesController,
 //     Users\GroupsController and Groups
+//   - Users\ChallengesController and R_Exists
 // -----------------------------------------------------------
 
 class GroupsChallenges extends Model

@@ -7,7 +7,8 @@
 //  api group's rate limit: the signed-in user as JSON,
 //  behind Sanctum's guard. Nothing of the lab uses it: the
 //  api group starts no session and no token exists, so it
-//  turns every client away with a 401.
+//  turns every client away: a 401 for one that asks for
+//  JSON, a redirect to the login page for any other.
 //
 //    GET  /api/user
 //
@@ -20,7 +21,8 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// The signed-in user — in practice a 401 for everyone
+// The signed-in user — in practice no one, so every client
+// is turned away
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });

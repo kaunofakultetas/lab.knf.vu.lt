@@ -39,8 +39,8 @@ use App\Models\Categories;
 // CategoriesController
 // -----------------------------------------------------------
 //
-// A new category needs a name, the rename form checks
-// nothing.
+// A category needs a name, when it is added and when it
+// is renamed.
 //
 //   __construct — the base's layout data
 //   index       — the categories page

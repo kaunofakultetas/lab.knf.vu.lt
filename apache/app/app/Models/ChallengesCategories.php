@@ -13,8 +13,10 @@
 //    - Admins\ChallengesController — categories,
 //      categories_store and destroy
 //    - Admins\CategoriesController::destroy
-//    - Users\ChallengesController::index and
-//      Users\GroupsController::index — the category filter
+//    - Users\ChallengesController::index — the category
+//      names of the dashboard's cards and its filter
+//    - Users\GroupsController::index — the category names
+//      of the group page's cards
 // -----------------------------------------------------------
 
 
@@ -39,7 +41,8 @@ use Illuminate\Database\Eloquent\Model;
 //   - Admins\ChallengesController and
 //     Admins\CategoriesController — the rows
 //   - Users\ChallengesController and Users\GroupsController
-//     — the dashboards' category filter
+//     — the category names of the challenge cards, and the
+//     dashboard's filter
 // -----------------------------------------------------------
 
 class ChallengesCategories extends Model

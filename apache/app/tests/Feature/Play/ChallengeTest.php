@@ -8,12 +8,13 @@
 //  is booked three ways — a submission row worth the
 //  challenge's points, the points added to the player, a
 //  history row — and announced in the shared solve history
-//  kept in Redis. The answer is compared after stripping the
-//  VU{...} wrapper players type around flags. A challenge
-//  can be solved once: the validate.ifsolved middleware turns
-//  a solved challenge away before the page or the answer
-//  check runs, and since the race-condition fix a unique key
-//  makes the database refuse a second submission row too.
+//  kept in Redis. The answer is compared with the stored
+//  flag after stripping the VU{...} wrapper players type
+//  around flags from both. A challenge can be solved once:
+//  the validate.ifsolved middleware turns a solved challenge
+//  away before the page or the answer check runs, and since
+//  the race-condition fix a unique key makes the database
+//  refuse a second submission row too.
 //
 //  The dashboard the answers redirect to is DashboardTest's —
 //  it may only be rendered once per PHP process.
@@ -49,7 +50,8 @@ use Tests\TestCase;
 // ChallengeTest
 // -----------------------------------------------------------
 //
-// Every test plays as a freshly signed-in local player.
+// Every test starts as a freshly signed-in local player;
+// the hidden-challenge tests sign in VU accounts too.
 //
 //   answer — posts an answer from the challenge page
 //
@@ -419,9 +421,9 @@ final class ChallengeTest extends TestCase
     // test_the_answer_may_be_typed_in_the_flag_format
     // -----------------------------------------------------------
     //
-    // Flags are stored bare and typed as VU{...}: the wrapper
-    // is stripped before comparing, and so are the blanks
-    // around the answer.
+    // A flag stored bare matches the answer typed as VU{...}:
+    // the wrapper is stripped before comparing, and so are
+    // the blanks around the answer.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)

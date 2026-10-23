@@ -106,7 +106,8 @@ final class LoginTest extends TestCase
     //
     // A successful login stamps last_login with the current
     // time and last_ip with the address Apache saw the client
-    // at — the admin user list shows both.
+    // at — the admin user list shows the time; no page shows
+    // the address.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -186,9 +187,11 @@ final class LoginTest extends TestCase
     // test_an_unverified_account_cannot_sign_in
     // -----------------------------------------------------------
     //
-    // An account whose email link was never followed (status
-    // 0) is signed out again at once, with a message saying
-    // so, even though its password is right.
+    // An inactive account (status 0) with no verification
+    // link pending is signed out again at once, with a message
+    // saying it is not active, even though its password is
+    // right. An account still waiting for its link is mailed a
+    // fresh one instead, which RegistrationTest covers.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)

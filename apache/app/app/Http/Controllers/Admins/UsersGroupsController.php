@@ -126,7 +126,7 @@ class UsersGroupsController extends BaseController
     // first, 50 to a page of the list.
     //
     // Used by:
-    //   - the Groups link of the panel's sidebar
+    //   - the VU Groups link of the panel's sidebar
     // -----------------------------------------------------------
 
     public function index(Request $request)

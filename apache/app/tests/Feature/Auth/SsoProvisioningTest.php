@@ -6,13 +6,15 @@
 //  After the VU identity provider authenticates someone, the
 //  saml_auth middleware hands the SAML attributes to
 //  UserAuthController::check_member, which creates the player
-//  account on the first visit — the VU user id as username
-//  and vu_id, given name and surname as display_name, active
-//  at once — and stamps the login on every visit. The admin
-//  side, AdminAuthController::check_admin, only recognises
-//  admins that already exist and copies their main flag into
-//  the session. These tests call the two directly; the
-//  middleware around them is SsoLoginTest's.
+//  account on the first visit — the VU user id as vu_id and
+//  as username, numbered when a local player holds that
+//  username, given name and surname as display_name, active
+//  at once — and stamps the login on every visit of an active
+//  account. The admin side, AdminAuthController::check_admin,
+//  only recognises admins that already exist and copies their
+//  main flag into the session. These tests call the two
+//  directly; the middleware around them, and the refused
+//  inactive account, are SsoLoginTest's.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -199,8 +201,9 @@ final class SsoProvisioningTest extends TestCase
     // -----------------------------------------------------------
     //
     // An admin's VU user id returns the admin's id and stores
-    // its main flag in the session, where the perms and
-    // r_exists middleware look for it.
+    // its main flag in the session, where nothing reads it any
+    // more: the perms and r_exists middleware read the flag
+    // from the signed-in account.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)

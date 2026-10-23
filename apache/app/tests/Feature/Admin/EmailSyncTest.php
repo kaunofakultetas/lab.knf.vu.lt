@@ -226,7 +226,8 @@ final class EmailSyncTest extends TestCase
     // test_malformed_addresses_never_reach_mailjet
     // -----------------------------------------------------------
     //
-    // Accounts admins created can carry addresses that are not
+    // Accounts admins created before the account dialog
+    // checked addresses can carry ones that are not
     // addresses; they are skipped without a word to Mailjet,
     // and the rest are synced.
     //

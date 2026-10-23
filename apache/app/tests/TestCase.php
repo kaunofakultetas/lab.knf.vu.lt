@@ -169,6 +169,7 @@ abstract class TestCase extends BaseTestCase
     // the defaults.
     //
     // Used by:
+    //   - makeSsoPlayer (below)
     //   - the Feature tests that need a player
     // -----------------------------------------------------------
 
@@ -201,7 +202,7 @@ abstract class TestCase extends BaseTestCase
     // can belong to a VU group, as groups list vu_ids.
     //
     // Used by:
-    //   - the group, password reset and SSO tests
+    //   - the Feature tests that need a VU account
     // -----------------------------------------------------------
 
     protected function makeSsoPlayer(array $attributes = []): User
@@ -230,7 +231,7 @@ abstract class TestCase extends BaseTestCase
     // challenges and groups it created itself.
     //
     // Used by:
-    //   - the admin Feature tests
+    //   - the Feature tests that need an admin
     // -----------------------------------------------------------
 
     protected function makeAdmin(bool $main = false, array $attributes = []): Admin
@@ -259,7 +260,8 @@ abstract class TestCase extends BaseTestCase
     // real ones.
     //
     // Used by:
-    //   - makeChallenge (below), the partner tests
+    //   - makeChallenge (below)
+    //   - the partner, challenge and route-table tests
     // -----------------------------------------------------------
 
     protected function makePartner(array $attributes = []): Partners
@@ -282,7 +284,8 @@ abstract class TestCase extends BaseTestCase
     // A challenge category next to the seven init.sql seeds.
     //
     // Used by:
-    //   - the dashboard and admin category tests
+    //   - the dashboard, admin category, CSRF and route-table
+    //     tests
     // -----------------------------------------------------------
 
     protected function makeCategory(string $name): Categories
@@ -338,7 +341,7 @@ abstract class TestCase extends BaseTestCase
     // seeded main admin.
     //
     // Used by:
-    //   - the group tests, player and admin side
+    //   - the Feature tests that involve a VU group
     // -----------------------------------------------------------
 
     protected function makeGroup(?Admin $owner = null, array $attributes = []): Groups
@@ -364,7 +367,7 @@ abstract class TestCase extends BaseTestCase
     // stored by vu_id, so only SSO accounts can really join.
     //
     // Used by:
-    //   - the group tests, player and admin side
+    //   - the Feature tests that involve a VU group
     // -----------------------------------------------------------
 
     protected function joinGroup(Groups $group, User $player): GroupsUsers
@@ -384,7 +387,7 @@ abstract class TestCase extends BaseTestCase
     // Puts the challenge on the group's dashboard.
     //
     // Used by:
-    //   - the group tests, player and admin side
+    //   - the Feature tests that involve a VU group
     // -----------------------------------------------------------
 
     protected function assignToGroup(Groups $group, Challenges $challenge): GroupsChallenges
@@ -410,7 +413,7 @@ abstract class TestCase extends BaseTestCase
     // by a real answer.
     //
     // Used by:
-    //   - the leaderboard, dashboard, group and admin tests
+    //   - the Feature tests that need a solve on record
     // -----------------------------------------------------------
 
     protected function recordSolve(User $player, Challenges $challenge, ?string $when = null): void
@@ -445,7 +448,7 @@ abstract class TestCase extends BaseTestCase
     // /user route checks.
     //
     // Used by:
-    //   - the player-side Feature tests
+    //   - the Feature tests that need a signed-in player
     // -----------------------------------------------------------
 
     protected function signIn(User $player): static
@@ -469,7 +472,7 @@ abstract class TestCase extends BaseTestCase
     // from the signed-in account.
     //
     // Used by:
-    //   - the admin Feature tests
+    //   - the Feature tests that need a signed-in admin
     // -----------------------------------------------------------
 
     protected function signInAdmin(Admin $admin): static

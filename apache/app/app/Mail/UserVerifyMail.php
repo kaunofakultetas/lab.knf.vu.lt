@@ -3,13 +3,15 @@
 // -----------------------------------------------------------
 //  [*] UserVerifyMail — the account verification link
 //
-//  The mail a new local account gets at registration: a
-//  link to /verify/{token} on APP_URL, good for a day,
-//  which activates the account once opened. The view is
-//  users.mail.verification.
+//  The mail a new local account gets at registration, and
+//  again whenever it signs in with the right password
+//  before it is verified: a link to /verify/{token} on
+//  APP_URL, good for a day, which activates the account
+//  once opened. The view is users.mail.verification.
 //
 //  Used by:
-//    - Users\RegisterController::send_verification
+//    - Users\RegisterController::send_verification — for
+//      store and UserAuthController::login
 // -----------------------------------------------------------
 
 

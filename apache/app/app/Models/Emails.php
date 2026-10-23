@@ -33,7 +33,7 @@ use Illuminate\Database\Eloquent\Model;
 //
 // Used by:
 //   - Admins\EmailsController — index, store, edit, update,
-//     destroy, sending_test and send
+//     destroy, send_test, sending_test and send
 // -----------------------------------------------------------
 
 class Emails extends Model

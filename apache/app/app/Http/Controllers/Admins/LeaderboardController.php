@@ -4,8 +4,8 @@
 //  [*] LeaderboardController — the control-panel dashboard
 //
 //  The page every admin lands on: the lab's counts —
-//  players, teams, players who ever signed in, players with
-//  a solve, groups — the top ten of the leaderboard and the
+//  players, players who ever signed in, players with a
+//  solve, groups — the top ten of the leaderboard and the
 //  fifteen latest solves. It keeps its own copies of the
 //  player side's rank and time helpers.
 //
@@ -88,12 +88,14 @@ class LeaderboardController extends BaseController
     // The admins.dashboard view: the counts, the first ten
     // rows of ranking_table with ordinal ranks and how long
     // ago each last solve was, and the fifteen latest solves
-    // with player, challenge and points. A standings list of
-    // every ranked player is built too, and thrown away.
+    // with player, challenge and the challenge's points as
+    // they stand now. The view never shows the count of team
+    // accounts it is handed, and a standings list of every
+    // ranked player is built too, and thrown away.
     //
     // Used by:
-    //   - the Dashboard link of the panel's sidebar, the end of
-    //     the SSO login, and the guest middleware's redirect
+    //   - the Home link of the panel's sidebar, the end of the
+    //     SSO login, and the guest middleware's redirect
     // -----------------------------------------------------------
 
     public function dashboard(Request $request)

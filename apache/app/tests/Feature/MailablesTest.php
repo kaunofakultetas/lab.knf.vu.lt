@@ -37,7 +37,7 @@ use Tests\TestCase;
 // The mails are built and rendered as the mailer would —
 // their subjects are only set while building — but never
 // sent; APP_URL is the live one, https://lab.knf.vu.lt, as
-// phpunit.xml sets it.
+// tests/container/run.sh exports it.
 //
 // Used by:
 //   - PHPUnit — the Feature suite (runTests.sh)
