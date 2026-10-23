@@ -20,6 +20,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Mail\SendNewPass;
+use App\Models\GroupsUsers;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -434,5 +435,63 @@ final class UsersTest extends TestCase
         $player->refresh();
         $this->assertSame($hash, $player->password);
         $this->assertSame(1, $player->status);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_deleting_an_account_ends_on_the_user_list
+    // -----------------------------------------------------------
+    //
+    // Deleting a VU account goes back to the accounts page with
+    // "User deleted!", and takes the account's group memberships,
+    // which are kept by VU id, with it.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_deleting_an_account_ends_on_the_user_list(): void
+    {
+        $player = $this->makeSsoPlayer();
+        $group = $this->makeGroup();
+        $this->joinGroup($group, $player);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/delete/{$player->id}");
+
+        $response->assertRedirect('/control-panel/users');
+        $response->assertSessionHas('success', 'User deleted!');
+        $this->assertNull(User::find($player->id));
+        $this->assertSame(0, GroupsUsers::where('group_id', $group->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_empty_account_form_is_refused
+    // -----------------------------------------------------------
+    //
+    // The new-account dialog sent empty goes back with errors and
+    // creates no account.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_empty_account_form_is_refused(): void
+    {
+        $before = User::count();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/users')->post('/control-panel/dialog/users/store', []);
+
+        $response->assertRedirect('/control-panel/users');
+        $response->assertSessionHasErrors(['username', 'email', 'password']);
+        $this->assertSame($before, User::count());
     }
 }

@@ -7,10 +7,10 @@
 //  add, change and delete the partners whose logos the
 //  challenge pages show. A logo is checked to be an image
 //  of 2 MB at most and stored in storage/app/public — the
-//  folder the site serves under /upload — under a hashed
-//  name with the extension its content shows, never the
-//  one it was sent with. In production that folder is
-//  _DATA/apache/public, mounted read-only
+//  folder the site serves under /upload — under a random
+//  32-character name with the extension its content shows,
+//  never the one it was sent with. In production that
+//  folder is _DATA/apache/public, mounted read-only
 //  (docker-compose.yml), so storing a logo there fails with
 //  a server error. No link of the panel leads to the page;
 //  it is reached by its address.
@@ -151,12 +151,6 @@ class PartnersController extends BaseController
     // above; then back with "Created!". A refused form goes
     // back with Laravel's errors.
     //
-    // Known bug LAB-17 (low): the logo's name is a hash of the
-    // current second only (PartnersController.php:174), so two
-    // logos uploaded within one second share a file, and the
-    // second overwrites the first partner's picture. Fix: hash
-    // something unique, such as a random string.
-    //
     // Used by:
     //   - the partner dialog, for a new partner
     // -----------------------------------------------------------
@@ -171,7 +165,7 @@ class PartnersController extends BaseController
         $file = $request->file('picture');
         $ext = $file->guessExtension() ?: 'png';
         if ($ext === 'jpeg') $ext = 'jpg';
-        $file_name = md5(sha1(md5(time()))) . '.' . $ext;
+        $file_name = bin2hex(random_bytes(16)) . '.' . $ext;
 
         $file->move(storage_path('app/public'), $file_name);
 
@@ -227,9 +221,6 @@ class PartnersController extends BaseController
     // new logo, which the form requires every time — a rename
     // alone is refused. Then back with "Updated!".
     //
-    // Known bug LAB-17 (low), as in store: the logo's name is a
-    // hash of the current second (PartnersController.php:248).
-    //
     // Used by:
     //   - the partner dialog, for an existing partner
     // -----------------------------------------------------------
@@ -245,7 +236,7 @@ class PartnersController extends BaseController
         $file = $request->file('picture');
         $ext = $file->guessExtension() ?: 'png';
         if ($ext === 'jpeg') $ext = 'jpg';
-        $file_name = md5(sha1(md5(time()))) . '.' . $ext;
+        $file_name = bin2hex(random_bytes(16)) . '.' . $ext;
 
         $file->move(storage_path('app/public'), $file_name);
 

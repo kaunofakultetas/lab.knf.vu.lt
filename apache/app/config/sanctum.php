@@ -4,10 +4,10 @@
 //  [*] config/sanctum.php — Laravel Sanctum
 //
 //  The settings of Sanctum, installed with the skeleton for
-//  its /api/user route. Nothing of the lab uses Sanctum:
-//  no token is ever issued, and the one route behind it
-//  fails, as the guard this file names does not exist
-//  (LAB-05).
+//  its /api/user route. Nothing of the lab uses Sanctum: no
+//  token is ever issued, and the api group starts no
+//  session, so the one route behind it turns every client
+//  away with a 401.
 //
 //  Used by:
 //    - Sanctum's guard — auth:sanctum on /api/user
@@ -29,9 +29,9 @@ return [
         Sanctum::currentApplicationUrlWithPort()
     ))),
 
-    // The guards Sanctum tries before tokens: web, a guard
-    // config/auth.php does not define (LAB-05)
-    'guard' => ['web'],
+    // The guard Sanctum tries before tokens: the players'
+    // users guard, which finds no one without a session
+    'guard' => ['users'],
 
     // Minutes before a token expires — never
     'expiration' => null,

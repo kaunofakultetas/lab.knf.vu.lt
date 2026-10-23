@@ -544,4 +544,33 @@ final class PartnersTest extends TestCase
         $this->assertSame(1, Partners::count());
         $this->assertSame('CERT-LT', $partner->refresh()->name);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_two_logos_never_share_a_file
+    // -----------------------------------------------------------
+    //
+    // Logos stored within the same second get files of their own:
+    // the names are random, not drawn from the clock. Three pairs
+    // are stored, so a pair straddling a second hides nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_two_logos_never_share_a_file(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true));
+
+        foreach (range(1, 3) as $n) {
+            foreach (["First {$n}", "Second {$n}"] as $name) {
+                $this->post('/control-panel/dialog/partners/store', ['name' => $name, 'picture' => $this->upload('logo.png', self::png())]);
+            }
+            $this->assertNotSame(Partners::where('name', "First {$n}")->value('picture'), Partners::where('name', "Second {$n}")->value('picture'));
+        }
+    }
 }

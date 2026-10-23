@@ -3,10 +3,10 @@
 // -----------------------------------------------------------
 //  [*] ValidateReset — the password-reminder link check
 //
-//  Lets a reminder link through only when its token matches
-//  the remember_token of exactly one account, where
-//  RegisterController::forgotpassword stores it — in plain
-//  text (LAB-26). Any other token is a 404.
+//  Lets a reminder link through only when the SHA-256 hash
+//  of its token matches the remember_token of exactly one
+//  account, where RegisterController::forgotpassword stores
+//  it. Any other token is a 404.
 //
 //  Used by:
 //    - app/Http/Kernel.php — the validate.reset alias
@@ -53,9 +53,9 @@ class ValidateReset
     // handle
     // -----------------------------------------------------------
     //
-    // Passes the request when one account holds the route's
-    // token, an empty or missing token never matching, and
-    // answers 404 otherwise.
+    // Passes the request when one account holds the hash of
+    // the route's token, an empty or missing token never
+    // matching, and answers 404 otherwise.
     //
     // Known bug LAB-25 (medium): a reminder link never expires
     // — nothing records when it was mailed, so a token still
@@ -72,7 +72,7 @@ class ValidateReset
     {
         $reset_token = $request->route('reset_token');
 
-        if(User::where(['remember_token'=>$reset_token])->where('remember_token', '<>', '')->whereNotNull('remember_token')->count() == 1) {
+        if(User::where(['remember_token'=>hash('sha256', $reset_token)])->where('remember_token', '<>', '')->whereNotNull('remember_token')->count() == 1) {
             return $next($request);
         } else {
             abort(404);

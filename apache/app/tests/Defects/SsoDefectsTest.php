@@ -17,7 +17,6 @@
 
 namespace Tests\Defects;
 
-use App\Models\User;
 use Mockery;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
@@ -35,7 +34,7 @@ use Tests\TestCase;
 // SsoDefectsTest
 // -----------------------------------------------------------
 //
-// LAB-15 and LAB-16.
+// LAB-15.
 //
 //   fakeIdentityProvider — overloads the SimpleSAMLphp client
 //
@@ -110,42 +109,6 @@ final class SsoDefectsTest extends TestCase
 
         $this->assertDefectStillOpen('LAB-15', function () {
             $this->assertGuest('users');
-        });
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_lab_16_a_taken_username_does_not_block_a_vu_login
-    // -----------------------------------------------------------
-    //
-    // Known bug LAB-16 (medium): a local player who registered
-    // under a username equal to some VU user id — s1234567,
-    // say — locks that VU user out of the lab: the first SSO
-    // login tries to create an account with the VU user id as
-    // username (UserAuthController::check_member, line 265),
-    // hits the unique username index and ends in a server
-    // error, every time. Fix: give the SSO account a username
-    // that is still free.
-    //
-    // Used by:
-    //   - PHPUnit — the Defects suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    public function test_lab_16_a_taken_username_does_not_block_a_vu_login(): void
-    {
-        $this->makePlayer(['username' => 's7777777']);
-        $this->fakeIdentityProvider('s7777777', 'ona@sso.test');
-
-        $response = $this->get('/cp');
-
-        $this->assertDefectStillOpen('LAB-16', function () use ($response) {
-            $response->assertRedirect('/user/dashboard');
-            $this->assertNotNull(User::where('vu_id', 's7777777')->first(), 'no account was provisioned');
-            $this->assertAuthenticated('users');
         });
     }
 }

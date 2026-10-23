@@ -592,4 +592,62 @@ final class GroupsTest extends TestCase
         $response->assertSee('Networks Lab 1 Leaderboard');
         $response->assertSeeInOrder(['1st place', 'First', '<b>50</b> points', '2nd place', 'Second', '<b>20</b> points'], false);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_lab_admins_cannot_empty_other_admins_groups
+    // -----------------------------------------------------------
+    //
+    // A lab admin cannot remove the members or challenges of a
+    // group another admin owns, even by the removal links' own
+    // addresses.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_lab_admins_cannot_empty_other_admins_groups(): void
+    {
+        $group = $this->makeGroup($this->makeAdmin());
+        $membership = GroupsUsers::create(['group_id' => $group->id, 'vu_id' => 's1234567']);
+        $place = $this->assignToGroup($group, $this->makeChallenge());
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/users/vu-groups');
+
+        $this->get("/control-panel/users/vu-groups/delete_group/{$membership->id}")->assertSessionHasErrors();
+        $this->get("/control-panel/users/vu-groups/delete_challenge/{$place->id}")->assertSessionHasErrors();
+
+        $this->assertNotNull(GroupsUsers::find($membership->id));
+        $this->assertNotNull(GroupsChallenges::find($place->id));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_empty_group_form_is_refused
+    // -----------------------------------------------------------
+    //
+    // The new-group dialog sent without a name goes back with the
+    // error and adds no group.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_empty_group_form_is_refused(): void
+    {
+        $before = Groups::count();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/users/vu-groups')->post('/control-panel/dialog/users/vu-groups/store', []);
+
+        $response->assertRedirect('/control-panel/users/vu-groups');
+        $response->assertSessionHasErrors('name');
+        $this->assertSame($before, Groups::count());
+    }
 }

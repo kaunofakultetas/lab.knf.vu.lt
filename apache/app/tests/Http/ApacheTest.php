@@ -12,10 +12,9 @@
 //  and everything else stays out of reach, that the rewrite
 //  rules hand pretty addresses to Laravel, that pages carry
 //  no PHP diagnostics, that directories are never listed,
-//  that uploads are served from /upload, that a forged
-//  client address is ignored, and that CSRF is enforced
-//  outside PHPUnit. The upload folder's PHP lockdown
-//  does not hold today; that is LAB-18, pinned below.
+//  that uploads are served from /upload and no PHP there
+//  ever runs, that a forged client address is ignored, and
+//  that CSRF is enforced outside PHPUnit.
 //
 //  Used by:
 //    - PHPUnit — the Http suite (runTests.sh)
@@ -26,7 +25,6 @@ namespace Tests\Http;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use Tests\Support\KnownDefects;
 use Tests\TestCase;
 
 
@@ -56,8 +54,6 @@ use Tests\TestCase;
 
 final class ApacheTest extends TestCase
 {
-
-    use KnownDefects;
 
     // The address the vhost listens on, from ports.conf
     private const SERVER = 'http://127.0.0.1:8080';
@@ -363,44 +359,33 @@ final class ApacheTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_lab_18_php_in_the_upload_folder_never_runs
+    // test_php_in_the_upload_folder_never_runs
     // -----------------------------------------------------------
     //
-    // Known bug LAB-18 (high): a PHP file in the upload folder
-    // is executed when requested under /upload, and .phtml
-    // and .phar files are handed out as source. The lockdown
-    // in 000-default.conf — the PHP engine off, script
-    // extensions denied — is written for
-    // /var/www/html/storage/app/public, but the files are
-    // reached through the public/upload symlink, and Apache
-    // matches Directory sections against the path it walked,
-    // never the symlink's target, so the section never
-    // applies. Uploads through the app are safe — they are
-    // stored under extensions taken from their content — but
-    // anything else that lands in _DATA/apache/public, an
-    // admin's manual copy included, runs as code. Fix: apply
-    // the same lockdown to /var/www/html/public/upload as
-    // well.
+    // A script that lands in the upload folder — an admin's
+    // manual copy into _DATA/apache/public, say — is never run
+    // or handed out: .php, .phtml and .phar files under
+    // /upload answer 403. The lockdown in 000-default.conf, the
+    // PHP engine off and script extensions denied, covers the
+    // folder's real path and public/upload alike, as Apache
+    // matches Directory sections against the path it walks,
+    // never a symlink's target.
     //
     // Used by:
     //   - PHPUnit — the Http suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_lab_18_php_in_the_upload_folder_never_runs(): void
+    public function test_php_in_the_upload_folder_never_runs(): void
     {
         $script = '<?php echo "EXECUTED-" . (6 * 7);';
-        $answers = [];
+
         foreach (['shell.php', 'shell.phtml', 'shell.phar'] as $name) {
             $this->plantUpload($name, $script);
-            $answers[$name] = $this->fetch('GET', "/upload/{$name}");
-        }
+            $response = $this->fetch('GET', "/upload/{$name}");
 
-        $this->assertDefectStillOpen('LAB-18', function () use ($answers) {
-            foreach ($answers as $name => $response) {
-                $this->assertSame(403, $response->status(), "{$name} was answered {$response->status()}");
-                $this->assertStringNotContainsString('EXECUTED-42', $response->body(), "{$name} was executed");
-            }
-        });
+            $this->assertSame(403, $response->status(), "{$name} was answered {$response->status()}");
+            $this->assertStringNotContainsString('EXECUTED-42', $response->body(), "{$name} was executed");
+        }
     }
 
 

@@ -60,6 +60,10 @@ final class RouteTableTest extends TestCase
         'GET control-panel/categories',
         'GET control-panel/category/delete/{uid}',
         'GET control-panel/challenges/status/{status}/{challenge_id}',
+        'GET control-panel/dialog/category/edit/{uid}',
+        'GET control-panel/dialog/category/new',
+        'POST control-panel/dialog/category/store',
+        'POST control-panel/dialog/category/update',
         'GET control-panel/dialog/emails/send_test/{email_id}',
         'GET control-panel/dialog/partners/edit/{uid}',
         'GET control-panel/dialog/partners/new',
@@ -93,7 +97,10 @@ final class RouteTableTest extends TestCase
     // The routes a lab admin may only use on its own records,
     // with the r_exists check each one runs: the record's id
     // comes from the address (challenge_owned, group_owned)
-    // or from the posted uid field (the _uid checks)
+    // or from the posted uid field (the _uid checks); a
+    // member's or a group challenge's row id leads to the
+    // group that is checked (membership_owned,
+    // group_challenge_owned)
     private const OWNERSHIP_CHECKS = [
         'GET control-panel/challenges/delete/{uid}'                           => 'challenge_owned',
         'GET control-panel/challenges/edit/{uid}'                             => 'challenge_owned',
@@ -108,6 +115,8 @@ final class RouteTableTest extends TestCase
         'GET control-panel/dialog/users/vu-groups/user_add_{type}/{uid}'      => 'group_owned',
         'GET control-panel/users/vu-groups/challenges_list/{uid}'             => 'group_owned',
         'GET control-panel/users/vu-groups/delete/{uid}'                      => 'group_owned',
+        'GET control-panel/users/vu-groups/delete_challenge/{uid}'            => 'group_challenge_owned',
+        'GET control-panel/users/vu-groups/delete_group/{uid}'                => 'membership_owned',
         'GET control-panel/users/vu-groups/leaderboard/{uid}'                 => 'group_owned',
         'GET control-panel/users/vu-groups/users_list/{uid}'                  => 'group_owned',
         'POST control-panel/dialog/users/vu-groups/challenges_store'          => 'group_owned_uid',
@@ -444,5 +453,27 @@ final class RouteTableTest extends TestCase
         $this->signInAdmin($this->makeAdmin(true));
 
         $this->requestEach($guarded, '/');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_api_user_route_turns_anonymous_clients_away
+    // -----------------------------------------------------------
+    //
+    // The skeleton's GET /api/user answers an anonymous client
+    // with a 401: Sanctum's guard is the players' users guard,
+    // which finds no one, as the api group starts no session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_api_user_route_turns_anonymous_clients_away(): void
+    {
+        $this->getJson('/api/user')->assertUnauthorized();
     }
 }

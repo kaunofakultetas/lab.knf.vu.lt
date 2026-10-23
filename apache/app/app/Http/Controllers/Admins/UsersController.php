@@ -53,9 +53,8 @@ use App\Models\User;
 // UsersController
 // -----------------------------------------------------------
 //
-// The create and password forms are not validated (LAB-14):
-// an empty create form ends in a server error on the NOT
-// NULL columns.
+// An empty create form goes back with the errors; the
+// password form is not validated.
 //
 //   __construct   — the base's layout data
 //   index         — the accounts page
@@ -205,7 +204,9 @@ class UsersController extends BaseController
     // e-mail and password as sent, unless the e-mail or the
     // username is taken; with notif set to 1, mails the
     // password to the new account (SendNewPass). Then to the
-    // accounts page with "User created!", or with the error.
+    // accounts page with "User created!", or with the error;
+    // a form missing the username, e-mail or password goes
+    // back with the errors.
     //
     // Used by:
     //   - the account dialog, for a new account
@@ -213,6 +214,16 @@ class UsersController extends BaseController
 
     public function store(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'username' => 'required',
+            'email' => 'required',
+            'password' => 'required'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         if (User::where(array('email' => $request->get('email')))->count() == 0) {
             if (User::where(array('username' =>$request->get('username')))->count() == 0) {
                 $addMember = new User();
@@ -354,17 +365,10 @@ class UsersController extends BaseController
     //
     // GET /control-panel/users/delete/{uid}
     //
-    // Deletes the account, then its group memberships — a
-    // change made by a plain link (LAB-19). The solves and
-    // feedback of the account stay.
-    //
-    // Known bug LAB-11 (medium): the memberships are deleted
-    // by a user_id column cyber_users_groups does not have —
-    // they are stored by vu_id — so the query fails
-    // (UsersController.php:377) after the account is gone:
-    // the memberships stay, and the admin gets the server
-    // error page. Fix: delete the memberships by the
-    // account's vu_id, when it has one.
+    // Deletes the account and, for a VU account, its group
+    // memberships, which are kept by VU id — a change made by
+    // a plain link (LAB-19). The solves and feedback of the
+    // account stay.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -373,8 +377,13 @@ class UsersController extends BaseController
 
     public function destroy($user_id)
     {
+        $vu_id = User::where(['id' => $user_id])->value('vu_id');
+
         User::destroy($user_id);
-        GroupsUsers::where(['user_id'=>$user_id])->delete();
+
+        if ($vu_id) {
+            GroupsUsers::where(['vu_id' => $vu_id])->delete();
+        }
 
         session()->flash('success', 'User deleted!');
 

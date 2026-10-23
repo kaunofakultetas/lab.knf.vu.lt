@@ -407,4 +407,31 @@ final class EmailsTest extends TestCase
         $this->assertSame(1, Emails::count());
         $this->assertSame(0, (int) $template->refresh()->sent);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_empty_template_form_is_refused
+    // -----------------------------------------------------------
+    //
+    // A template form sent empty goes back with an error for the
+    // name, subject and content, and stores nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_empty_template_form_is_refused(): void
+    {
+        $before = Emails::count();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/emails/create')->post('/control-panel/emails/store', []);
+
+        $response->assertRedirect('/control-panel/emails/create');
+        $response->assertSessionHasErrors(['name', 'subject', 'content']);
+        $this->assertSame($before, Emails::count());
+    }
 }

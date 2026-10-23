@@ -5,8 +5,8 @@
 //
 //  The categories page of the control panel and its
 //  dialog: list, add, rename and delete the categories the
-//  challenges are filed under. Listing and deleting are
-//  main-only; the dialog routes are not (LAB-12).
+//  challenges are filed under. Every route of it is
+//  main-only (perms).
 //
 //    GET  /control-panel/categories                 — the page
 //    GET  /control-panel/dialog/category/new        — add dialog
@@ -24,6 +24,7 @@ namespace App\Http\Controllers\Admins;
 
 use App\Http\Controllers\Admins\BaseController;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 use App\Models\ChallengesCategories;
 use App\Models\Categories;
 
@@ -38,8 +39,8 @@ use App\Models\Categories;
 // CategoriesController
 // -----------------------------------------------------------
 //
-// None of the forms is validated (LAB-14): an empty name
-// ends in a server error on the NOT NULL column.
+// A new category needs a name, the rename form checks
+// nothing.
 //
 //   __construct — the base's layout data
 //   index       — the categories page
@@ -139,7 +140,8 @@ class CategoriesController extends BaseController
     // POST /control-panel/dialog/category/store
     //
     // Adds a category with the name as sent, then goes back
-    // with "Created!".
+    // with "Created!"; a form without a name goes back with
+    // the error.
     //
     // Used by:
     //   - the category dialog, for a new category
@@ -147,6 +149,14 @@ class CategoriesController extends BaseController
 
     public function store(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         Categories::create(['name' => $request->get('name')]);
 
         session()->flash('success', 'Created!');

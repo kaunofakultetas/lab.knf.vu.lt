@@ -627,4 +627,31 @@ final class RegistrationTest extends TestCase
         $this->post('/login', $credentials)->assertRedirect('/user/dashboard');
         $this->assertAuthenticated('users');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_form_keeps_no_password
+    // -----------------------------------------------------------
+    //
+    // A refused registration comes back with the username and
+    // e-mail filled in again, but neither password is kept in
+    // the session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_form_keeps_no_password(): void
+    {
+        $this->post('/register', ['username' => 'Jo', 'email' => 'jonas@players.test', 'password' => 'typed-secret-1', 'password_confirmation' => 'typed-secret-1']);
+
+        $this->assertSame('Jo', session()->getOldInput('username'));
+        $this->assertSame('jonas@players.test', session()->getOldInput('email'));
+        $this->assertNull(session()->getOldInput('password'));
+        $this->assertNull(session()->getOldInput('password_confirmation'));
+    }
 }

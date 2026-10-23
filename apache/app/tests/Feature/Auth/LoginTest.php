@@ -491,4 +491,29 @@ final class LoginTest extends TestCase
         $this->signIn($this->makeSsoPlayer());
         $this->get('/user/leaderboard')->assertSee('href="https://lab.knf.vu.lt/user/logout_saml"', false);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_form_keeps_no_password
+    // -----------------------------------------------------------
+    //
+    // A refused login form comes back with the e-mail filled in
+    // again, but the password typed into it is never kept in the
+    // session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_form_keeps_no_password(): void
+    {
+        $this->post('/login', ['email' => 'jonas@players.test', 'password' => 'short']);
+
+        $this->assertSame('jonas@players.test', session()->getOldInput('email'));
+        $this->assertNull(session()->getOldInput('password'));
+    }
 }

@@ -7,8 +7,9 @@
 //  solved: the points it gave, when and from which address.
 //  Only right answers are stored, so a row means "solved";
 //  the table's unique key on user_id and challenge_id keeps
-//  a second solve of the same challenge out (LAB-24). The
-//  ranking views read the rows too (mysql/init.sql).
+//  a second solve of the same challenge out, even when both
+//  arrive at once. The ranking views read the rows too
+//  (mysql/init.sql).
 //
 //  Used by:
 //    - Users\ChallengesController::submit_answer — books a

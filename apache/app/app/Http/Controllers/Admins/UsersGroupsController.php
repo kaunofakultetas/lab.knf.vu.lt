@@ -60,9 +60,10 @@ use App\Models\GroupsUsers;
 // UsersGroupsController
 // -----------------------------------------------------------
 //
-// The group, member and challenge forms are not validated
-// (LAB-14): an empty one ends in a server error on a NOT
-// NULL column.
+// An empty group form goes back with the error. The member
+// and challenge forms are not validated — their dialogs
+// always send a value, so only a hand-made request ends in a
+// server error on a NOT NULL column.
 //
 //   __construct              — the base's layout data
 //   index                    — the groups list
@@ -122,9 +123,8 @@ class UsersGroupsController extends BaseController
     // GET /control-panel/users/vu-groups
     //
     // The admins.users-groups view: every group for a main
-    // admin, by the session's flag (LAB-28), only the admin's
-    // own for a lab admin; newest first, 50 to a page of the
-    // list.
+    // admin, only the admin's own for a lab admin; newest
+    // first, 50 to a page of the list.
     //
     // Used by:
     //   - the Groups link of the panel's sidebar
@@ -132,7 +132,7 @@ class UsersGroupsController extends BaseController
 
     public function index(Request $request)
     {
-        if(Session::get('main') == 1){
+        if(Auth::guard('admins')->user()?->main == 1){
             $all_groups = Groups::all()->toArray();
             $groups_ordered = Groups::all()->sortByDesc('id')->toArray();
         } else {
@@ -209,7 +209,8 @@ class UsersGroupsController extends BaseController
     //
     // Adds a group with the name as sent, owned by the
     // signed-in admin, with a fresh UUID as its public id;
-    // then back with "Created!".
+    // then back with "Created!". A form without a name goes
+    // back with the error.
     //
     // Used by:
     //   - the group dialog, for a new group
@@ -217,6 +218,14 @@ class UsersGroupsController extends BaseController
 
     public function store(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         Groups::create(['name' => $request->get('name'), 'created_by'=>Auth::guard('admins')->id(), 'created'=>date("Y-m-d H:i:s"), 'public_id'=>Str::uuid()]);
 
         session()->flash('success', 'Created!');
@@ -441,15 +450,9 @@ class UsersGroupsController extends BaseController
     //
     // Removes the membership row uid — one member of one group
     // — and goes back with "Deleted!", a change made by a
-    // plain link (LAB-19).
-    //
-    // Known bug LAB-13 (medium): neither this route nor the
-    // one of challenge_destroy runs an ownership check, unlike
-    // every other group route, and both take bare row ids
-    // (routes/web.php), so any admin can remove members and
-    // challenges from any group. Fix: check that the row's
-    // group belongs to the admin, as r_exists does for the
-    // group itself.
+    // plain link (LAB-19). The route's r_exists check
+    // (membership_owned) keeps a lab admin to the members of
+    // its own groups.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the remove
@@ -535,8 +538,9 @@ class UsersGroupsController extends BaseController
     // GET /control-panel/users/vu-groups/delete_challenge/{uid}
     //
     // Removes the group-challenge row uid and goes back with
-    // "Deleted!", a change made by a plain link (LAB-19). No
-    // ownership check (LAB-13, see group_destroy).
+    // "Deleted!", a change made by a plain link (LAB-19). The
+    // route's r_exists check (group_challenge_owned) keeps a
+    // lab admin to the challenges of its own groups.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the remove

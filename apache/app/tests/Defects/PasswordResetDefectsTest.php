@@ -20,7 +20,6 @@ namespace Tests\Defects;
 use App\Mail\SendNewPass;
 use App\Mail\SendRemindLink;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Tests\Support\KnownDefects;
 use Tests\TestCase;
@@ -36,7 +35,7 @@ use Tests\TestCase;
 // PasswordResetDefectsTest
 // -----------------------------------------------------------
 //
-// LAB-25 to LAB-27. Mail is faked in every test.
+// LAB-25 and LAB-27. Mail is faked in every test.
 //
 //   mailedLink — the token of a freshly mailed reminder
 //
@@ -126,37 +125,6 @@ final class PasswordResetDefectsTest extends TestCase
         $this->assertDefectStillOpen('LAB-25', function () use ($response) {
             $response->assertNotFound();
             Mail::assertNotSent(SendNewPass::class);
-        });
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_lab_26_reminder_tokens_are_not_stored_as_mailed
-    // -----------------------------------------------------------
-    //
-    // Known bug LAB-26 (low): reminder tokens are stored
-    // exactly as mailed, in plain text in remember_token, so
-    // anyone who can read the users table — a backup, dbgate
-    // — can reset the password of every account with a
-    // pending reminder. Fix: store a hash of the token and
-    // compare hashes.
-    //
-    // Used by:
-    //   - PHPUnit — the Defects suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    public function test_lab_26_reminder_tokens_are_not_stored_as_mailed(): void
-    {
-        $player = $this->makePlayer();
-        $link = $this->mailedLink($player);
-
-        $this->assertDefectStillOpen('LAB-26', function () use ($player, $link) {
-            $this->assertNotSame($link, $player->refresh()->remember_token, 'the users table holds the mailed token');
-            $this->assertFalse(DB::table('password_resets')->where('token', $link)->exists(), 'password_resets holds the mailed token');
         });
     }
 

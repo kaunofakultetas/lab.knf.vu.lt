@@ -8,8 +8,7 @@
 //  and admins, the control panel's accounts
 //  (App\Models\Admin on cyber_admins). Both live in the one
 //  session, so a browser can be signed into both sides at
-//  once. There is no web guard, which Sanctum's config
-//  names (LAB-05).
+//  once. Sanctum's guard is users too (config/sanctum.php).
 //
 //  Used by:
 //    - Laravel's auth — Auth::guard('users') and

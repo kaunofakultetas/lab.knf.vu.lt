@@ -75,17 +75,10 @@ class BaseController extends Controller
     // The event range comes from the event_date setting: the
     // layouts read event_start_time; event_end_time, and
     // event_start and event_end — shifted two hours back — are
-    // shared but read by no view.
-    //
-    // Known bug LAB-03 (medium): an event range saved without
-    // the " - " separator breaks every page through here — the
-    // split has no second half, and reading it
-    // (BaseController.php:148) throws before anything is
-    // shared; the error page cannot render either, as its
-    // layout reads event_start_time, so visitors get an empty
-    // server error. Fix: validate the range in
-    // Admins\SettingsController::event_data, and fall back
-    // gracefully on a malformed stored value.
+    // shared but read by no view. The settings form takes any
+    // text, so a range saved without its " - " separator is
+    // read as a start that is also the end, rather than taking
+    // every player page and the login page down.
     //
     // Used by:
     //   - Laravel, when it builds a player controller for a
@@ -144,6 +137,7 @@ class BaseController extends Controller
             // STEP 4: the event range, then everything shared
             // ===============================================
             $dates = explode(" - ",Settings::find(1)->val1);
+            $dates[1] = $dates[1] ?? $dates[0];
 
             View::share('event_end', date("Y-m-d H:i:s", strtotime($dates[1])-7200));
             View::share('event_start', date("Y-m-d H:i:s", strtotime($dates[0])-7200));

@@ -53,16 +53,11 @@ class Perms
     // handle
     // -----------------------------------------------------------
     //
-    // Passes the request when the session's main flag is 1 —
-    // the flag the SSO login copies from the admin's account
-    // (AdminAuthController::check_admin) — and redirects back
-    // with the error otherwise.
-    //
-    // Known bug LAB-28 (medium): the flag is read from the
-    // session, never from the account (Perms.php:73), so
-    // an admin whose main rights are taken away keeps them
-    // until signing in again. Fix: read the flag from the
-    // signed-in admin's row.
+    // Passes the request when the signed-in admin's account
+    // is a main admin's, and redirects back with the error
+    // otherwise. The flag is read from the account on every
+    // request, so rights taken away end at once, not at the
+    // next sign-in.
     //
     // Used by:
     //   - the perms alias — the main-only routes
@@ -70,7 +65,7 @@ class Perms
 
     public function handle($request, Closure $next)
     {
-        if(Session::get('main') == 1){
+        if(Auth::guard('admins')->user()?->main == 1){
             return $next($request);
         } else {
             return back()->withErrors(['You don\'t have permissions to do this!']);

@@ -11,8 +11,8 @@
 //  Used by:
 //    - Admins\UsersGroupsController — the member list, its
 //      add dialog and the removals
-//    - Admins\UsersController::destroy — which deletes by a
-//      user_id column the table does not have (LAB-11)
+//    - Admins\UsersController::destroy — removes a deleted
+//      VU account's memberships
 //    - GroupExists (Http/Middleware/) and
 //      Users\BaseController — who may open a group, and the
 //      groups of the sidebar

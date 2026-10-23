@@ -50,11 +50,12 @@ use Mailjet\Resources;
 // EmailsController
 // -----------------------------------------------------------
 //
-// The template forms are not validated (LAB-14). The
-// Mailjet API this controller calls for the list sync is
-// not among the hosts the stack's egress lets through
-// (exit/Caddyfile: the SMTP relay and reCAPTCHA only), so
-// the sync cannot work in production as it stands.
+// A new template needs a name, subject and content; the
+// edit form checks nothing. The Mailjet API this controller
+// calls for the list sync is not among the hosts the
+// stack's egress lets through (exit/Caddyfile: the SMTP
+// relay and reCAPTCHA only), so the sync cannot work in
+// production as it stands.
 //
 //   __construct     — the base's layout data
 //   index           — the templates list
@@ -188,12 +189,8 @@ class EmailsController extends BaseController
     // POST /control-panel/emails/store
     //
     // Adds a template, not sent yet, and goes to the list with
-    // "Created!".
-    //
-    // Known bug LAB-14 (low): the validator is built and never
-    // asked (EmailsController.php:204), so an empty form
-    // ends in a server error on the NOT NULL columns instead
-    // of coming back with errors. Fix: validate the request.
+    // "Created!"; a form missing the name, subject or content
+    // goes back with the errors and what was typed.
     //
     // Used by:
     //   - the template form, for a new template
@@ -206,6 +203,10 @@ class EmailsController extends BaseController
             'content' => 'required',
             'subject' => 'required'
         ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
 
         Emails::create([
             'name' => $request->get('name'),

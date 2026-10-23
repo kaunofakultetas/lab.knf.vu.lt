@@ -114,9 +114,9 @@ class SettingsController extends BaseController
     // POST /control-panel/settings/event_data
     //
     // Stores the event's time range exactly as typed, then
-    // goes back with "Updated!". Nothing checks the text: a
-    // range without its " - " separator breaks every player
-    // page (LAB-03, Users\BaseController).
+    // goes back with "Updated!". Nothing checks the text;
+    // Users\BaseController reads a range without its " - "
+    // separator as a start that is also the end.
     //
     // Used by:
     //   - the time range form of admins/settings.blade.php

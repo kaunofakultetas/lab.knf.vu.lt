@@ -217,17 +217,12 @@ class ChallengesController extends BaseController
     //
     // Adds a challenge owned by the signed-in admin, with a
     // fresh UUID as its public id and the flag trimmed;
-    // hidden when the session does not mark a main admin
-    // (LAB-28). Then to the list with "Created!".
-    //
-    // Known bug LAB-10 (low): the validator is built and never
-    // asked (ChallengesController.php:245), so a form missing
-    // a field ends in a server error on the NOT NULL columns
-    // instead of coming back with errors. Fix: validate the
-    // request.
+    // hidden unless the admin's account is a main admin's.
+    // Then to the list with "Created!". A form missing a field
+    // goes back with the errors and what was typed.
     //
     // Known bug LAB-29 (medium): the content is stored as given
-    // (ChallengesController.php:266) and the challenge page
+    // (ChallengesController.php:265) and the challenge page
     // prints it as raw HTML, under a CSP that allows inline
     // scripts — so a lab admin can run JavaScript in the
     // browser of every player who opens the challenge, and
@@ -251,7 +246,11 @@ class ChallengesController extends BaseController
             'points' => 'required'
         ]);
 
-        if(Session::get('main') == 1){
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
+        if(Auth::guard('admins')->user()?->main == 1){
             $hidden=0;
         } else {
             $hidden=1;
@@ -321,13 +320,8 @@ class ChallengesController extends BaseController
     // Changes the challenge with the posted uid to the form's
     // fields as sent — the content unfiltered, as in store
     // (LAB-29) — then goes to the list with "Updated!". The
-    // hidden switch stays as it was.
-    //
-    // Known bug LAB-07 (medium): the editing admin's id is
-    // written into created_by (ChallengesController.php:341), so
-    // when a main admin corrects a lab admin's challenge, the
-    // lab admin can no longer open, change or delete it. Fix:
-    // leave created_by out of the update.
+    // hidden switch and the author stay as they were, so a lab
+    // admin keeps a challenge a main admin corrected.
     //
     // Used by:
     //   - the challenge form, for an existing challenge
@@ -338,7 +332,6 @@ class ChallengesController extends BaseController
         Challenges::where(['id' => $request->get('uid')])->update([
             'name' => $request->get('name'),
             'partner_id' => $request->get('partner_id'),
-            'created_by' => Auth::guard('admins')->id(),
             'descr' => $request->get('descr'),
             'content' => $request->get('content'),
             'answer' => $request->get('answer'),
@@ -432,13 +425,8 @@ class ChallengesController extends BaseController
     // Replaces the categories of the challenge with the posted
     // uid by the ticked ones — the keys of the item field —
     // then goes back, with "Categoried updated!" when any was
-    // ticked.
-    //
-    // Known bug LAB-08 (low): with every box unticked the item
-    // field is missing, and count() of it throws
-    // (ChallengesController.php:453) after the old categories are
-    // deleted — a server error instead of a cleared list. Fix:
-    // treat a missing list as an empty one.
+    // ticked. With every box unticked the form sends no item
+    // field at all, and the challenge is left with none.
     //
     // Used by:
     //   - the categories dialog's form
@@ -448,7 +436,7 @@ class ChallengesController extends BaseController
     {
         ChallengesCategories::where(['challenge_id'=>$request->get('uid')])->delete();
 
-        $items = $request->get('item');
+        $items = $request->get('item', []);
 
         if(count($items)>0){
             foreach($items as $k => $v){
@@ -572,17 +560,11 @@ class ChallengesController extends BaseController
     // POST /control-panel/challenges_file/store
     //
     // Adds a link to the challenge with the posted uid — a
-    // name of up to 255 characters and an address of up to
-    // 2048 — then goes back with "File created!".
-    //
-    // Known bug LAB-09 (low): the rule url:http,https
-    // (ChallengesController.php:595) restricts nothing — the url rule
-    // of Laravel 10.6 takes no protocol list and ignores it —
-    // so ftp, file and the rest of Laravel's scheme list are
-    // stored and shown to players as links; javascript: stays
-    // refused, as it is not on that list. Fix: a Laravel
-    // release whose url rule reads protocols, or a
-    // starts_with:http://,https:// rule next to it.
+    // name of up to 255 characters and a web address of up to
+    // 2048 — then goes back with "File created!". The url rule
+    // of Laravel 10.6 ignores its protocol list, so starts_with
+    // is what keeps ftp, smb, file and the other schemes the
+    // url rule knows out.
     //
     // Used by:
     //   - the link dialog, for a new link
@@ -592,7 +574,7 @@ class ChallengesController extends BaseController
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'file_url' => 'required|url:http,https|max:2048',
+            'file_url' => 'required|url:http,https|starts_with:http://,https://|max:2048',
         ]);
 
         ChallengesFiles::create([
@@ -618,9 +600,9 @@ class ChallengesController extends BaseController
     // POST /control-panel/challenges_file/update
     //
     // Changes the link with the posted uid, under the rules of
-    // file_store (LAB-09), then goes back with "File
-    // updated!". The route's r_exists check reads that uid as
-    // a challenge id (LAB-06, routes/web.php).
+    // file_store, then goes back with "File updated!". The
+    // route's r_exists check reads that uid as a challenge id
+    // (LAB-06, routes/web.php).
     //
     // Used by:
     //   - the link dialog, for an existing link
@@ -630,7 +612,7 @@ class ChallengesController extends BaseController
     {
         $request->validate([
             'name' => 'required|string|max:255',
-            'file_url' => 'required|url:http,https|max:2048',
+            'file_url' => 'required|url:http,https|starts_with:http://,https://|max:2048',
         ]);
 
         ChallengesFiles::where(['id'=>$request->get('uid')])->update([

@@ -59,7 +59,8 @@ class Handler extends ExceptionHandler
 
     // The inputs never flashed back to the form after a failed
     // validation. The login and registration forms flash
-    // their input themselves, past this list (LAB-02)
+    // their input themselves, past this list, and leave the
+    // passwords out on their own
     protected $dontFlash = [
         'current_password',
         'password',

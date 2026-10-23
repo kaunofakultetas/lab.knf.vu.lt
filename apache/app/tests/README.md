@@ -71,7 +71,8 @@ MySQL creating its schema.
   counts those deprecations under the run's report; they do not fail it.
 - Races are pinned without real concurrency: the test listens to its own
   request's queries (`DB::listen`) or Redis commands and slips the other
-  request's write in where it would land live — see `RaceDefectsTest`.
+  request's write in where it would land live — see
+  `test_simultaneous_solves_keep_all_points` in `Feature/Play/ChallengeTest.php`.
 - A defect found but not yet fixed gets its regression test up front in
   `tests/Defects` (or, for the web server, in `tests/Http`), stating the
   wanted behaviour inside `assertDefectStillOpen('LAB-nn', ...)`. While

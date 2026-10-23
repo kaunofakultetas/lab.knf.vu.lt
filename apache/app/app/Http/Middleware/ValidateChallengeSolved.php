@@ -60,7 +60,8 @@ class ValidateChallengeSolved
     // Counts the player's solves of the challenge with the
     // route's public_id and passes the request when there are
     // none. Two answers sent at once both pass before either
-    // is booked (LAB-24).
+    // is booked; submit_answer then answers the second as
+    // solved.
     //
     // Used by:
     //   - the validate.ifsolved alias — the challenge page and

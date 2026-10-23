@@ -106,13 +106,9 @@ class RegisterController extends Controller
     // reCAPTCHA v3 score of at least 0.6 for the register
     // action. The account starts inactive with a 50-character
     // verify_token, which the verification mail carries; tags
-    // are stripped from the username and e-mail first.
-    //
-    // Known bug LAB-02 (low): a refused form is sent back with
-    // withInput() and no arguments (RegisterController.php:133),
-    // which flashes every field, both passwords included, into
-    // the session until the next request. Fix: flash only the
-    // username and e-mail.
+    // are stripped from the username and e-mail first. A
+    // refused form comes back refilled but for both passwords,
+    // which never sit in the session.
     //
     // Used by:
     //   - the registration form of users/register.blade.php
@@ -130,7 +126,7 @@ class RegisterController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return redirect()->route('register_users')->withErrors($validator)->withInput();
+            return redirect()->route('register_users')->withErrors($validator)->withInput($request->except('password', 'password_confirmation'));
         }
 
         $uid_token = Str::random(50);
@@ -230,17 +226,11 @@ class RegisterController extends Controller
     // Behind a reCAPTCHA v3 score of at least 0.6 for the
     // forgotpass action: when exactly one local account has
     // the e-mail, mails it a reminder link with a fresh
-    // 50-character token and stores the token in
-    // remember_token. The answer is the same whether or not
-    // the account exists, so the form tells no one which
-    // addresses are registered.
-    //
-    // Known bug LAB-26 (low): the token is stored exactly as
-    // mailed, in plain text (RegisterController.php:263), so
-    // anyone who can read the users table — a backup, dbgate —
-    // can reset the password of every account with a pending
-    // reminder. Fix: store a hash of the token and compare
-    // hashes.
+    // 50-character token and stores the token's SHA-256 hash
+    // in remember_token — never the token, so the users table
+    // alone resets no password. The answer is the same whether
+    // or not the account exists, so the form tells no one
+    // which addresses are registered.
     //
     // Used by:
     //   - the form of users/forgot-password.blade.php
@@ -260,7 +250,7 @@ class RegisterController extends Controller
 
             Mail::to($request->input('email'))->send(new SendRemindLink(['uid'=>$uid]));
 
-            User::where(['email'=>$request->input('email')])->update(['remember_token'=>$uid]);
+            User::where(['email'=>$request->input('email')])->update(['remember_token'=>hash('sha256', $uid)]);
         }
 
         session()->flash('success', 'If email exists in our database, you will receive reset link.');
@@ -279,14 +269,14 @@ class RegisterController extends Controller
     //
     // GET /reset/{reset_token}
     //
-    // Gives the account holding the token a new random
+    // Gives the account holding the token's hash a new random
     // 12-character password, mails it, stores its hash and
     // empties the token, then goes to the login page. The
     // validate.reset middleware has refused unknown tokens
     // already.
     //
     // Known bug LAB-27 (low): merely opening the link does the
-    // reset (RegisterController.php:307) — mail filters and link
+    // reset (RegisterController.php:297) — mail filters and link
     // scanners that open the links of incoming mail use the
     // reminder up and change the password before the player
     // clicks anything. Fix: let the link open a page whose
@@ -300,11 +290,11 @@ class RegisterController extends Controller
     {
         $new_pass = Str::random(12);
 
-        $user_email = User::select('email')->where('remember_token', '=', $reset_token)->get()->pluck('email')->first();
+        $user_email = User::select('email')->where('remember_token', '=', hash('sha256', $reset_token))->get()->pluck('email')->first();
 
         Mail::to($user_email)->send(new SendNewPass(['email'=>$user_email, 'new_pass'=>$new_pass]));
 
-        User::where('remember_token', '=', $reset_token)->update(['password'=>Hash::make($new_pass), 'remember_token'=>'']);
+        User::where('remember_token', '=', hash('sha256', $reset_token))->update(['password'=>Hash::make($new_pass), 'remember_token'=>'']);
 
         session()->flash('success', 'We just emailed you new password');
 

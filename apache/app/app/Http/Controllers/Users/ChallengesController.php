@@ -29,7 +29,9 @@ use App\Http\Controllers\Users\SettingsController;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use App\Models\Groups;
@@ -262,30 +264,18 @@ class ChallengesController extends BaseController
     // — with the points won. Every "VU{" and "}" is removed
     // from the answer before the compare, so the flag matches
     // with or without its wrapper — and a stored flag must be
-    // saved without it. Wrong answers and solved challenges
-    // go back with "Wrong answer" or "Already solved".
-    //
-    // Known bug LAB-04 (low): the compare is ==
-    // (ChallengesController.php:331), which PHP makes numeric
-    // for numeric strings, so a numeric flag is also accepted
-    // in any spelling of the same number. Fix: compare with
-    // ===.
+    // saved without it; the compare is exact, so a numeric
+    // flag matches only as written. Wrong answers and solved
+    // challenges go back with "Wrong answer" or "Already
+    // solved". The points are added in SQL, so solves two tabs
+    // book at the same moment all count; the same right answer
+    // sent twice at once — a double click — passes both
+    // "already solved" checks, and the second solve, which the
+    // table's unique key refuses, goes back as solved too.
     //
     // Known bug LAB-21 (low): answers have no rate limit
     // (routes/web.php), so flags can be guessed without end.
     // Fix: throttle the route per player.
-    //
-    // Known bug LAB-22 (low): the points are read, added in PHP
-    // and written back (ChallengesController.php:340), so a
-    // solve booked by another tab between the read and the
-    // write is lost. Fix: add the points in SQL, with
-    // increment().
-    //
-    // Known bug LAB-24 (low): the same right answer sent twice
-    // at once passes both "already solved" checks; the unique
-    // key then refuses the second insert, whose QueryException
-    // ends on the 500 page. Fix: catch the duplicate and answer
-    // as for a solved challenge.
     //
     // Used by:
     //   - the answer form of users/challenge.blade.php
@@ -328,18 +318,29 @@ class ChallengesController extends BaseController
         // feed row and the cached feed
         // =======================================================
         if ($solved == 0) {
-            if (trim($challenge_answer) == $answer) {
+            if (trim($challenge_answer) === $answer) {
                 $submitTask = new ChallengesSubmitted();
                 $submitTask->user_id = Auth::guard('users')->id();
                 $submitTask->challenge_id = $challenge_id;
                 $submitTask->points_given = $challenge_points;
                 $submitTask->created = date('Y-m-d H:i:s');
                 $submitTask->ip = SettingsController::getUserIP();
-                $submitTask->save();
 
+                // MySQL's duplicate-entry error: the same solve booked
+                // a moment ago by the other half of a double click
+                try {
+                    $submitTask->save();
+                } catch (QueryException $e) {
+                    if ((int) ($e->errorInfo[1] ?? 0) !== 1062) {
+                        throw $e;
+                    }
+
+                    return back()->withErrors(['Already solved']);
+                }
+
+                // A missing total counts as 0, as it always has
                 User::where(["id" => Auth::guard('users')->id()])->update(
-                    ["points" => User::select('points')->where(
-                        ["id" => Auth::guard('users')->id()])->get()->pluck('points')->first() + $challenge_points]);
+                    ["points" => DB::raw('IFNULL(points, 0) + ' . (int) $challenge_points)]);
 
                 // The content line is neither fillable nor a column,
                 // so the model drops it
@@ -387,14 +388,10 @@ class ChallengesController extends BaseController
     //
     // One vote per player and challenge: up or down adds one
     // to the challenge's ThumbsUp_ or ThumbsDown_ counter in
-    // Redis, and any type marks the player as having voted.
+    // Redis — INCR, so votes cast at the same moment all
+    // count — and any type marks the player as having voted.
     // The answer is an empty page; the challenge is never
     // looked up, so any public id collects votes.
-    //
-    // Known bug LAB-23 (low): the counter is read, added to in
-    // PHP and written back (ChallengesController.php:410), so
-    // two votes at the same moment can count as one. Fix:
-    // Redis INCR.
     //
     // Used by:
     //   - thumbs() and thumbs_list() of custom.js — the vote
@@ -407,15 +404,11 @@ class ChallengesController extends BaseController
 
         if($voted == 0){
             if($type == 'up'){
-                $current = Redis::get('ThumbsUp_'.$public_id) ?? 0;
-
-                Redis::set('ThumbsUp_'.$public_id, $current + 1);
+                Redis::incr('ThumbsUp_'.$public_id);
             }
 
             if($type == 'down'){
-                $current = Redis::get('ThumbsDown_'.$public_id) ?? 0;
-
-                Redis::set('ThumbsDown_'.$public_id, $current + 1);
+                Redis::incr('ThumbsDown_'.$public_id);
             }
 
             Redis::set('Vote_'.$public_id.'_'.Auth::guard('users')->id(), 1);

@@ -50,12 +50,13 @@
 //    GET       /control-panel/logout
 //    GET       /control-panel/dashboard
 //
-//  The control panel, main admins only — the categories
-//  page, the partners, the content pages, the mail
-//  templates and the settings:
+//  The control panel, main admins only — the categories,
+//  the partners, the content pages, the mail templates and
+//  the settings:
 //
 //    GET       /control-panel/categories
 //    GET       /control-panel/category/delete/{uid}
+//    GET|POST  /control-panel/dialog/category/…
 //    GET       /control-panel/partners[/delete/{uid}]
 //    GET|POST  /control-panel/dialog/partners/…
 //    GET|POST  /control-panel/pages[/…]
@@ -63,13 +64,12 @@
 //    GET       /control-panel/dialog/emails/send_test/{email_id}
 //    GET|POST  /control-panel/settings[/…]
 //
-//  The control panel, every admin — the category dialogs,
-//  the accounts, the challenges and the groups; within them
-//  perms guards an account's new password, status and
-//  deletion and a challenge's status, and r_exists the
-//  changes to a group or a challenge:
+//  The control panel, every admin — the accounts, the
+//  challenges and the groups; within them perms guards an
+//  account's new password, status and deletion and a
+//  challenge's status, and r_exists the changes to a group
+//  or a challenge:
 //
-//    GET|POST  /control-panel/dialog/category/…
 //    GET|POST  /control-panel/users[/…]
 //    GET|POST  /control-panel/dialog/users/…
 //    GET|POST  /control-panel/challenges[/…]
@@ -189,19 +189,15 @@ Route::prefix('control-panel')->group(function(){
     // The forms the panel's pages open in a modal, and the POSTs
     // they send
     Route::prefix('dialog')->group(function(){
-        // The category dialog.
-        //
-        // Known bug LAB-12 (medium): categories are main-only in the
-        // list and on deletion, but these four routes lack perms
-        // (web.php:198), so a lab admin can add categories and rename
-        // the lab-wide ones. Fix: add perms to the four routes.
-        Route::get('/category/new', [App\Http\Controllers\Admins\CategoriesController::class, 'create'])->middleware(['auth.admin:admins']);
+        // The category dialog — main-only, like the categories
+        // page
+        Route::get('/category/new', [App\Http\Controllers\Admins\CategoriesController::class, 'create'])->middleware(['auth.admin:admins', 'perms']);
 
-        Route::post('/category/store', [App\Http\Controllers\Admins\CategoriesController::class, 'store'])->middleware(['auth.admin:admins'])->name('admin.category.store');
+        Route::post('/category/store', [App\Http\Controllers\Admins\CategoriesController::class, 'store'])->middleware(['auth.admin:admins', 'perms'])->name('admin.category.store');
 
-        Route::get('/category/edit/{uid}', [App\Http\Controllers\Admins\CategoriesController::class, 'edit'])->middleware(['auth.admin:admins']);
+        Route::get('/category/edit/{uid}', [App\Http\Controllers\Admins\CategoriesController::class, 'edit'])->middleware(['auth.admin:admins', 'perms']);
 
-        Route::post('/category/update', [App\Http\Controllers\Admins\CategoriesController::class, 'update'])->middleware(['auth.admin:admins'])->name('admin.category.update');
+        Route::post('/category/update', [App\Http\Controllers\Admins\CategoriesController::class, 'update'])->middleware(['auth.admin:admins', 'perms'])->name('admin.category.update');
 
         // The partner dialog — main-only
         Route::get('/partners/new', [App\Http\Controllers\Admins\PartnersController::class, 'create'])->middleware(['auth.admin:admins', 'perms']);
@@ -299,17 +295,12 @@ Route::prefix('control-panel')->group(function(){
 
     Route::get('/users/vu-groups/delete/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'destroy'])->middleware(['auth.admin:admins','r_exists:group_owned']);
 
-    // Removing a member or a challenge from a group.
-    //
-    // Known bug LAB-13 (medium): these two routes (web.php:310 and
-    // web.php:312) run no ownership check, unlike every other group
-    // route, and take bare row ids, so any admin can remove
-    // members and challenges from any group. Fix: check that the
-    // row's group belongs to the admin, as r_exists does for the
-    // group itself.
-    Route::get('/users/vu-groups/delete_group/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'group_destroy'])->middleware(['auth.admin:admins']);
+    // Removing a member or a challenge from a group; the uid
+    // is the membership's or the group challenge's row, and
+    // r_exists checks the group it belongs to
+    Route::get('/users/vu-groups/delete_group/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'group_destroy'])->middleware(['auth.admin:admins','r_exists:membership_owned']);
 
-    Route::get('/users/vu-groups/delete_challenge/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'challenge_destroy'])->middleware(['auth.admin:admins']);
+    Route::get('/users/vu-groups/delete_challenge/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'challenge_destroy'])->middleware(['auth.admin:admins','r_exists:group_challenge_owned']);
 
     // The mail templates' forms, the sending and the list sync —
     // main-only
@@ -335,7 +326,7 @@ Route::prefix('control-panel')->group(function(){
     //
     // Known bug LAB-06 (medium): a file link can be neither
     // changed nor deleted. The challenges_file/update and
-    // challenges/files/delete routes (web.php:362 and web.php:364)
+    // challenges/files/delete routes (web.php:353 and web.php:355)
     // run the r_exists challenge check, which reads the link's id
     // as a challenge id: unless a challenge happens to share it,
     // the answer is "No challenge!", and a lab admin is checked

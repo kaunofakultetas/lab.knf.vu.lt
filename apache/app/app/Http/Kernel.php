@@ -63,7 +63,7 @@ class Kernel extends HttpKernel
 
     // The groups RouteServiceProvider loads the route files
     // under: web for routes/web.php, api for routes/api.php,
-    // whose one route is the skeleton's /api/user (LAB-05)
+    // whose one route is the skeleton's /api/user
     protected $middlewareGroups = [
         'web' => [
             \App\Http\Middleware\EncryptCookies::class,

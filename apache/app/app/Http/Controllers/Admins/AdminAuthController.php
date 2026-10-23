@@ -186,9 +186,8 @@ class AdminAuthController extends Controller
     // The id of the admin account whose vu_id is the uid the
     // SSO attributes carry, or null for a VU user who is no
     // admin. For an admin it also copies the account's main
-    // flag into the session, the copy the perms and r_exists
-    // checks and the challenge form read from then on
-    // (LAB-28).
+    // flag into the session, where nothing reads it any more:
+    // the checks read the account itself.
     //
     // Used by:
     //   - SamlAuthAdmin::handle (Http/Middleware/) — the SSO

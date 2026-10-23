@@ -27,6 +27,7 @@ namespace Tests\Feature\Auth;
 use App\Mail\SendNewPass;
 use App\Mail\SendRemindLink;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -495,5 +496,31 @@ final class PasswordResetTest extends TestCase
         $this->assertNotSame($first, $second);
         $this->get("/reset/{$first}")->assertNotFound();
         $this->get("/reset/{$second}")->assertRedirect('/');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_reminder_tokens_are_not_stored_as_mailed
+    // -----------------------------------------------------------
+    //
+    // The token a reminder mail carries is stored only as its
+    // hash, so the users table alone resets no password, and
+    // Laravel's password_resets table never holds it either.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_reminder_tokens_are_not_stored_as_mailed(): void
+    {
+        $player = $this->makePlayer();
+        $link = $this->mailedLink($player);
+
+        $this->assertSame(hash('sha256', $link), $player->refresh()->remember_token);
+        $this->assertFalse(DB::table('password_resets')->where('token', $link)->exists());
     }
 }

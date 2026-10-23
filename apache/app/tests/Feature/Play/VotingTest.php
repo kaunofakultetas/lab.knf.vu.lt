@@ -20,6 +20,8 @@ namespace Tests\Feature\Play;
 
 use App\Models\Challenges;
 use App\Models\User;
+use Illuminate\Redis\Events\CommandExecuted;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -291,5 +293,42 @@ final class VotingTest extends TestCase
         $this->get("/user/challenge/{$challenge->public_id}")
             ->assertSee('<span id="thumbs-down-count">1</span>', false)
             ->assertSee('<button disabled class="badge border-0 text-white bg-primary thumbs-up"', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_simultaneous_votes_are_all_counted
+    // -----------------------------------------------------------
+    //
+    // Two votes at the same moment both count. The counter is
+    // raised with INCR, so there is no read to slip the other
+    // player's vote in after; should one come back, the other
+    // vote lands right after it and must still count.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_simultaneous_votes_are_all_counted(): void
+    {
+        $challenge = $this->makeChallenge();
+        $counter = "ThumbsUp_{$challenge->public_id}";
+        $interleaved = false;
+        Redis::enableEvents();
+        Redis::purge();
+        Event::listen(CommandExecuted::class, function (CommandExecuted $event) use ($counter, &$interleaved) {
+            if (!$interleaved && strtolower($event->command) === 'get' && ($event->parameters[0] ?? null) === $counter) {
+                $interleaved = true;
+                Redis::incr($counter);
+            }
+        });
+
+        $this->vote($this->makePlayer(), 'up', $challenge);
+
+        $this->assertSame(1 + ($interleaved ? 1 : 0), $this->counter('ThumbsUp', $challenge));
     }
 }

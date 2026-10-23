@@ -7,8 +7,8 @@
 //  control panel's challenge pages fall short today, under a
 //  LAB-nn id; KnownDefects reports it incomplete while the
 //  defect is open and fails it once a fix lands. The banner
-//  of every test gives the severity, the mechanism with file
-//  and line, and the fix.
+//  of every test gives the severity, the mechanism and where
+//  it lives, and the fix.
 //
 //  Used by:
 //    - PHPUnit — the Defects suite (runTests.sh)
@@ -18,9 +18,7 @@
 namespace Tests\Defects;
 
 use App\Models\Challenges;
-use App\Models\ChallengesCategories;
 use App\Models\ChallengesFiles;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Support\KnownDefects;
 use Tests\TestCase;
 
@@ -35,7 +33,7 @@ use Tests\TestCase;
 // ChallengeDefectsTest
 // -----------------------------------------------------------
 //
-// LAB-06 to LAB-10 and LAB-29.
+// LAB-06 and LAB-29.
 //
 // Used by:
 //   - PHPUnit — the Defects suite (runTests.sh)
@@ -83,180 +81,6 @@ final class ChallengeDefectsTest extends TestCase
         $this->assertDefectStillOpen('LAB-06', function () use ($edited, $deleted) {
             $this->assertSame('new.pcap', $edited->refresh()->name, 'the link was not edited');
             $this->assertNull(ChallengesFiles::find($deleted->id), 'the link was not deleted');
-        });
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_lab_07_editing_a_challenge_keeps_its_author
-    // -----------------------------------------------------------
-    //
-    // Known bug LAB-07 (medium): saving a challenge hands it
-    // to whoever saved it. Admins\ChallengesController::update
-    // (line 341) writes the editing admin's id into
-    // created_by, so when a main admin corrects a lab admin's
-    // challenge, the lab admin can no longer open, change or
-    // delete it. Fix: leave created_by out of the update.
-    //
-    // Used by:
-    //   - PHPUnit — the Defects suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    public function test_lab_07_editing_a_challenge_keeps_its_author(): void
-    {
-        $author = $this->makeAdmin();
-        $challenge = $this->makeChallenge(['created_by' => $author->id]);
-        $form = [
-            'uid'        => $challenge->id,
-            'name'       => 'Corrected Name',
-            'partner_id' => $challenge->partner_id,
-            'descr'      => $challenge->descr,
-            'content'    => $challenge->content,
-            'answer'     => $challenge->answer,
-            'points'     => $challenge->points,
-        ];
-
-        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/challenges/update', $form);
-        $page = $this->signInAdmin($author)->get("/control-panel/challenges/edit/{$challenge->id}");
-
-        $this->assertDefectStillOpen('LAB-07', function () use ($challenge, $author, $page) {
-            $this->assertSame($author->id, $challenge->refresh()->created_by, 'the challenge changed hands');
-            $page->assertOk();
-        });
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_lab_08_all_categories_can_be_taken_off_a_challenge
-    // -----------------------------------------------------------
-    //
-    // Known bug LAB-08 (low): saving the categories dialog
-    // with every box unticked ends in a server error instead
-    // of clearing the categories — the old ones are deleted
-    // first, then count() fails on the missing item list
-    // (Admins\ChallengesController::categories_store, line
-    // 453). Fix: treat a missing list as an empty one.
-    //
-    // Used by:
-    //   - PHPUnit — the Defects suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    public function test_lab_08_all_categories_can_be_taken_off_a_challenge(): void
-    {
-        $challenge = $this->makeChallenge();
-        ChallengesCategories::create(['challenge_id' => $challenge->id, 'cat_id' => 1]);
-
-        $response = $this->signInAdmin($this->makeAdmin(true))
-            ->from('/control-panel/challenges')
-            ->post('/control-panel/challenges/categories/store', ['uid' => $challenge->id]);
-
-        $this->assertDefectStillOpen('LAB-08', function () use ($response, $challenge) {
-            $response->assertRedirect('/control-panel/challenges');
-            $this->assertSame(0, ChallengesCategories::where('challenge_id', $challenge->id)->count());
-        });
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_lab_09_only_web_links_are_accepted_as_files
-    // -----------------------------------------------------------
-    //
-    // Known bug LAB-09 (low): the file-link rule
-    // url:http,https restricts nothing — the url rule of the
-    // installed Laravel (10.6) takes no protocol list and
-    // ignores it — so ftp, smb, file and the rest of
-    // Laravel's long scheme list are stored and shown to
-    // players as links. javascript: links stay refused, as
-    // that scheme is not on the list. Fix: a Laravel release
-    // whose url rule reads protocols, or a
-    // starts_with:http://,https:// rule next to it.
-    //
-    // Used by:
-    //   - PHPUnit — the Defects suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    #[DataProvider('otherSchemes')]
-    public function test_lab_09_only_web_links_are_accepted_as_files(string $url): void
-    {
-        $challenge = $this->makeChallenge();
-
-        $response = $this->signInAdmin($this->makeAdmin(true))
-            ->post('/control-panel/challenges_file/store', ['uid' => $challenge->id, 'name' => 'dump.zip', 'file_url' => $url]);
-
-        $this->assertDefectStillOpen('LAB-09', function () use ($response, $challenge) {
-            $response->assertSessionHasErrors('file_url');
-            $this->assertSame(0, ChallengesFiles::where('challenge_id', $challenge->id)->count());
-        });
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // otherSchemes
-    // -----------------------------------------------------------
-    //
-    // Links of schemes other than http and https that the url
-    // rule lets through.
-    //
-    // Used by:
-    //   - test_lab_09_only_web_links_are_accepted_as_files
-    //     (above)
-    // -----------------------------------------------------------
-
-    public static function otherSchemes(): array
-    {
-        return [
-            'ftp'  => ['ftp://files.test/dump.zip'],
-            'smb'  => ['smb://files.test/share/dump.zip'],
-            'file' => ['file://files.test/etc/passwd'],
-        ];
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_lab_10_an_incomplete_challenge_form_is_refused
-    // -----------------------------------------------------------
-    //
-    // Known bug LAB-10 (low): a challenge form missing a
-    // required field ends in a server error instead of coming
-    // back with errors. Admins\ChallengesController::store
-    // (line 245) builds a validator and never asks it, so the
-    // insert fails on the NOT NULL columns. Fix: validate the
-    // request.
-    //
-    // Used by:
-    //   - PHPUnit — the Defects suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    public function test_lab_10_an_incomplete_challenge_form_is_refused(): void
-    {
-        $response = $this->signInAdmin($this->makeAdmin(true))
-            ->from('/control-panel/challenges/create')
-            ->post('/control-panel/challenges/store', ['name' => 'Half a challenge']);
-
-        $this->assertDefectStillOpen('LAB-10', function () use ($response) {
-            $response->assertRedirect('/control-panel/challenges/create');
-            $response->assertSessionHasErrors(['partner_id', 'descr', 'content', 'answer', 'points']);
-            $this->assertSame(0, Challenges::where('name', 'Half a challenge')->count());
         });
     }
 

@@ -243,4 +243,63 @@ final class CategoriesTest extends TestCase
 
         $this->assertNotNull($category->fresh());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_lab_admins_cannot_create_or_rename_categories
+    // -----------------------------------------------------------
+    //
+    // The category dialog is main-only like the categories page:
+    // a lab admin who posts it anyway is refused, and nothing is
+    // added or renamed.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_lab_admins_cannot_create_or_rename_categories(): void
+    {
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
+
+        $this->post('/control-panel/dialog/category/store', ['name' => 'Lab Admin Category']);
+        $created = session('errors') ? session('errors')->all() : [];
+        $this->post('/control-panel/dialog/category/update', ['uid' => 1, 'name' => 'Renamed By A Lab Admin']);
+        $renamed = session('errors') ? session('errors')->all() : [];
+
+        $this->assertContains(self::REFUSAL, $created);
+        $this->assertContains(self::REFUSAL, $renamed);
+        $this->assertSame(0, Categories::where('name', 'Lab Admin Category')->count());
+        $this->assertSame('Cryptography', Categories::find(1)->name);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_empty_category_form_is_refused
+    // -----------------------------------------------------------
+    //
+    // The new-category dialog sent without a name goes back with
+    // the error and adds nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_empty_category_form_is_refused(): void
+    {
+        $before = Categories::count();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/categories')->post('/control-panel/dialog/category/store', []);
+
+        $response->assertRedirect('/control-panel/categories');
+        $response->assertSessionHasErrors('name');
+        $this->assertSame($before, Categories::count());
+    }
 }

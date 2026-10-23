@@ -240,10 +240,10 @@ final class ChallengeFilesTest extends TestCase
     // test_only_named_web_links_are_accepted
     // -----------------------------------------------------------
     //
-    // A link that is no URL — javascript: and data: links
-    // included — or is too long, or comes without a usable
-    // name, is refused with an error under the field, and
-    // nothing is stored.
+    // A link that is no web address — javascript:, data:,
+    // ftp:, smb: and file: links included — or is too long,
+    // or comes without a usable name, is refused with an error
+    // under the field, and nothing is stored.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -285,6 +285,9 @@ final class ChallengeFilesTest extends TestCase
             'javascript link'         => ['run.js', 'javascript:alert(document.cookie)', 'file_url'],
             'javascript with slashes' => ['run.js', 'javascript://files.test/%0Aalert(1)', 'file_url'],
             'data link'               => ['page.html', 'data:text/html,<script>alert(1)</script>', 'file_url'],
+            'ftp link'                => ['dump.zip', 'ftp://files.test/dump.zip', 'file_url'],
+            'smb link'                => ['dump.zip', 'smb://files.test/share/dump.zip', 'file_url'],
+            'file link'               => ['passwd', 'file://files.test/etc/passwd', 'file_url'],
             'not a link'              => ['dump.zip', 'files.test/dump.zip', 'file_url'],
             'no link'                 => ['dump.zip', '', 'file_url'],
             'overlong link'           => ['dump.zip', 'https://files.test/' . str_repeat('a', 2048), 'file_url'],

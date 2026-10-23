@@ -159,4 +159,29 @@ final class SettingsTest extends TestCase
         $this->assertSame('2023-02-25 09:00:00 - 2029-02-25 21:00:00', Settings::find(1)->val1);
         $this->assertSame('1', Settings::find(2)->val1);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_malformed_event_range_takes_no_page_down
+    // -----------------------------------------------------------
+    //
+    // The form takes any text, so the event range can lack its
+    // " - " separator; the login page and the player pages still
+    // answer, the start standing for the end too.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_malformed_event_range_takes_no_page_down(): void
+    {
+        $this->setEventRange('2027-03-01 10:00:00');
+
+        $this->get('/')->assertOk();
+        $this->signIn($this->makePlayer())->get('/user/leaderboard')->assertOk();
+    }
 }

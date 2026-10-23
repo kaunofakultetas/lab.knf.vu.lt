@@ -12,7 +12,7 @@
 //    - app/Http/Kernel.php — the auth alias
 //    - routes/web.php — the player pages under /user
 //      (auth:users)
-//    - routes/api.php — /api/user (auth:sanctum, LAB-05)
+//    - routes/api.php — /api/user (auth:sanctum)
 // -----------------------------------------------------------
 
 

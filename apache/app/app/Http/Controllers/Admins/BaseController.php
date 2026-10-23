@@ -62,10 +62,9 @@ class BaseController extends Controller
     // -----------------------------------------------------------
     //
     // Registers a controller middleware that shares vu_id and
-    // main with the views before every action. The views read
-    // the account's flag, while the perms and r_exists checks
-    // read the session's copy (LAB-28), so after a demotion
-    // the menu hides what the checks still allow.
+    // main with the views before every action. The views and
+    // the perms and r_exists checks all read the account's
+    // flag, so a demotion takes effect at once everywhere.
     //
     // Used by:
     //   - Laravel, when it builds a control-panel controller

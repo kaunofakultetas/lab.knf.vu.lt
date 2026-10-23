@@ -8,8 +8,8 @@
 //  origin, method and header, no credentials. They decide
 //  little in practice — the stack's endpoint already turns
 //  away every request whose Origin is another site's
-//  (endpoint/Caddyfile), and the one API route fails anyway
-//  (LAB-05).
+//  (endpoint/Caddyfile), and the one API route turns every
+//  client away anyway.
 //
 //  Used by:
 //    - HandleCors, in the global stack of app/Http/Kernel.php

@@ -103,12 +103,8 @@ class UserAuthController extends BaseController
     // panel — go back to the login page with the error; a
     // good login records the time and address and goes on to
     // the page the player first asked for, or the dashboard.
-    //
-    // Known bug LAB-02 (low): a refused form is sent back with
-    // withInput() and no arguments (UserAuthController.php:131),
-    // which flashes every field, the password included, into
-    // the session until the next request. Fix: flash only the
-    // e-mail.
+    // A refused form comes back with the e-mail refilled; the
+    // password is left out, so it never sits in the session.
     //
     // Known bug LAB-20 (medium): the form takes any number of
     // wrong passwords — the route has no rate limit, no lockout
@@ -128,7 +124,7 @@ class UserAuthController extends BaseController
         ]);
 
         if ($validator->fails()) {
-            return redirect()->route('login_users')->withErrors($validator)->withInput();
+            return redirect()->route('login_users')->withErrors($validator)->withInput($request->except('password'));
         }
 
         if(Auth::guard('users')->attempt(['email' => $request->input('email'), 'password' => $request->input('password')])) {
@@ -233,21 +229,15 @@ class UserAuthController extends BaseController
     // mail attributes, by their OIDs. A VU user without an
     // account gets one, active at once: the VU user id as both
     // vu_id and username, the full name as display name, and
-    // no password. The login time and address are recorded
-    // either way.
+    // no password. When a local player has registered that
+    // username already, the account takes it with the first
+    // free numbered suffix instead. The login time and address
+    // are recorded either way.
     //
     // Known bug LAB-15 (medium): the account's status is never
     // looked at, so an account switched inactive in the
     // control panel still signs in through SamlAuth. Fix:
     // refuse inactive accounts here or in the middleware.
-    //
-    // Known bug LAB-16 (medium): a local player who registered
-    // under a username equal to a VU user id locks that VU
-    // user out — the new account takes the VU user id as
-    // username (UserAuthController.php:265), hits the
-    // unique username index and ends in a server error, at
-    // every SSO login. Fix: give the SSO account a username
-    // that is still free.
     //
     // Used by:
     //   - SamlAuth::handle (Http/Middleware/) — the SSO login
@@ -260,10 +250,17 @@ class UserAuthController extends BaseController
         if($exists == 0){
             $name = $memberarr['urn:oid:2.5.4.42'][0].' '.$memberarr['urn:oid:2.5.4.4'][0];
 
+            // The username must be free: a local player may have
+            // registered the VU user id as one
+            $username = $memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0];
+            for ($n = 2; User::where(['username' => $username])->exists(); $n++) {
+                $username = $memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0] . '_' . $n;
+            }
+
             // The SSO's affiliation and group attributes are not
             // stored; the fields that kept them are switched off
             User::create([
-                'username'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0],
+                'username'=>$username,
                 'vu_id'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0],
                 'email'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.3'][0],
                 'display_name'=>$name,

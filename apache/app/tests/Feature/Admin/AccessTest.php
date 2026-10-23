@@ -285,4 +285,33 @@ final class AccessTest extends TestCase
         $response->assertDontSee('href="https://lab.knf.vu.lt/control-panel/emails"', false);
         $response->assertDontSee('href="https://lab.knf.vu.lt/control-panel/settings"', false);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_demoted_admin_loses_the_main_pages_at_once
+    // -----------------------------------------------------------
+    //
+    // Main-admin rights taken away end at once: the next request
+    // of the still signed-in admin to a main-only page is turned
+    // back, as the checks read the account, not the session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_demoted_admin_loses_the_main_pages_at_once(): void
+    {
+        $admin = $this->makeAdmin(true);
+        $this->signInAdmin($admin)->from('/control-panel/dashboard');
+        $admin->update(['main' => 0]);
+
+        $response = $this->get('/control-panel/settings');
+
+        $response->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed(self::REFUSAL);
+    }
 }

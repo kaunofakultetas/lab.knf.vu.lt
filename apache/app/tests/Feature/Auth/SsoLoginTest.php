@@ -255,4 +255,34 @@ final class SsoLoginTest extends TestCase
 
         $this->assertGuest('admins');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_taken_username_does_not_block_a_vu_login
+    // -----------------------------------------------------------
+    //
+    // A local player who registered a VU user id as username does
+    // not lock that VU user out: the first SSO login provisions
+    // the account under the first free numbered username and
+    // signs it in.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_taken_username_does_not_block_a_vu_login(): void
+    {
+        $this->makePlayer(['username' => 's7777777']);
+        $this->fakeIdentityProvider('s7777777', 'ona@sso.test');
+
+        $response = $this->get('/cp');
+
+        $response->assertRedirect('/user/dashboard');
+        $this->assertSame('s7777777_2', User::where('vu_id', 's7777777')->value('username'));
+        $this->assertAuthenticated('users');
+    }
 }

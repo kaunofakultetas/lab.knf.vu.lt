@@ -640,4 +640,99 @@ final class ChallengesTest extends TestCase
         $response->assertSessionHas('success', 'Categoried updated!');
         $this->assertSame([3, 5], ChallengesCategories::where('challenge_id', $challenge->id)->orderBy('cat_id')->pluck('cat_id')->all());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_editing_a_challenge_keeps_its_author
+    // -----------------------------------------------------------
+    //
+    // A main admin correcting a lab admin's challenge leaves it
+    // the lab admin's: the author stays, and can still open it.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_editing_a_challenge_keeps_its_author(): void
+    {
+        $author = $this->makeAdmin();
+        $challenge = $this->makeChallenge(['created_by' => $author->id]);
+        $form = [
+            'uid'        => $challenge->id,
+            'name'       => 'Corrected Name',
+            'partner_id' => $challenge->partner_id,
+            'descr'      => $challenge->descr,
+            'content'    => $challenge->content,
+            'answer'     => $challenge->answer,
+            'points'     => $challenge->points,
+        ];
+
+        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/challenges/update', $form);
+
+        $this->assertSame('Corrected Name', $challenge->refresh()->name);
+        $this->assertSame($author->id, $challenge->created_by);
+        $this->signInAdmin($author)->get("/control-panel/challenges/edit/{$challenge->id}")->assertOk();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_all_categories_can_be_taken_off_a_challenge
+    // -----------------------------------------------------------
+    //
+    // Saving the categories dialog with every box unticked — the
+    // form then sends no item field at all — leaves the challenge
+    // without categories and goes back.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_all_categories_can_be_taken_off_a_challenge(): void
+    {
+        $challenge = $this->makeChallenge();
+        ChallengesCategories::create(['challenge_id' => $challenge->id, 'cat_id' => 1]);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/challenges')
+            ->post('/control-panel/challenges/categories/store', ['uid' => $challenge->id]);
+
+        $response->assertRedirect('/control-panel/challenges');
+        $this->assertSame(0, ChallengesCategories::where('challenge_id', $challenge->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_incomplete_challenge_form_is_refused
+    // -----------------------------------------------------------
+    //
+    // A challenge form missing fields goes back with an error for
+    // each of them and what was typed, and stores nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_incomplete_challenge_form_is_refused(): void
+    {
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/challenges/create')
+            ->post('/control-panel/challenges/store', ['name' => 'Half a challenge']);
+
+        $response->assertRedirect('/control-panel/challenges/create');
+        $response->assertSessionHasErrors(['partner_id', 'descr', 'content', 'answer', 'points']);
+        $this->assertSame('Half a challenge', session()->getOldInput('name'));
+        $this->assertSame(0, Challenges::where('name', 'Half a challenge')->count());
+    }
 }

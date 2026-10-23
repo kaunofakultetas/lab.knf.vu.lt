@@ -30,7 +30,9 @@ use App\Models\ChallengesFiles;
 use App\Models\ChallengesHistory;
 use App\Models\ChallengesSubmitted;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
@@ -694,5 +696,115 @@ final class ChallengeTest extends TestCase
 
         $history = json_decode(Redis::get('tasks_history'), true);
         $this->assertSame(array_reverse(array_slice($names, 1)), array_column($history, 'name'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_numeric_flag_matches_only_as_written
+    // -----------------------------------------------------------
+    //
+    // A flag that is a number is matched as text: another
+    // spelling of the same number is a wrong answer, the flag as
+    // written is right.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_numeric_flag_matches_only_as_written(): void
+    {
+        $challenge = $this->makeChallenge(['answer' => '100', 'points' => 10]);
+
+        foreach (['1e2', '100.0', '0100'] as $spelling) {
+            $this->answer($challenge, $spelling)->assertSessionHasErrors();
+        }
+        $this->assertSame(0, $this->player->refresh()->points);
+
+        $this->answer($challenge, '100');
+        $this->assertSame(10, $this->player->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_simultaneous_solves_keep_all_points
+    // -----------------------------------------------------------
+    //
+    // Two right answers at the same moment, from two tabs, both
+    // count. The other tab's 25-point solve is slipped in where a
+    // read-add-write of the points would lose it — right after
+    // this request first reads the account once its own solve is
+    // booked; the points are added in SQL, so all of them stay.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_simultaneous_solves_keep_all_points(): void
+    {
+        $challenge = $this->makeChallenge(['points' => 10]);
+        $booked = false;
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use (&$booked, &$interleaved) {
+            if (str_starts_with($query->sql, 'insert into `cyber_challenges_submitted`')) {
+                $booked = true;
+            } elseif ($booked && !$interleaved && preg_match('/^select .* from `cyber_users`/', $query->sql)) {
+                $interleaved = true;
+                DB::table('cyber_users')->where('id', $this->player->id)->increment('points', 25);
+            }
+        });
+
+        $this->answer($challenge, $challenge->answer);
+
+        $this->assertSame(10 + ($interleaved ? 25 : 0), $this->player->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_double_submitted_answer_is_refused_cleanly
+    // -----------------------------------------------------------
+    //
+    // The same right answer sent twice at once — a double click —
+    // passes both "already solved" checks; the other request's
+    // solve is booked right after this one's last check, the
+    // table's unique key refuses this one, and it goes back as an
+    // already solved challenge, not to the error page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_double_submitted_answer_is_refused_cleanly(): void
+    {
+        $challenge = $this->makeChallenge();
+        $checks = 0;
+        DB::listen(function (QueryExecuted $query) use (&$checks, $challenge) {
+            if (str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_challenges_submitted`') && ++$checks === 2) {
+                DB::table('cyber_challenges_submitted')->insert([
+                    'user_id'      => $this->player->id,
+                    'challenge_id' => $challenge->id,
+                    'points_given' => $challenge->points,
+                    'created'      => date('Y-m-d H:i:s'),
+                    'ip'           => '127.0.0.1',
+                ]);
+            }
+        });
+
+        $response = $this->answer($challenge, $challenge->answer);
+
+        $response->assertRedirect("/user/challenge/{$challenge->public_id}");
+        $response->assertSessionHasErrors();
+        $this->assertSame(1, ChallengesSubmitted::where('user_id', $this->player->id)->count());
     }
 }
