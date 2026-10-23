@@ -196,6 +196,13 @@ class SettingsController extends BaseController
     // A copy of Users\SettingsController::time_elapsed_string:
     // how long ago a date was, in English.
     //
+    // Known bug (low): the weeks go into a property the code
+    // adds to PHP's DateInterval (SettingsController.php:217), a
+    // dynamic property — deprecated since PHP 8.2, reported
+    // by PHP 8.4 and expected to fail under PHP 9, which would
+    // end every page that shows an age in a server error.
+    // Fix: keep the weeks in a local variable.
+    //
     // Used by:
     //   - UsersGroupsController::group_leaderboard — the last
     //     solves

@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "0b145309ba007e94a1e30d54fbc01f2c",
+    "content-hash": "18280b6592a079fc735f44fb72c04f09",
     "packages": [
         {
             "name": "hamcrest/hamcrest-php",
@@ -1791,7 +1791,7 @@
     "platform": {},
     "platform-dev": {},
     "platform-overrides": {
-        "php": "8.1.21"
+        "php": "8.4.27"
     },
     "plugin-api-version": "2.9.0"
 }

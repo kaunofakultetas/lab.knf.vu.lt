@@ -7,7 +7,7 @@ through `apache/runTests.sh`, never against the live stack.
 |---|---|---|
 | Unit | `tests/Unit` | Pure helpers, no application: place ordinals, "3 days ago", the client-address picker |
 | Feature | `tests/Feature` | The app through its HTTP kernel: registration, login, password reset, VU SSO, challenges, voting, leaderboards, groups, pages, feedback, the whole control panel, the route table's guards, CSRF, mails, models, error pages |
-| Http | `tests/Http` | The image's own Apache, started by `run.sh` with the production environment: document root, rewrites, directory listing, `/upload`, CSRF outside PHPUnit, forged client addresses |
+| Http | `tests/Http` | The image's own Apache, started by `run.sh` with the production environment: document root, rewrites, pages free of PHP diagnostics, directory listing, `/upload`, CSRF outside PHPUnit, forged client addresses |
 | Defects | `tests/Defects` | Open defects, each stating the wanted behaviour under a `LAB-nn` id (see below) |
 
 ## Running
@@ -58,12 +58,17 @@ MySQL creating its schema.
   them only once — fine under Apache, fatal under PHPUnit. Tests that
   open either page, and tests that overload a class, run in separate
   processes (`#[RunTestsInSeparateProcesses]`) and open the page once.
+  Laravel 10.6 leaves its error handlers in place after each test, and
+  on PHP 8.4 that kills every isolated test without a word, so
+  `TestCase::tearDown` takes them off — keep calling `parent::tearDown()`.
 - Style: test files follow the house-comments skill for PHP — file
   header, class banner and a banner per test method, data provider and
   hook. Check them from the repository root with
   `python3 .claude/skills/house-comments/scripts/house_check_php84.py --new apache/app/tests`.
-  The app runs PHP 8.1, so the tests use nothing newer (no typed class
-  constants, no readonly classes).
+  The app runs PHP 8.4 (`php:8.4.27-apache`), which reports the locked
+  Laravel 10 and Symfony 6 code — and the app's own `DateInterval::$w`
+  in the three copies of `time_elapsed_string` — as deprecated. PHPUnit
+  counts those deprecations under the run's report; they do not fail it.
 - Races are pinned without real concurrency: the test listens to its own
   request's queries (`DB::listen`) or Redis commands and slips the other
   request's write in where it would land live — see `RaceDefectsTest`.

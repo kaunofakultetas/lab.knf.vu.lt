@@ -10,10 +10,11 @@
 //  over the tests container's loopback. It pins what only
 //  the web server decides: that public/ is the document root
 //  and everything else stays out of reach, that the rewrite
-//  rules hand pretty addresses to Laravel, that directories
-//  are never listed, that uploads are served from /upload,
-//  that a forged client address is ignored, and that CSRF is
-//  enforced outside PHPUnit. The upload folder's PHP lockdown
+//  rules hand pretty addresses to Laravel, that pages carry
+//  no PHP diagnostics, that directories are never listed,
+//  that uploads are served from /upload, that a forged
+//  client address is ignored, and that CSRF is enforced
+//  outside PHPUnit. The upload folder's PHP lockdown
 //  does not hold today; that is LAB-18, pinned below.
 //
 //  Used by:
@@ -183,6 +184,47 @@ final class ApacheTest extends TestCase
         $this->assertStringContainsString('name="password_confirmation"', $this->fetch('GET', '/register')->body());
         $this->assertStringContainsString("{action: 'forgotpass'}", $this->fetch('GET', '/forgot-password')->body());
         $this->assertStringContainsString('Login with VU SSO', $this->fetch('GET', '/control-panel')->body());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_pages_carry_no_php_diagnostics
+    // -----------------------------------------------------------
+    //
+    // No page shows a PHP notice, warning, deprecation or fatal
+    // error, and the answers keep their headers — the session
+    // cookie, a redirect's address — which a diagnostic
+    // printed before them would cost. PHP 8.4 reports much of
+    // the locked vendor code as deprecated before Laravel's
+    // error handler takes over; the image's error_reporting
+    // setting keeps that out of the pages (Dockerfile). The
+    // 404 page has no session, so no cookie is asked of it.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_pages_carry_no_php_diagnostics(): void
+    {
+        $diagnostic = '#<b>(Deprecated|Warning|Notice|Fatal error)</b>:|^(Deprecated|Warning|Notice|Fatal error): .* on line \d+#m';
+
+        foreach (['/', '/register', '/forgot-password', '/control-panel', '/no-such-page'] as $path) {
+            $response = $this->fetch('GET', $path);
+            $this->assertDoesNotMatchRegularExpression($diagnostic, $response->body(), $path);
+            if ($path !== '/no-such-page') {
+                $this->assertNotEmpty($response->header('Set-Cookie'), $path);
+            }
+        }
+
+        $redirect = $this->fetch('GET', '/user/dashboard');
+
+        $this->assertSame(302, $redirect->status());
+        $this->assertNotEmpty($redirect->header('Location'));
+        $this->assertDoesNotMatchRegularExpression($diagnostic, $redirect->body());
     }
 
 

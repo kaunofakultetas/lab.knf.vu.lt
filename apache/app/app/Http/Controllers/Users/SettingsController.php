@@ -112,6 +112,13 @@ class SettingsController extends BaseController
     // when there is none. The difference carries no sign, so
     // a date in the future reads the same.
     //
+    // Known bug (low): the weeks go into a property the code
+    // adds to PHP's DateInterval (SettingsController.php:134), a
+    // dynamic property — deprecated since PHP 8.2, reported
+    // by PHP 8.4 and expected to fail under PHP 9, which would
+    // end every page that shows an age in a server error.
+    // Fix: keep the weeks in a local variable.
+    //
     // Used by:
     //   - BaseController — the feed of recent solves
     //   - LeaderboardController::index and GroupsController —

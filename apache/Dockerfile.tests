@@ -6,14 +6,15 @@
 #  around the app — nothing inside the app changes. MySQL
 #  8.0.36 and Redis 7.2.3, the servers of the production
 #  stack, come from the Debian builds of the official
-#  images; both are built on Debian bookworm like the PHP
-#  image, so the libraries they link are bookworm's own —
-#  only libaio and libnuma have to be installed, and MySQL's
-#  private protobuf library comes along with it. PHPUnit
-#  and Mockery go to /opt/test-tools, never into the app's
-#  vendor, which stays exactly what ships. The build
-#  context is app/: the suite is kept out of the production
-#  image by .dockerignore and copied in here.
+#  images. Those are built on Debian bookworm and the PHP
+#  image on trixie: the OpenSSL 3 they link is there, but
+#  mysqld's libaio and libnuma are not — trixie renamed
+#  libaio, so no package of it fits — and both come from the
+#  MySQL image itself, as MySQL's private protobuf library
+#  does. PHPUnit and Mockery go to /opt/test-tools, never
+#  into the app's vendor, which stays exactly what ships.
+#  The build context is app/: the suite is kept out of the
+#  production image by .dockerignore and copied in here.
 #
 #  Used by:
 #    - runTests.sh (this folder)
@@ -29,9 +30,10 @@ COPY --from=mysql:8.0.36-debian /usr/sbin/mysqld /usr/sbin/mysqld
 COPY --from=mysql:8.0.36-debian /usr/bin/mysql /usr/bin/mysqladmin /usr/bin/
 COPY --from=mysql:8.0.36-debian /usr/lib/mysql/private /usr/lib/mysql/private
 COPY --from=mysql:8.0.36-debian /usr/share/mysql-8.0 /usr/share/mysql-8.0
-RUN apt-get update &&                                                          \
-    apt-get install -y --no-install-recommends libaio1 libnuma1 &&             \
-    rm -rf /var/lib/apt/lists/*
+COPY --from=mysql:8.0.36-debian /usr/lib/x86_64-linux-gnu/libaio.so.1.0.2     \
+                                /usr/lib/x86_64-linux-gnu/libnuma.so.1.0.0    \
+                                /usr/lib/x86_64-linux-gnu/
+RUN ldconfig
 
 
 # Redis 7.2.3 server

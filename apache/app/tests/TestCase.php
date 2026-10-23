@@ -125,6 +125,42 @@ abstract class TestCase extends BaseTestCase
 
 
     // -----------------------------------------------------------
+    // tearDown
+    // -----------------------------------------------------------
+    //
+    // After Laravel's own teardown, takes off the error and
+    // exception handlers the test's application installed,
+    // which Laravel 10.6 leaves in place. Left there, they make
+    // PHPUnit remove Laravel's handler instead of its own when
+    // the test ends, and PHPUnit's stays active outside any
+    // test, where the first warning makes it throw: in an
+    // isolated test that is the child's rewind of STDOUT —
+    // the real pipe on PHP 8.4 — so the child ends before it
+    // can report. A test that never booted the application
+    // has nothing to take off.
+    //
+    // Used by:
+    //   - PHPUnit, after every test
+    // -----------------------------------------------------------
+
+    protected function tearDown(): void
+    {
+        $booted = $this->app !== null;
+
+        parent::tearDown();
+
+        if ($booted) {
+            restore_error_handler();
+            restore_exception_handler();
+        }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
     // makePlayer
     // -----------------------------------------------------------
     //
