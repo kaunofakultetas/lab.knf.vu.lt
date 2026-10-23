@@ -107,7 +107,7 @@
                                   </td>
                                   <td>{{ $value['email'] }}</td> 
                                   <td>{{ $value['last_login'] }}</td>
-                                  <td><a href="/control-panel/users/status/{{ $value['id'] }}/{{ $value['status'] }}">@if($value['status'] == 1) 
+                                  <td><a href="#" onClick="Post_Link('/control-panel/users/status/{{ $value['id'] }}/{{ $value['status'] }}');">@if($value['status'] == 1) 
                                   	 <span class="badge bg-success">Active</span>  
                                   	  @else <span class="badge bg-danger">Not active</span>  
                                   	  @endif </a></td> 

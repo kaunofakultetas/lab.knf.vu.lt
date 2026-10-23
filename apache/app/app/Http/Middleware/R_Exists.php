@@ -5,12 +5,13 @@
 //
 //  Guards the control panel's group and challenge routes:
 //  the group or challenge the request names — or the group a
-//  member or a group challenge belongs to — must belong to
-//  the signed-in admin, created_by, unless the admin is a
-//  main admin, who may touch them all. A missing group or
-//  challenge sends the admin back with "No group!" or "No
-//  challenge!", someone else's with "You don't have
-//  permissions to do this!".
+//  member or a group challenge belongs to, or the challenge
+//  a file link belongs to — must belong to the signed-in
+//  admin, created_by, unless the admin is a main admin, who
+//  may touch them all. A missing group or challenge sends
+//  the admin back with "No group!" or "No challenge!",
+//  someone else's with "You don't have permissions to do
+//  this!".
 //
 //  Used by:
 //    - app/Http/Kernel.php — the r_exists alias
@@ -28,6 +29,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Challenges;
+use App\Models\ChallengesFiles;
 use App\Models\Groups;
 use App\Models\GroupsChallenges;
 use App\Models\GroupsUsers;
@@ -43,7 +45,7 @@ use App\Models\GroupsUsers;
 // R_Exists
 // -----------------------------------------------------------
 //
-// One method, handle, which the alias hands one of six
+// One method, handle, which the alias hands one of eight
 // types after its colon.
 //
 // Used by:
@@ -66,13 +68,13 @@ class R_Exists
     // route's uid, the _uid types from the uid field the forms
     // post; membership_owned and group_challenge_owned read a
     // member's or a group challenge's row id from the route's
-    // uid and check the group the row belongs to. Whether the
+    // uid and check the group the row belongs to, and
+    // file_owned and file_owned_uid read a file link's id and
+    // check the challenge the link belongs to. Whether the
     // admin is a main admin is read from the account on every
-    // request, as in Perms. A type other than the six falls
+    // request, as in Perms. A type other than the eight falls
     // through and returns nothing, which Laravel answers with
-    // an empty page; every route names one of the six. Two
-    // file-link routes hand it a link's id as a challenge id
-    // (LAB-06, routes/web.php).
+    // an empty page; every route names one of the eight.
     //
     // Used by:
     //   - the r_exists alias — the group and challenge routes
@@ -159,6 +161,31 @@ class R_Exists
             $group_id = GroupsChallenges::where(['id'=>$request->route('uid')])->value('group_id');
 
             if($group_id === null || Auth::guard('admins')->user()?->main == 1 || Groups::where(['id'=>$group_id, 'created_by'=>Auth::guard('admins')->id()])->count() == 1){
+                return $next($request);
+            } else {
+                return back()->withErrors(['You don\'t have permissions to do this!']);
+            }
+        }
+
+        // A file link of a challenge, by the link's id in the
+        // route's uid; the challenge it belongs to is checked,
+        // and a link already gone is let through, as for the
+        // rows above
+        if($type =='file_owned'){
+            $challenge_id = ChallengesFiles::where(['id'=>$request->route('uid')])->value('challenge_id');
+
+            if($challenge_id === null || Auth::guard('admins')->user()?->main == 1 || Challenges::where(['id'=>$challenge_id, 'created_by'=>Auth::guard('admins')->id()])->count() == 1){
+                return $next($request);
+            } else {
+                return back()->withErrors(['You don\'t have permissions to do this!']);
+            }
+        }
+
+        // The same, by the link's id the form posts as uid
+        if($type =='file_owned_uid'){
+            $challenge_id = ChallengesFiles::where(['id'=>$request->get('uid')])->value('challenge_id');
+
+            if($challenge_id === null || Auth::guard('admins')->user()?->main == 1 || Challenges::where(['id'=>$challenge_id, 'created_by'=>Auth::guard('admins')->id()])->count() == 1){
                 return $next($request);
             } else {
                 return back()->withErrors(['You don\'t have permissions to do this!']);

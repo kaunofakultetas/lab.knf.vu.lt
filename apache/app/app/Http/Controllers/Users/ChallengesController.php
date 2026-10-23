@@ -202,10 +202,11 @@ class ChallengesController extends BaseController
     // GET /user/challenge/{public_id}/{public_group_id?}
     //
     // The users.challenge view: the challenge — its content
-    // printed as HTML (LAB-29) — its partner, file links and
-    // votes. An unknown challenge goes back to the dashboard
-    // with "Challenge doesn't exists!", an unknown group back
-    // with "Error!". The group only has to exist: neither the
+    // printed as HTML, a lab admin's cleaned of scripts when
+    // it was saved — its partner, file links and votes. An
+    // unknown challenge goes back to the dashboard with
+    // "Challenge doesn't exists!", an unknown group back with
+    // "Error!". The group only has to exist: neither the
     // membership nor the challenge's place in the group is
     // checked, and a hidden challenge opens like any other.
     // The validate.ifsolved middleware has sent solved ones to

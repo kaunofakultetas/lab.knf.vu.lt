@@ -5,17 +5,16 @@
 //
 //  Local accounts recover in two steps. The reminder form
 //  (behind reCAPTCHA v3) mails a link carrying a fresh
-//  50-character token; the link then sets a new random
-//  12-character password, mails it, and is used up. The form
-//  answers the same whether or not the address has an
-//  account, and SSO accounts, whose password lives at VU,
-//  never get a reminder.
+//  50-character token and the time it was mailed; the link,
+//  good for an hour, opens a page whose button sets a new
+//  random 12-character password, mails it, and uses the
+//  link up. The form answers the same whether or not the
+//  address has an account, and SSO accounts, whose password
+//  lives at VU, never get a reminder.
 //
 //  The tests take every link from the mail it was sent in,
 //  never from the database, so they keep holding when the
-//  way tokens are stored changes. How long a link lives, how
-//  its token is stored and what opening it does are open
-//  defects, pinned in PasswordResetDefectsTest.
+//  way tokens are stored changes.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -166,8 +165,9 @@ final class PasswordResetTest extends TestCase
     // -----------------------------------------------------------
     //
     // The address of a local account receives the reminder
-    // mail with a 50-character token, and the form answers
-    // with its usual message.
+    // mail with a 50-character token, a dash and the Unix time
+    // it was mailed, and the form answers with its usual
+    // message.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -177,13 +177,15 @@ final class PasswordResetTest extends TestCase
     {
         $player = $this->makePlayer();
         $this->fakeRecaptcha('forgotpass', 0.9);
+        $this->freezeTime();
 
         $response = $this->askForReminder($player->email);
 
         $response->assertRedirect('/forgot-password');
         $response->assertSessionHas('success', self::ANSWER);
         Mail::assertSent(SendRemindLink::class, function (SendRemindLink $mail) use ($player) {
-            return $mail->hasTo($player->email) && strlen($mail->data['uid']) === 50;
+            return $mail->hasTo($player->email)
+                && preg_match('/^[A-Za-z0-9]{50}-' . now()->getTimestamp() . '$/', $mail->data['uid']) === 1;
         });
     }
 
@@ -327,23 +329,58 @@ final class PasswordResetTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_the_link_sets_and_mails_a_new_password
+    // test_opening_the_link_changes_no_password
     // -----------------------------------------------------------
     //
-    // Following the mailed link replaces the password with a
-    // random 12-character one, mails it to the account's
-    // address and sends the player to the login form.
+    // The mailed link opens a page with one button, a form
+    // posting to the link with the CSRF token; opening it
+    // changes no password and mails nothing, so a mail
+    // filter or link scanner that opens it uses nothing up.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_the_link_sets_and_mails_a_new_password(): void
+    public function test_opening_the_link_changes_no_password(): void
+    {
+        $player = $this->makePlayer();
+        $link = $this->mailedLink($player);
+        $hash = $player->refresh()->password;
+
+        $response = $this->get("/reset/{$link}");
+
+        $response->assertOk();
+        $response->assertViewIs('users.reset-password');
+        $response->assertSee('action="https://lab.knf.vu.lt/reset/' . $link . '"', false);
+        $response->assertSee('name="_token"', false);
+        $this->assertSame($hash, $player->refresh()->password);
+        Mail::assertNotSent(SendNewPass::class);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_button_sets_and_mails_a_new_password
+    // -----------------------------------------------------------
+    //
+    // The button of the mailed link's page replaces the
+    // password with a random 12-character one, mails it to
+    // the account's address and sends the player to the login
+    // form.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_button_sets_and_mails_a_new_password(): void
     {
         $player = $this->makePlayer();
         $link = $this->mailedLink($player);
 
-        $response = $this->get("/reset/{$link}");
+        $response = $this->post("/reset/{$link}");
 
         $response->assertRedirect('/');
         $response->assertSessionHas('success', 'We just emailed you new password');
@@ -366,9 +403,9 @@ final class PasswordResetTest extends TestCase
     // test_the_mailed_password_signs_the_player_in
     // -----------------------------------------------------------
     //
-    // The whole way back in: ask for the reminder, follow the
-    // mailed link, sign in with the mailed password — and no
-    // longer with the old one.
+    // The whole way back in: ask for the reminder, press the
+    // button of the mailed link's page, sign in with the
+    // mailed password — and no longer with the old one.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -379,7 +416,7 @@ final class PasswordResetTest extends TestCase
         $player = $this->makePlayer();
         $link = $this->mailedLink($player);
 
-        $this->get("/reset/{$link}")->assertRedirect('/');
+        $this->post("/reset/{$link}")->assertRedirect('/');
         $password = Mail::sent(SendNewPass::class)->first()->data['new_pass'];
 
         $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD])->assertRedirect('/');
@@ -397,8 +434,8 @@ final class PasswordResetTest extends TestCase
     // test_a_link_works_only_once
     // -----------------------------------------------------------
     //
-    // A used link answers 404 the second time and mails
-    // nothing more.
+    // A used link answers 404 afterwards — its page and its
+    // button alike — and mails nothing more.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -407,9 +444,10 @@ final class PasswordResetTest extends TestCase
     public function test_a_link_works_only_once(): void
     {
         $link = $this->mailedLink($this->makePlayer());
-        $this->get("/reset/{$link}")->assertRedirect('/');
+        $this->post("/reset/{$link}")->assertRedirect('/');
 
         $this->get("/reset/{$link}")->assertNotFound();
+        $this->post("/reset/{$link}")->assertNotFound();
 
         Mail::assertSent(SendNewPass::class, 1);
     }
@@ -423,8 +461,9 @@ final class PasswordResetTest extends TestCase
     // test_an_unknown_link_is_404
     // -----------------------------------------------------------
     //
-    // A token no reminder mailed answers 404, even while a
-    // real reminder is pending, and no password changes.
+    // A token no reminder mailed answers 404, its page and its
+    // button alike, even while a real reminder is pending,
+    // and no password changes.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -435,10 +474,99 @@ final class PasswordResetTest extends TestCase
         $player = $this->makePlayer();
         $this->mailedLink($player);
         $hash = $player->refresh()->password;
+        $unknown = Str::random(50) . '-' . now()->getTimestamp();
 
-        $this->get('/reset/' . Str::random(50))->assertNotFound();
+        $this->get("/reset/{$unknown}")->assertNotFound();
+        $this->post("/reset/{$unknown}")->assertNotFound();
 
         $this->assertSame($hash, $player->refresh()->password);
+        Mail::assertNotSent(SendNewPass::class);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_link_expires_after_an_hour
+    // -----------------------------------------------------------
+    //
+    // A link still opens 59 minutes after it was mailed; past
+    // the hour it answers 404 like an unknown one, its button
+    // too, and mails no password — however long it waited in
+    // a mailbox or a log.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_link_expires_after_an_hour(): void
+    {
+        $link = $this->mailedLink($this->makePlayer());
+
+        $this->travel(59)->minutes();
+        $this->get("/reset/{$link}")->assertOk();
+
+        $this->travel(2)->minutes();
+        $this->get("/reset/{$link}")->assertNotFound();
+        $this->post("/reset/{$link}")->assertNotFound();
+        Mail::assertNotSent(SendNewPass::class);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_link_with_a_changed_time_is_404
+    // -----------------------------------------------------------
+    //
+    // The stored hash covers the time the token ends with, so
+    // an expired link whose time is moved on matches no
+    // account.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_link_with_a_changed_time_is_404(): void
+    {
+        $link = $this->mailedLink($this->makePlayer());
+        $this->travel(2)->hours();
+
+        $moved = Str::beforeLast($link, '-') . '-' . now()->getTimestamp();
+
+        $this->get("/reset/{$moved}")->assertNotFound();
+        $this->post("/reset/{$moved}")->assertNotFound();
+        Mail::assertNotSent(SendNewPass::class);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_link_without_a_time_is_404
+    // -----------------------------------------------------------
+    //
+    // A token as reminders were mailed before links expired —
+    // 50 characters, no time — answers 404 even with its hash
+    // stored, so such links stop working.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_link_without_a_time_is_404(): void
+    {
+        $token = Str::random(50);
+        $this->makePlayer(['remember_token' => hash('sha256', $token)]);
+
+        $this->get("/reset/{$token}")->assertNotFound();
+        $this->post("/reset/{$token}")->assertNotFound();
         Mail::assertNotSent(SendNewPass::class);
     }
 
@@ -451,9 +579,9 @@ final class PasswordResetTest extends TestCase
     // test_the_link_is_a_guest_page
     // -----------------------------------------------------------
     //
-    // A signed-in player following a reminder link is sent to
-    // the dashboard; the link is not used up and still works
-    // for a guest afterwards.
+    // A signed-in player opening a reminder link, or posting
+    // its button, is sent to the dashboard; the link is not
+    // used up and still works for a guest afterwards.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -465,10 +593,11 @@ final class PasswordResetTest extends TestCase
         $this->signIn($this->makePlayer());
 
         $this->get("/reset/{$link}")->assertRedirect('/user/dashboard');
+        $this->post("/reset/{$link}")->assertRedirect('/user/dashboard');
         Mail::assertNotSent(SendNewPass::class);
 
         $this->app['auth']->guard('users')->logout();
-        $this->get("/reset/{$link}")->assertRedirect('/');
+        $this->post("/reset/{$link}")->assertRedirect('/');
     }
 
 
@@ -494,8 +623,8 @@ final class PasswordResetTest extends TestCase
         $second = $this->mailedLink($player);
 
         $this->assertNotSame($first, $second);
-        $this->get("/reset/{$first}")->assertNotFound();
-        $this->get("/reset/{$second}")->assertRedirect('/');
+        $this->post("/reset/{$first}")->assertNotFound();
+        $this->post("/reset/{$second}")->assertRedirect('/');
     }
 
 

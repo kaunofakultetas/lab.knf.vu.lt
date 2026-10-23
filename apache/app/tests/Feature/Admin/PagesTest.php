@@ -209,7 +209,7 @@ final class PagesTest extends TestCase
             ->assertRedirect('/control-panel/pages');
         $this->get('/page/rules')->assertSee('<p>New rules</p>', false);
 
-        $this->from('/control-panel/pages')->get("/control-panel/pages/delete/{$page->id}")->assertSessionHas('success', 'Deleted!');
+        $this->from('/control-panel/pages')->post("/control-panel/pages/delete/{$page->id}")->assertSessionHas('success', 'Deleted!');
         $this->get('/page/rules')->assertRedirect('/');
     }
 
@@ -238,7 +238,7 @@ final class PagesTest extends TestCase
         $this->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'X', 'content' => 'X', 'alias' => 'rules'])
             ->assertRedirect('/control-panel/dashboard');
         $this->post('/control-panel/pages/store', ['name' => 'X', 'content' => 'X', 'alias' => 'x'])->assertRedirect('/control-panel/dashboard');
-        $this->get("/control-panel/pages/delete/{$page->id}")->assertRedirect('/control-panel/dashboard');
+        $this->post("/control-panel/pages/delete/{$page->id}")->assertRedirect('/control-panel/dashboard');
 
         $this->assertErrorFlashed("You don't have permissions to do this!");
         $this->assertSame('Rules of Play', $page->refresh()->name);

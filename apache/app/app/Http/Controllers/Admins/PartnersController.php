@@ -20,7 +20,7 @@
 //    POST /control-panel/dialog/partners/store      — adds
 //    GET  /control-panel/dialog/partners/edit/{uid} — edit dialog
 //    POST /control-panel/dialog/partners/update     — changes
-//    GET  /control-panel/partners/delete/{uid}      — deletes
+//    POST /control-panel/partners/delete/{uid}      — deletes
 //
 //  Used by:
 //    - routes/web.php — the routes above, all main-only
@@ -263,11 +263,10 @@ class PartnersController extends BaseController
     // destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/partners/delete/{uid}
+    // POST /control-panel/partners/delete/{uid}
     //
-    // Deletes the partner and goes back with "Deleted!" — a
-    // change made by a plain link (LAB-19). Its challenges
-    // keep pointing at the deleted partner.
+    // Deletes the partner and goes back with "Deleted!". Its
+    // challenges keep pointing at the deleted partner.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete

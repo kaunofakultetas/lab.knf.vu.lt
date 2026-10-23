@@ -6,17 +6,12 @@
 //  A challenge's "files" are named links to wherever the
 //  files are hosted; players see them as links on the
 //  challenge page. Since the upload hardening, a link must be
-//  a URL of at most 2048 characters with a name of at most
-//  255, so a javascript: link — the one that would run in a
-//  player's browser — never reaches the page. The list and
-//  the forms are reached from the admin challenge list.
-//
-//  Two things around here are known defects and pinned in
-//  ChallengeDefectsTest instead: the rule's http and https
-//  restriction is ignored by this Laravel version, which lets
-//  ftp, file and other schemes through; and editing or
-//  deleting a link is refused by an ownership check that
-//  reads the link's id as a challenge id.
+//  an http or https address of at most 2048 characters with
+//  a name of at most 255, so a javascript: link — the one
+//  that would run in a player's browser — never reaches the
+//  page. The list and the forms are reached from the admin
+//  challenge list, and a link is edited and deleted by
+//  whoever may change the challenge it belongs to.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -229,6 +224,79 @@ final class ChallengeFilesTest extends TestCase
         ])->assertSessionHas('success', 'File created!');
 
         $this->assertSame(1, ChallengesFiles::where('challenge_id', $challenge->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_link_can_be_edited_and_deleted
+    // -----------------------------------------------------------
+    //
+    // The link dialog's changes are saved and the delete
+    // button removes the link. The links get ids no challenge
+    // has, so an ownership check that took them for challenge
+    // ids would refuse both.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_link_can_be_edited_and_deleted(): void
+    {
+        $challenge = $this->makeChallenge();
+        $edited = ChallengesFiles::forceCreate(['id' => 2000000001, 'challenge_id' => $challenge->id, 'name' => 'old.pcap', 'file_url' => 'https://files.test/old']);
+        $deleted = ChallengesFiles::forceCreate(['id' => 2000000002, 'challenge_id' => $challenge->id, 'name' => 'gone.pcap', 'file_url' => 'https://files.test/gone']);
+        $this->signInAdmin($this->makeAdmin(true))->from("/control-panel/challenges/files/{$challenge->id}");
+
+        $this->post('/control-panel/challenges_file/update', ['uid' => $edited->id, 'name' => 'new.pcap', 'file_url' => 'https://files.test/new'])
+            ->assertSessionHas('success', 'File updated!');
+        $this->post("/control-panel/challenges/files/delete/{$deleted->id}")
+            ->assertSessionHas('success', 'File deleted!');
+
+        $this->assertSame('new.pcap', $edited->refresh()->name);
+        $this->assertSame('https://files.test/new', $edited->file_url);
+        $this->assertNull(ChallengesFiles::find($deleted->id));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_lab_admin_changes_only_the_links_of_its_own_challenges
+    // -----------------------------------------------------------
+    //
+    // A lab admin edits and deletes the links of a challenge
+    // it created, and is refused with the permissions message
+    // on another admin's, which stay as they were.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_lab_admin_changes_only_the_links_of_its_own_challenges(): void
+    {
+        $admin = $this->makeAdmin();
+        $own = ChallengesFiles::create(['challenge_id' => $this->makeChallenge(['created_by' => $admin->id])->id, 'name' => 'own.pcap', 'file_url' => 'https://files.test/own']);
+        $other = ChallengesFiles::create(['challenge_id' => $this->makeChallenge()->id, 'name' => 'other.pcap', 'file_url' => 'https://files.test/other']);
+        $this->signInAdmin($admin)->from('/control-panel/challenges');
+
+        $this->post('/control-panel/challenges_file/update', ['uid' => $other->id, 'name' => 'taken.pcap', 'file_url' => 'https://files.test/taken']);
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->post("/control-panel/challenges/files/delete/{$other->id}");
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->assertSame('other.pcap', $other->refresh()->name);
+
+        $this->post('/control-panel/challenges_file/update', ['uid' => $own->id, 'name' => 'renamed.pcap', 'file_url' => 'https://files.test/own'])
+            ->assertSessionHas('success', 'File updated!');
+        $this->assertSame('renamed.pcap', $own->refresh()->name);
+        $this->post("/control-panel/challenges/files/delete/{$own->id}")
+            ->assertSessionHas('success', 'File deleted!');
+        $this->assertNull(ChallengesFiles::find($own->id));
     }
 
 

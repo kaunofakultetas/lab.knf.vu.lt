@@ -16,8 +16,8 @@
 //    POST /control-panel/dialog/users/store                 — creates
 //    GET  /control-panel/dialog/users/edit/{uid}            — password dialog
 //    POST /control-panel/dialog/users/update                — new password
-//    GET  /control-panel/users/status/{user_id}/{status_id} — switches
-//    GET  /control-panel/users/delete/{uid}                 — deletes
+//    POST /control-panel/users/status/{user_id}/{status_id} — switches
+//    POST /control-panel/users/delete/{uid}                 — deletes
 //    GET  /control-panel/users/create                       — create dialog
 //    POST /control-panel/users/store                        — creates
 //
@@ -321,18 +321,18 @@ class UsersController extends BaseController
     // change_status
     // -----------------------------------------------------------
     //
-    // GET /control-panel/users/status/{user_id}/{status_id}
+    // POST /control-panel/users/status/{user_id}/{status_id}
     //
-    // Switches the account to the other status — the link
+    // Switches the account to the other status — the address
     // carries the current one, 0 or 1 — and goes to the
     // accounts page with "Status changed!"; any other status
     // in the address leaves the new one undefined and ends in
-    // a server error. A change made by a plain link (LAB-19).
-    // An inactive local account can no longer sign in; an
-    // inactive VU account still can (LAB-15).
+    // a server error. An inactive account can no longer sign
+    // in, through the login form or the VU SSO alike.
     //
     // Used by:
-    //   - the status links of the accounts page
+    //   - Post_Link() of custom_admin.js — the status switches
+    //     of the accounts page
     // -----------------------------------------------------------
 
     public function change_status($user_id, $status_id)
@@ -363,12 +363,11 @@ class UsersController extends BaseController
     // destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/users/delete/{uid}
+    // POST /control-panel/users/delete/{uid}
     //
     // Deletes the account and, for a VU account, its group
-    // memberships, which are kept by VU id — a change made by
-    // a plain link (LAB-19). The solves and feedback of the
-    // account stay.
+    // memberships, which are kept by VU id. The solves and
+    // feedback of the account stay.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete

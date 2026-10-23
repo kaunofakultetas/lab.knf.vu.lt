@@ -101,9 +101,9 @@
                                   @if($main == 1)
                                       <td class="text-center"> 
                                       @if($value['hidden'] == 0)
-                                      	<a href="/control-panel/challenges/status/1/{{ $value['id'] }}" class="badge badge-info bg-success hover-white">Visible</a>
+                                      	<a href="#" onClick="Post_Link('/control-panel/challenges/status/1/{{ $value['id'] }}');" class="badge badge-info bg-success hover-white">Visible</a>
                                       @elseif($value['hidden'] == 1)
-                                        <a href="/control-panel/challenges/status/0/{{ $value['id'] }}" class="badge badge-info bg-primary hover-white">Hidden</a>
+                                        <a href="#" onClick="Post_Link('/control-panel/challenges/status/0/{{ $value['id'] }}');" class="badge badge-info bg-primary hover-white">Hidden</a>
                                       @endif
                                       </td>
                                   @endif

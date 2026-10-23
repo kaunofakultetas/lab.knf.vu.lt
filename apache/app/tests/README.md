@@ -66,9 +66,8 @@ MySQL creating its schema.
   hook. Check them from the repository root with
   `python3 .claude/skills/house-comments/scripts/house_check_php84.py --new apache/app/tests`.
   The app runs PHP 8.4 (`php:8.4.27-apache`), which reports the locked
-  Laravel 10 and Symfony 6 code — and the app's own `DateInterval::$w`
-  in the three copies of `time_elapsed_string` — as deprecated. PHPUnit
-  counts those deprecations under the run's report; they do not fail it.
+  Laravel 10 and Symfony 6 code as deprecated. PHPUnit counts those
+  deprecations under the run's report; they do not fail it.
 - Races are pinned without real concurrency: the test listens to its own
   request's queries (`DB::listen`) or Redis commands and slips the other
   request's write in where it would land live — see

@@ -15,15 +15,15 @@
 //    POST /control-panel/dialog/users/vu-groups/store                      — adds
 //    GET  /control-panel/dialog/users/vu-groups/edit/{uid}                 — rename dialog
 //    POST /control-panel/dialog/users/vu-groups/update                     — renames
-//    GET  /control-panel/users/vu-groups/delete/{uid}                      — deletes
+//    POST /control-panel/users/vu-groups/delete/{uid}                      — deletes
 //    GET  /control-panel/users/vu-groups/users_list/{uid}                  — the members
 //    GET  /control-panel/dialog/users/vu-groups/user_add_{type}/{uid}      — member dialog
 //    POST /control-panel/dialog/users/vu-groups/users_store                — adds a member
-//    GET  /control-panel/users/vu-groups/delete_group/{uid}                — removes one
+//    POST /control-panel/users/vu-groups/delete_group/{uid}                — removes one
 //    GET  /control-panel/users/vu-groups/challenges_list/{uid}             — the challenges
 //    GET  /control-panel/dialog/users/vu-groups/challenge_add_{type}/{uid} — challenge dialog
 //    POST /control-panel/dialog/users/vu-groups/challenges_store           — adds one
-//    GET  /control-panel/users/vu-groups/delete_challenge/{uid}            — removes one
+//    POST /control-panel/users/vu-groups/delete_challenge/{uid}            — removes one
 //    GET  /control-panel/users/vu-groups/leaderboard/{uid}                 — the leaderboard
 //
 //  Used by:
@@ -296,11 +296,10 @@ class UsersGroupsController extends BaseController
     // destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/users/vu-groups/delete/{uid}
+    // POST /control-panel/users/vu-groups/delete/{uid}
     //
     // Deletes the group with its challenge places and
-    // memberships, then goes back with "Deleted!" — a change
-    // made by a plain link (LAB-19).
+    // memberships, then goes back with "Deleted!".
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -446,13 +445,12 @@ class UsersGroupsController extends BaseController
     // group_destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/users/vu-groups/delete_group/{uid}
+    // POST /control-panel/users/vu-groups/delete_group/{uid}
     //
     // Removes the membership row uid — one member of one group
-    // — and goes back with "Deleted!", a change made by a
-    // plain link (LAB-19). The route's r_exists check
-    // (membership_owned) keeps a lab admin to the members of
-    // its own groups.
+    // — and goes back with "Deleted!". The route's r_exists
+    // check (membership_owned) keeps a lab admin to the
+    // members of its own groups.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the remove
@@ -535,12 +533,12 @@ class UsersGroupsController extends BaseController
     // challenge_destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/users/vu-groups/delete_challenge/{uid}
+    // POST /control-panel/users/vu-groups/delete_challenge/{uid}
     //
     // Removes the group-challenge row uid and goes back with
-    // "Deleted!", a change made by a plain link (LAB-19). The
-    // route's r_exists check (group_challenge_owned) keeps a
-    // lab admin to the challenges of its own groups.
+    // "Deleted!". The route's r_exists check
+    // (group_challenge_owned) keeps a lab admin to the
+    // challenges of its own groups.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the remove

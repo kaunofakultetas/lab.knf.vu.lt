@@ -117,7 +117,7 @@ final class EmailSyncTest extends TestCase
 
         $response = $this->signInAdmin($this->makeAdmin(true))
             ->from('/control-panel/emails')
-            ->get('/control-panel/emails/sync/registered');
+            ->post('/control-panel/emails/sync/registered');
 
         $response->assertRedirect('/control-panel/emails');
         $response->assertSessionHas('success', 'registered email list synced!');
@@ -149,7 +149,7 @@ final class EmailSyncTest extends TestCase
         $this->makePlayer(['email' => 'jonas@players.test']);
         $this->fakeMailjet([]);
 
-        $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/emails/sync/registered');
+        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/emails/sync/registered');
 
         $this->assertEquals([
             ['get', Resources::$Contact, ['filters' => ['Email' => 'jonas@players.test']]],
@@ -179,7 +179,7 @@ final class EmailSyncTest extends TestCase
         $this->makePlayer(['email' => 'inactive@players.test', 'status' => 0]);
         $this->fakeMailjet(['active@players.test' => 1, 'inactive@players.test' => 2]);
 
-        $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/emails/sync/registered');
+        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/emails/sync/registered');
 
         $lookups = array_filter($this->calls, fn (array $call) => $call[0] === 'get');
         $this->assertSame(['active@players.test'], array_map(fn (array $call) => $call[2]['filters']['Email'], array_values($lookups)));
@@ -208,7 +208,7 @@ final class EmailSyncTest extends TestCase
         $this->makePlayer(['email' => 'quiet@players.test', 'newsletter' => 0]);
         $this->fakeMailjet(['reader@players.test' => 5, 'quiet@players.test' => 6]);
 
-        $response = $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/emails/sync/newsletters');
+        $response = $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/emails/sync/newsletters');
 
         $response->assertSessionHas('success', 'newsletters email list synced!');
         $this->assertEquals([
@@ -240,7 +240,7 @@ final class EmailSyncTest extends TestCase
         $this->makePlayer(['email' => 'fine@players.test']);
         $this->fakeMailjet(['fine@players.test' => 3]);
 
-        $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/emails/sync/registered');
+        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/emails/sync/registered');
 
         $this->assertCount(2, $this->calls);
         $this->assertSame('fine@players.test', $this->calls[0][2]['filters']['Email']);

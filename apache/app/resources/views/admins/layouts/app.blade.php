@@ -7,6 +7,7 @@
     <meta name="description" content="">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="robots" content="noindex,nofollow">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <!-- Google fonts - Poppins --> 
     <link href="/assets/img/favicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon" />
     <link rel="stylesheet" href="/static/fonts/poppins.css"> 
@@ -21,7 +22,8 @@
   
   @yield('content') 
    
-	<script src="/assets/js/app_admin.min.js"></script>
+	{{-- The file's time in the address, so browsers fetch the script anew whenever it changes --}}
+	<script src="/assets/js/app_admin.min.js?{{ filemtime(public_path('assets/js/app_admin.min.js')) }}"></script>
     
     <script src="/static/js/bootstrap-5.0.2.min.js"></script>
      

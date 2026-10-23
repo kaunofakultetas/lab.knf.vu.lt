@@ -7,8 +7,8 @@
 //  filters by: the seven init.sql seeds and whatever is added
 //  later. New and renamed categories go through small dialogs
 //  loaded into a modal; deleting a category also takes it off
-//  every challenge. The list and the deletion are main-only;
-//  that the dialogs are not is pinned in AdminDefectsTest.
+//  every challenge. The list, the dialogs and the deletion
+//  are all main-only.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -206,7 +206,7 @@ final class CategoriesTest extends TestCase
 
         $response = $this->signInAdmin($this->makeAdmin(true))
             ->from('/control-panel/categories')
-            ->get("/control-panel/category/delete/{$category->id}");
+            ->post("/control-panel/category/delete/{$category->id}");
 
         $response->assertRedirect('/control-panel/categories');
         $response->assertSessionHas('success', 'Deleted!');
@@ -238,7 +238,7 @@ final class CategoriesTest extends TestCase
 
         $this->get('/control-panel/categories')->assertRedirect('/control-panel/dashboard');
         $this->assertErrorFlashed(self::REFUSAL);
-        $this->get("/control-panel/category/delete/{$category->id}")->assertRedirect('/control-panel/dashboard');
+        $this->post("/control-panel/category/delete/{$category->id}")->assertRedirect('/control-panel/dashboard');
         $this->assertErrorFlashed(self::REFUSAL);
 
         $this->assertNotNull($category->fresh());

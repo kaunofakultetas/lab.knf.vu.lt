@@ -5,14 +5,14 @@
 //
 //  The mail that hands a player a password in plain text:
 //  the one an admin typed for a new or edited account, or
-//  the one generated when a password-reminder link is
-//  opened (LAB-27). The view is users.mail.usernewpass.
+//  the one generated when the button a password-reminder
+//  link opens is pressed. The view is users.mail.usernewpass.
 //
 //  Used by:
 //    - Admins\UsersController::store and update — an account
 //      the control panel created or gave a new password
-//    - Users\RegisterController::reset_pass — the reminder
-//      link
+//    - Users\RegisterController::reset_pass — the button of
+//      the reminder link's page
 // -----------------------------------------------------------
 
 

@@ -112,13 +112,6 @@ class SettingsController extends BaseController
     // when there is none. The difference carries no sign, so
     // a date in the future reads the same.
     //
-    // Known bug (low): the weeks go into a property the code
-    // adds to PHP's DateInterval (SettingsController.php:134), a
-    // dynamic property — deprecated since PHP 8.2, reported
-    // by PHP 8.4 and expected to fail under PHP 9, which would
-    // end every page that shows an age in a server error.
-    // Fix: keep the weeks in a local variable.
-    //
     // Used by:
     //   - BaseController — the feed of recent solves
     //   - LeaderboardController::index and GroupsController —
@@ -131,8 +124,9 @@ class SettingsController extends BaseController
         $ago = new \DateTime($datetime);
         $diff = $now->diff($ago);
 
-        $diff->w = floor($diff->d / 7);
-        $diff->d -= $diff->w * 7;
+        // DateInterval has no weeks, so they are kept apart
+        $weeks = floor($diff->d / 7);
+        $diff->d -= $weeks * 7;
 
         $string = array(
             'y' => 'year',
@@ -144,8 +138,9 @@ class SettingsController extends BaseController
             's' => 'second'
         );
         foreach ($string as $k => &$v) {
-            if ($diff->$k) {
-                $v = $diff->$k . ' ' . $v . ($diff->$k > 1 ? 's' : '');
+            $count = $k == 'w' ? $weeks : $diff->$k;
+            if ($count) {
+                $v = $count . ' ' . $v . ($count > 1 ? 's' : '');
             } else {
                 unset($string[$k]);
             }

@@ -13,7 +13,7 @@
 //    POST /control-panel/pages/store        — adds a page
 //    GET  /control-panel/pages/edit/{uid}   — the filled form
 //    POST /control-panel/pages/update       — changes a page
-//    GET  /control-panel/pages/delete/{uid} — deletes a page
+//    POST /control-panel/pages/delete/{uid} — deletes a page
 //
 //  Used by:
 //    - routes/web.php — the routes above, all main-only
@@ -271,10 +271,9 @@ class PagesController extends BaseController
     // destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/pages/delete/{uid}
+    // POST /control-panel/pages/delete/{uid}
     //
-    // Deletes the page and goes back with "Deleted!" — a
-    // change made by a plain link (LAB-19).
+    // Deletes the page and goes back with "Deleted!".
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete

@@ -10,7 +10,8 @@
 //  provider returns is matched to a player account —
 //  created on the first visit — which is signed in on the
 //  users guard; the route behind, /cp, then opens the
-//  dashboard.
+//  dashboard. An account switched inactive in the control
+//  panel is turned back to the login page instead.
 //
 //  Used by:
 //    - app/Http/Kernel.php — the saml_auth alias
@@ -62,14 +63,10 @@ class SamlAuth
     // stops the request when there is no SSO session yet.
     // With one, the player account UserAuthController::
     // check_member finds or creates for the attributes is
-    // signed in.
-    //
-    // Known bug LAB-15 (medium): an account switched inactive
-    // in the control panel still signs in — whatever id
-    // check_member returns is signed in here
-    // (SamlAuth.php:85), and neither looks at the status the
-    // local login form checks. Fix: refuse inactive accounts
-    // in check_member or here.
+    // signed in. For an inactive account check_member returns
+    // no id: the visitor goes to the login page with the
+    // message the login form gives an inactive account, and
+    // signs in to nothing.
     //
     // Used by:
     //   - the saml_auth alias — GET /cp
@@ -82,7 +79,13 @@ class SamlAuth
 
         $attributes = $as->getAttributes();
 
-        Auth::guard('users')->loginUsingId(UserAuthController::check_member($attributes));
+        $id = UserAuthController::check_member($attributes);
+
+        if ($id === null) {
+            return redirect()->route('login_users')->withErrors(['Your account is not active']);
+        }
+
+        Auth::guard('users')->loginUsingId($id);
 
         return $next($request);
     }

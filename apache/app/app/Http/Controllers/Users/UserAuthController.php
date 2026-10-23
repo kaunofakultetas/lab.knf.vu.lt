@@ -232,12 +232,10 @@ class UserAuthController extends BaseController
     // no password. When a local player has registered that
     // username already, the account takes it with the first
     // free numbered suffix instead. The login time and address
-    // are recorded either way.
-    //
-    // Known bug LAB-15 (medium): the account's status is never
-    // looked at, so an account switched inactive in the
-    // control panel still signs in through SamlAuth. Fix:
-    // refuse inactive accounts here or in the middleware.
+    // are recorded. An account switched inactive in the
+    // control panel gets null instead, and its login is not
+    // recorded — as the login form refuses an inactive local
+    // account.
     //
     // Used by:
     //   - SamlAuth::handle (Http/Middleware/) — the SSO login
@@ -269,6 +267,10 @@ class UserAuthController extends BaseController
         }
 
         $id = User::where(['vu_id'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0]])->get()->pluck('id')->first();
+
+        if (User::where(['id' => $id])->value('status') != 1) {
+            return null;
+        }
 
         User::where(['vu_id'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0]])->where('vu_id','!=', NULL)->update(['last_login'=>date("Y-m-d H:i:s"), 'last_ip'=>SettingsController::getUserIP()]);
 

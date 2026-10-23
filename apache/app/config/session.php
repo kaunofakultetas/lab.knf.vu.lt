@@ -10,7 +10,8 @@
 //  2160, and the later wins: 36 hours. Its cookie is named
 //  after APP_NAME, sent on every path of the site, hidden
 //  from scripts, and SameSite=Lax — which still lets a
-//  top-level link from another site carry it (LAB-19).
+//  top-level link from another site carry it, so the
+//  control panel makes no change by GET.
 //
 //  Used by:
 //    - StartSession, in the web group of app/Http/Kernel.php

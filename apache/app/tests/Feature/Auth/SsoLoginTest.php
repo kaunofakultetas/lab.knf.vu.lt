@@ -285,4 +285,35 @@ final class SsoLoginTest extends TestCase
         $this->assertSame('s7777777_2', User::where('vu_id', 's7777777')->value('username'));
         $this->assertAuthenticated('users');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_deactivated_vu_account_stays_outside
+    // -----------------------------------------------------------
+    //
+    // A VU account switched inactive in the control panel is
+    // turned back to the login page with the message the
+    // login form gives an inactive account, signed in to
+    // nothing, and the refused login is not recorded.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_deactivated_vu_account_stays_outside(): void
+    {
+        $player = $this->makeSsoPlayer(['status' => 0]);
+        $this->fakeIdentityProvider($player->vu_id, $player->email);
+
+        $response = $this->get('/cp');
+
+        $response->assertRedirect('/');
+        $this->assertErrorFlashed('Your account is not active');
+        $this->assertGuest('users');
+        $this->assertNull($player->refresh()->last_login);
+    }
 }

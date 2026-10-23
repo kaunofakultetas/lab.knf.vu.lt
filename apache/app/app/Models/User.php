@@ -11,9 +11,9 @@
 //  username and an empty password no sign-in matches.
 //  points is the sum of the player's solves, kept by
 //  submit_answer; user_type is 1 for an individual and 2
-//  for a team. remember_token holds the password-reminder
-//  token, never Laravel's remember-me one — the login never
-//  asks to be remembered.
+//  for a team. remember_token holds the SHA-256 hash of the
+//  password-reminder token, never Laravel's remember-me one
+//  — the login never asks to be remembered.
 //
 //  Used by:
 //    - config/auth.php — the users provider, behind the

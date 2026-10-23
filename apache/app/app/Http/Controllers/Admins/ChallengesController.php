@@ -11,22 +11,24 @@
 //  created — the r_exists middleware checks — while a main
 //  admin changes them all. A lab admin's new challenge
 //  starts hidden, for the groups; a main admin's shows on
-//  the dashboard.
+//  the dashboard. A lab admin's content is cleaned of
+//  scripts before it is stored, as the players' challenge
+//  page prints it as HTML.
 //
 //    GET  /control-panel/challenges                                — the list
 //    GET  /control-panel/challenges/create                         — the empty form
 //    POST /control-panel/challenges/store                          — adds
 //    GET  /control-panel/challenges/edit/{uid}                     — the filled form
 //    POST /control-panel/challenges/update                         — changes
-//    GET  /control-panel/challenges/delete/{uid}                   — deletes
+//    POST /control-panel/challenges/delete/{uid}                   — deletes
 //    GET  /control-panel/dialog/challenges/categories/{uid}        — categories dialog
 //    POST /control-panel/challenges/categories/store               — sets categories
 //    GET  /control-panel/challenges/files/{uid}                    — the file links
 //    GET  /control-panel/dialog/challenge_file/{type}/{uid}        — link dialog
 //    POST /control-panel/challenges_file/store                     — adds a link
 //    POST /control-panel/challenges_file/update                    — changes a link
-//    GET  /control-panel/challenges/files/delete/{uid}             — deletes a link
-//    GET  /control-panel/challenges/status/{status}/{challenge_id} — hides or shows
+//    POST /control-panel/challenges/files/delete/{uid}             — deletes a link
+//    POST /control-panel/challenges/status/{status}/{challenge_id} — hides or shows
 //
 //  Used by:
 //    - routes/web.php — the routes above
@@ -42,6 +44,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
+use HTMLPurifier;
+use HTMLPurifier_Config;
 use App\Models\Partners;
 use App\Models\Categories;
 use App\Models\Challenges;
@@ -77,6 +81,7 @@ use App\Models\GroupsChallenges;
 //   file_update      — changes a link
 //   file_destroy     — deletes a link
 //   status           — hides or shows a challenge
+//   clean_content    — a lab admin's content, made safe
 //
 // Used by:
 //   - routes/web.php
@@ -216,20 +221,11 @@ class ChallengesController extends BaseController
     // POST /control-panel/challenges/store
     //
     // Adds a challenge owned by the signed-in admin, with a
-    // fresh UUID as its public id and the flag trimmed;
-    // hidden unless the admin's account is a main admin's.
-    // Then to the list with "Created!". A form missing a field
-    // goes back with the errors and what was typed.
-    //
-    // Known bug LAB-29 (medium): the content is stored as given
-    // (ChallengesController.php:265) and the challenge page
-    // prints it as raw HTML, under a CSP that allows inline
-    // scripts — so a lab admin can run JavaScript in the
-    // browser of every player who opens the challenge, and
-    // with admin rights in that of a main admin signed into
-    // both sides of the site. Fix: strip scripts and event
-    // handlers when saving — an HTML sanitiser — at least for
-    // lab admins.
+    // fresh UUID as its public id, the flag trimmed and the
+    // content through clean_content; hidden unless the
+    // admin's account is a main admin's. Then to the list
+    // with "Created!". A form missing a field goes back with
+    // the errors and what was typed.
     //
     // Used by:
     //   - the challenge form, for a new challenge
@@ -262,7 +258,7 @@ class ChallengesController extends BaseController
             'partner_id' => $request->get('partner_id'),
             'created_by'=>Auth::guard('admins')->id(),
             'descr' => $request->get('descr'),
-            'content' => $request->get('content'),
+            'content' => $this->clean_content($request->get('content')),
             'answer' => trim($request->get('answer')),
             'points' => $request->get('points'),
             'hidden' => $hidden
@@ -318,8 +314,8 @@ class ChallengesController extends BaseController
     // POST /control-panel/challenges/update
     //
     // Changes the challenge with the posted uid to the form's
-    // fields as sent — the content unfiltered, as in store
-    // (LAB-29) — then goes to the list with "Updated!". The
+    // fields as sent — the content through clean_content, as
+    // in store — then goes to the list with "Updated!". The
     // hidden switch and the author stay as they were, so a lab
     // admin keeps a challenge a main admin corrected.
     //
@@ -333,7 +329,7 @@ class ChallengesController extends BaseController
             'name' => $request->get('name'),
             'partner_id' => $request->get('partner_id'),
             'descr' => $request->get('descr'),
-            'content' => $request->get('content'),
+            'content' => $this->clean_content($request->get('content')),
             'answer' => $request->get('answer'),
             'points' => $request->get('points')
         ]);
@@ -352,12 +348,11 @@ class ChallengesController extends BaseController
     // destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/challenges/delete/{uid}
+    // POST /control-panel/challenges/delete/{uid}
     //
     // Deletes the challenge with its feed rows, file links,
     // solves, categories and group places, then goes back with
-    // "Deleted!" — a change made by a plain link (LAB-19).
-    // The players keep the points its solves gave.
+    // "Deleted!". The players keep the points its solves gave.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -601,8 +596,8 @@ class ChallengesController extends BaseController
     //
     // Changes the link with the posted uid, under the rules of
     // file_store, then goes back with "File updated!". The
-    // route's r_exists check reads that uid as a challenge id
-    // (LAB-06, routes/web.php).
+    // route's r_exists check (file_owned_uid) keeps a lab
+    // admin to the links of its own challenges.
     //
     // Used by:
     //   - the link dialog, for an existing link
@@ -633,12 +628,11 @@ class ChallengesController extends BaseController
     // file_destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/challenges/files/delete/{uid}
+    // POST /control-panel/challenges/files/delete/{uid}
     //
-    // Deletes the link and goes back with "File deleted!" — a
-    // change made by a plain link (LAB-19). The route's
-    // r_exists check reads the link's id as a challenge id
-    // (LAB-06, routes/web.php).
+    // Deletes the link and goes back with "File deleted!". The
+    // route's r_exists check (file_owned) keeps a lab admin to
+    // the links of its own challenges.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -663,15 +657,15 @@ class ChallengesController extends BaseController
     // status
     // -----------------------------------------------------------
     //
-    // GET /control-panel/challenges/status/{status}/{challenge_id}
+    // POST /control-panel/challenges/status/{status}/{challenge_id}
     //
     // Writes the status from the address into the challenge's
     // hidden column — 1 hides it from the main dashboard, 0
-    // shows it — and goes back. A main-only change made by a
-    // plain link (LAB-19).
+    // shows it — and goes back. Main-only.
     //
     // Used by:
-    //   - the hide and show links of the challenges list
+    //   - Post_Link() of custom_admin.js — the Visible and
+    //     Hidden switches of the challenges list
     // -----------------------------------------------------------
 
     public function status(Request $request, $status, $challenge_id)
@@ -679,5 +673,46 @@ class ChallengesController extends BaseController
         Challenges::where(['id'=>$challenge_id])->update(['hidden'=>$status]);
 
         return back();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // clean_content
+    // -----------------------------------------------------------
+    //
+    // The content a challenge form sent, made safe to print as
+    // HTML on the players' challenge page when a lab admin
+    // wrote it: HTMLPurifier keeps the formatting the editor
+    // produces — text styles, lists, tables, links, pictures,
+    // pasted ones included — and drops scripts, event
+    // handlers, frames and javascript: links. A main admin's
+    // content, and a missing one, are kept as sent: main
+    // admins are trusted with the whole site already. The
+    // definition cache stays off, as the container's file
+    // system is read-only.
+    //
+    // Used by:
+    //   - store and update (above)
+    // -----------------------------------------------------------
+
+    private function clean_content($content)
+    {
+        if ($content === null || Auth::guard('admins')->user()?->main == 1) {
+            return $content;
+        }
+
+        $config = HTMLPurifier_Config::createDefault();
+        $config->set('Cache.DefinitionImpl', null);
+
+        // The editor embeds a pasted picture as a data: address,
+        // and its links may open in a new tab
+        $config->set('URI.AllowedSchemes', ['http' => true, 'https' => true, 'mailto' => true, 'data' => true]);
+        $config->set('Attr.AllowedFrameTargets', ['_blank']);
+
+        return (new HTMLPurifier($config))->purify($content);
     }
 }

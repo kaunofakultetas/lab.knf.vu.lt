@@ -146,8 +146,8 @@ final class EmailsTest extends TestCase
         $response->assertSee("/control-panel/emails/send/{$unsent->id}", false);
         $response->assertDontSee("/control-panel/emails/send/{$sent->id}", false);
         $response->assertSee("href=\"/control-panel/emails/edit/{$sent->id}\"", false);
-        $response->assertSee('href="/control-panel/emails/sync/registered"', false);
-        $response->assertSee('href="/control-panel/emails/sync/newsletters"', false);
+        $response->assertSee("onClick=\"Post_Link('/control-panel/emails/sync/registered');\"", false);
+        $response->assertSee("onClick=\"Post_Link('/control-panel/emails/sync/newsletters');\"", false);
     }
 
 
@@ -264,7 +264,7 @@ final class EmailsTest extends TestCase
 
         $this->signInAdmin($this->makeAdmin(true))
             ->from('/control-panel/emails')
-            ->get("/control-panel/emails/delete/{$template->id}")
+            ->post("/control-panel/emails/delete/{$template->id}")
             ->assertSessionHas('success', 'Deleted!');
 
         $this->assertNull(Emails::find($template->id));
@@ -329,7 +329,7 @@ final class EmailsTest extends TestCase
         $template = $this->makeTemplate();
         $this->signInAdmin($this->makeAdmin(true));
 
-        $response = $this->get("/control-panel/emails/send/{$template->id}");
+        $response = $this->post("/control-panel/emails/send/{$template->id}");
 
         $response->assertRedirect('/control-panel/emails');
         $response->assertSessionHas('success', 'Email sent!');
@@ -362,10 +362,10 @@ final class EmailsTest extends TestCase
         $this->makePlayer(['status' => 0, 'newsletter' => 0]);
         $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/emails');
 
-        $this->get('/control-panel/emails/sync/registered')
+        $this->post('/control-panel/emails/sync/registered')
             ->assertRedirect('/control-panel/emails')
             ->assertSessionHas('success', 'registered email list synced!');
-        $this->get('/control-panel/emails/sync/newsletters')
+        $this->post('/control-panel/emails/sync/newsletters')
             ->assertSessionHas('success', 'newsletters email list synced!');
     }
 
@@ -393,11 +393,15 @@ final class EmailsTest extends TestCase
         foreach ([
             "/control-panel/emails/edit/{$template->id}",
             "/control-panel/dialog/emails/send_test/{$template->id}",
+        ] as $page) {
+            $this->get($page)->assertRedirect('/control-panel/dashboard');
+        }
+        foreach ([
             "/control-panel/emails/send/{$template->id}",
             "/control-panel/emails/delete/{$template->id}",
             '/control-panel/emails/sync/registered',
-        ] as $page) {
-            $this->get($page)->assertRedirect('/control-panel/dashboard');
+        ] as $action) {
+            $this->post($action)->assertRedirect('/control-panel/dashboard');
         }
         $this->post('/control-panel/emails/store', ['name' => 'x', 'subject' => 'x', 'content' => 'x'])->assertRedirect('/control-panel/dashboard');
         $this->post("/control-panel/emails/sending_test/{$template->id}", ['email' => 'me@admins.test'])->assertRedirect('/control-panel/dashboard');

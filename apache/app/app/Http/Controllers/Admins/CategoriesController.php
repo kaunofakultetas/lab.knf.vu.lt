@@ -13,7 +13,7 @@
 //    POST /control-panel/dialog/category/store      — adds
 //    GET  /control-panel/dialog/category/edit/{uid} — rename dialog
 //    POST /control-panel/dialog/category/update     — renames
-//    GET  /control-panel/category/delete/{uid}      — deletes
+//    POST /control-panel/category/delete/{uid}      — deletes
 //
 //  Used by:
 //    - routes/web.php — the routes above
@@ -227,11 +227,10 @@ class CategoriesController extends BaseController
     // destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/category/delete/{uid}
+    // POST /control-panel/category/delete/{uid}
     //
     // Takes the category off every challenge, deletes it, and
-    // goes back with "Deleted!" — a change made by a plain
-    // link (LAB-19).
+    // goes back with "Deleted!".
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete

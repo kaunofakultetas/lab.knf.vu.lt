@@ -186,4 +186,46 @@ final class ElapsedTimeTest extends TestCase
         $this->assertSame($words, AdminLeaderboard::time_elapsed_string($then, true));
         $this->assertSame($words, AdminSettings::time_elapsed_string($then, true));
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_no_copy_raises_a_deprecation
+    // -----------------------------------------------------------
+    //
+    // The weeks are counted beside PHP's DateInterval, not in
+    // a property added to it: PHP 8.2 deprecated such dynamic
+    // properties, and PHP 9 is expected to refuse them, which
+    // would end every page that shows an age in a server
+    // error. No copy raises a deprecation, with weeks to word
+    // or without.
+    //
+    // Used by:
+    //   - PHPUnit — the Unit suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_no_copy_raises_a_deprecation(): void
+    {
+        $deprecations = [];
+        set_error_handler(function (int $level, string $message) use (&$deprecations): bool {
+            $deprecations[] = $message;
+            return true;
+        }, E_DEPRECATED);
+
+        try {
+            foreach (['-15 days -2 hours', '-3 hours'] as $offset) {
+                $then = (new DateTime())->modify($offset)->format('Y-m-d H:i:s.u');
+                PlayerSettings::time_elapsed_string($then, true);
+                AdminLeaderboard::time_elapsed_string($then, true);
+                AdminSettings::time_elapsed_string($then, true);
+            }
+        } finally {
+            restore_error_handler();
+        }
+
+        $this->assertSame([], $deprecations);
+    }
 }

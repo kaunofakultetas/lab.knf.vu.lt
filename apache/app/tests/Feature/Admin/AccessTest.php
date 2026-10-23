@@ -314,4 +314,36 @@ final class AccessTest extends TestCase
         $response->assertRedirect('/control-panel/dashboard');
         $this->assertErrorFlashed(self::REFUSAL);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_panel_pages_carry_the_csrf_token
+    // -----------------------------------------------------------
+    //
+    // The pages whose lists delete and switch things carry the
+    // session's CSRF token in a csrf-token meta tag, which
+    // Post_Link of custom_admin.js sends with every change it
+    // posts, and load that script under an address carrying
+    // the file's time, so a browser cannot keep a copy older
+    // than the page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_panel_pages_carry_the_csrf_token(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true));
+        $script = '/assets/js/app_admin.min.js?' . filemtime(public_path('assets/js/app_admin.min.js'));
+
+        foreach (['/control-panel/categories', '/control-panel/users', '/control-panel/challenges', '/control-panel/emails'] as $page) {
+            $response = $this->get($page);
+            $response->assertSee('<meta name="csrf-token" content="' . csrf_token() . '">', false);
+            $response->assertSee('<script src="' . $script . '"></script>', false);
+        }
+    }
 }

@@ -505,7 +505,7 @@ final class PartnersTest extends TestCase
 
         $response = $this->signInAdmin($this->makeAdmin(true))
             ->from('/control-panel/partners')
-            ->get("/control-panel/partners/delete/{$partner->id}");
+            ->post("/control-panel/partners/delete/{$partner->id}");
 
         $response->assertRedirect('/control-panel/partners');
         $response->assertSessionHas('success', 'Deleted!');
@@ -538,7 +538,7 @@ final class PartnersTest extends TestCase
             ->assertRedirect('/control-panel/dashboard');
         $this->post('/control-panel/dialog/partners/update', ['uid' => $partner->id, 'name' => 'X'])
             ->assertRedirect('/control-panel/dashboard');
-        $this->get("/control-panel/partners/delete/{$partner->id}")->assertRedirect('/control-panel/dashboard');
+        $this->post("/control-panel/partners/delete/{$partner->id}")->assertRedirect('/control-panel/dashboard');
 
         $this->assertErrorFlashed("You don't have permissions to do this!");
         $this->assertSame(1, Partners::count());

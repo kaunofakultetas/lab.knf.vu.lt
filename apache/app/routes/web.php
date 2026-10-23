@@ -15,12 +15,12 @@
 //  groups and challenges they created. The dialog routes
 //  return the forms the panel's pages open in a modal.
 //  event.status is switched off and lets every request
-//  through. No route has a rate limit (LAB-20, LAB-21), and
-//  every change the panel makes from a link — a deletion, a
-//  removal, a switch, a mail sent to the list — is a plain
-//  GET request, which no CSRF token guards: a link an admin
-//  clicks on another site makes the change in the admin's
-//  name (LAB-19).
+//  through. No route has a rate limit (LAB-20, LAB-21).
+//  Every change the panel makes from its lists — a deletion,
+//  a removal, a switch, a mail sent to the list, a list
+//  sync — is a POST, which the panel's script sends with the
+//  page's CSRF token, so a link on another site changes
+//  nothing.
 //
 //  The player side — guests, then anyone, then players:
 //
@@ -28,7 +28,7 @@
 //    POST      /login
 //    GET|POST  /register
 //    GET       /verify/{verify_token}
-//    GET       /reset/{reset_token}
+//    GET|POST  /reset/{reset_token}
 //    GET|POST  /forgot-password
 //    GET       /cp
 //    GET       /page/{alias}
@@ -55,9 +55,10 @@
 //  the settings:
 //
 //    GET       /control-panel/categories
-//    GET       /control-panel/category/delete/{uid}
+//    POST      /control-panel/category/delete/{uid}
 //    GET|POST  /control-panel/dialog/category/…
-//    GET       /control-panel/partners[/delete/{uid}]
+//    GET       /control-panel/partners
+//    POST      /control-panel/partners/delete/{uid}
 //    GET|POST  /control-panel/dialog/partners/…
 //    GET|POST  /control-panel/pages[/…]
 //    GET|POST  /control-panel/emails[/…]
@@ -89,7 +90,7 @@ use Illuminate\Support\Facades\Route;
 // form; signed-in visitors go to their dashboard (guest).
 //
 // Known bug LAB-20 (medium): the login form's route has no
-// rate limit, lockout or reCAPTCHA (web.php:97), so a password
+// rate limit, lockout or reCAPTCHA (web.php:98), so a password
 // can be guessed without end. Fix: throttle the route, by
 // address and e-mail.
 Route::get('', [App\Http\Controllers\Users\UserAuthController::class, 'index'])->name('login_users')->middleware(['guest']);
@@ -98,16 +99,19 @@ Route::post('login', [App\Http\Controllers\Users\UserAuthController::class, 'log
 
 // Registration — the form, and its POST, which the reg.status
 // switch closes — and the links the mails carry: the
-// verification link and the password-reminder link, whose
-// validate.verify and validate.reset answer an unknown token
-// with a 404
+// verification link, and the password-reminder link, which
+// opens a page whose button posts the reset. validate.verify
+// answers an unknown token with a 404, validate.reset an
+// unknown one or one mailed over an hour ago
 Route::get('register', [App\Http\Controllers\Users\RegisterController::class, 'create'])->name('register_users')->middleware(['guest']);
 
 Route::post('register', [App\Http\Controllers\Users\RegisterController::class, 'store'])->name('create_users')->middleware(['guest', 'reg.status']);
 
 Route::get('verify/{verify_token}', [App\Http\Controllers\Users\RegisterController::class, 'verify'])->middleware(['guest', 'validate.verify']);
 
-Route::get('reset/{reset_token}', [App\Http\Controllers\Users\RegisterController::class, 'reset_pass'])->middleware(['guest', 'validate.reset']);
+Route::get('reset/{reset_token}', [App\Http\Controllers\Users\RegisterController::class, 'reset_form'])->middleware(['guest', 'validate.reset']);
+
+Route::post('reset/{reset_token}', [App\Http\Controllers\Users\RegisterController::class, 'reset_pass'])->middleware(['guest', 'validate.reset']);
 
 // The forgotten-password form and its POST
 Route::get('forgot-password', [App\Http\Controllers\Users\RegisterController::class, 'ForgotPasswordForm'])->name('remind_password')->middleware(['guest']);
@@ -127,7 +131,7 @@ Route::prefix('user')->group(function(){
     // dashboard.
     //
     // Known bug LAB-21 (low): the answer route has no rate limit
-    // (web.php:136), so flags can be guessed without end. Fix:
+    // (web.php:140), so flags can be guessed without end. Fix:
     // throttle it per player.
     Route::get('/dashboard', [App\Http\Controllers\Users\ChallengesController::class, 'index'])->middleware(['event.status', 'auth:users'])->name('user_dashboard');
 
@@ -247,9 +251,9 @@ Route::prefix('control-panel')->group(function(){
     });
 
     // Deleting a category or a partner — main-only
-    Route::get('/category/delete/{uid}', [App\Http\Controllers\Admins\CategoriesController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
+    Route::post('/category/delete/{uid}', [App\Http\Controllers\Admins\CategoriesController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
 
-    Route::get('/partners/delete/{uid}', [App\Http\Controllers\Admins\PartnersController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
+    Route::post('/partners/delete/{uid}', [App\Http\Controllers\Admins\PartnersController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
 
     // The content pages — main-only
     Route::get('/pages', [App\Http\Controllers\Admins\PagesController::class, 'index'])->middleware(['auth.admin:admins', 'perms'])->name('admin.pages');
@@ -260,7 +264,7 @@ Route::prefix('control-panel')->group(function(){
 
     Route::get('/pages/edit/{uid}', [App\Http\Controllers\Admins\PagesController::class, 'edit'])->middleware(['auth.admin:admins', 'perms']);
 
-    Route::get('/pages/delete/{uid}', [App\Http\Controllers\Admins\PagesController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
+    Route::post('/pages/delete/{uid}', [App\Http\Controllers\Admins\PagesController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
 
     Route::post('/pages/update', [App\Http\Controllers\Admins\PagesController::class, 'update'])->middleware(['auth.admin:admins', 'perms']);
 
@@ -270,13 +274,13 @@ Route::prefix('control-panel')->group(function(){
     // uses them.
     Route::get('/users', [App\Http\Controllers\Admins\UsersController::class, 'index'])->middleware(['auth.admin:admins'])->name('admin.users');
 
-    Route::get('/users/status/{user_id}/{status_id}', [App\Http\Controllers\Admins\UsersController::class, 'change_status'])->middleware(['auth.admin:admins', 'perms']);
+    Route::post('/users/status/{user_id}/{status_id}', [App\Http\Controllers\Admins\UsersController::class, 'change_status'])->middleware(['auth.admin:admins', 'perms']);
 
     Route::get('/users/create', [App\Http\Controllers\Admins\UsersController::class, 'create'])->middleware(['auth.admin:admins']);
 
     Route::post('/users/store', [App\Http\Controllers\Admins\UsersController::class, 'store'])->middleware(['auth.admin:admins']);
 
-    Route::get('/users/delete/{uid}', [App\Http\Controllers\Admins\UsersController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
+    Route::post('/users/delete/{uid}', [App\Http\Controllers\Admins\UsersController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
 
     // The mail templates list — main-only
     Route::get('/emails', [App\Http\Controllers\Admins\EmailsController::class, 'index'])->middleware(['auth.admin:admins', 'perms'])->name('admin.emails');
@@ -293,14 +297,14 @@ Route::prefix('control-panel')->group(function(){
 
     Route::get('/users/vu-groups/leaderboard/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'group_leaderboard'])->middleware(['auth.admin:admins','r_exists:group_owned'])->name('admin.users.groups.challenges_list');
 
-    Route::get('/users/vu-groups/delete/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'destroy'])->middleware(['auth.admin:admins','r_exists:group_owned']);
+    Route::post('/users/vu-groups/delete/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'destroy'])->middleware(['auth.admin:admins','r_exists:group_owned']);
 
     // Removing a member or a challenge from a group; the uid
     // is the membership's or the group challenge's row, and
     // r_exists checks the group it belongs to
-    Route::get('/users/vu-groups/delete_group/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'group_destroy'])->middleware(['auth.admin:admins','r_exists:membership_owned']);
+    Route::post('/users/vu-groups/delete_group/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'group_destroy'])->middleware(['auth.admin:admins','r_exists:membership_owned']);
 
-    Route::get('/users/vu-groups/delete_challenge/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'challenge_destroy'])->middleware(['auth.admin:admins','r_exists:group_challenge_owned']);
+    Route::post('/users/vu-groups/delete_challenge/{uid}', [App\Http\Controllers\Admins\UsersGroupsController::class, 'challenge_destroy'])->middleware(['auth.admin:admins','r_exists:group_challenge_owned']);
 
     // The mail templates' forms, the sending and the list sync —
     // main-only
@@ -310,28 +314,21 @@ Route::prefix('control-panel')->group(function(){
 
     Route::get('/emails/edit/{uid}', [App\Http\Controllers\Admins\EmailsController::class, 'edit'])->middleware(['auth.admin:admins', 'perms']);
 
-    Route::get('/emails/delete/{uid}', [App\Http\Controllers\Admins\EmailsController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
+    Route::post('/emails/delete/{uid}', [App\Http\Controllers\Admins\EmailsController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
 
     Route::post('/emails/update', [App\Http\Controllers\Admins\EmailsController::class, 'update'])->middleware(['auth.admin:admins', 'perms']);
 
-    Route::get('/emails/send/{email_id}', [App\Http\Controllers\Admins\EmailsController::class, 'send'])->middleware(['auth.admin:admins', 'perms']);
+    Route::post('/emails/send/{email_id}', [App\Http\Controllers\Admins\EmailsController::class, 'send'])->middleware(['auth.admin:admins', 'perms']);
 
     Route::post('/emails/sending_test/{email_id}', [App\Http\Controllers\Admins\EmailsController::class, 'sending_test'])->middleware(['auth.admin:admins', 'perms']);
 
-    Route::get('/emails/sync/{type}', [App\Http\Controllers\Admins\EmailsController::class, 'sync_with_lists'])->middleware(['auth.admin:admins', 'perms']);
+    Route::post('/emails/sync/{type}', [App\Http\Controllers\Admins\EmailsController::class, 'sync_with_lists'])->middleware(['auth.admin:admins', 'perms']);
 
     // The challenges: every admin sees the list and may add one;
     // the changes are for the challenge's creator or a main
-    // admin (r_exists), the status switch for main admins.
-    //
-    // Known bug LAB-06 (medium): a file link can be neither
-    // changed nor deleted. The challenges_file/update and
-    // challenges/files/delete routes (web.php:353 and web.php:355)
-    // run the r_exists challenge check, which reads the link's id
-    // as a challenge id: unless a challenge happens to share it,
-    // the answer is "No challenge!", and a lab admin is checked
-    // against the wrong challenge. Fix: check the challenge the
-    // link belongs to.
+    // admin (r_exists) — for a file link, the creator of the
+    // challenge the link belongs to — the status switch for
+    // main admins.
     Route::get('/challenges', [App\Http\Controllers\Admins\ChallengesController::class, 'index'])->middleware(['auth.admin:admins'])->name('admin.challenges');
 
     Route::get('/challenges/create', [App\Http\Controllers\Admins\ChallengesController::class, 'create'])->middleware(['auth.admin:admins']);
@@ -340,7 +337,7 @@ Route::prefix('control-panel')->group(function(){
 
     Route::get('/challenges/edit/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'edit'])->middleware(['auth.admin:admins','r_exists:challenge_owned']);
 
-    Route::get('/challenges/delete/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'destroy'])->middleware(['auth.admin:admins','r_exists:challenge_owned']);
+    Route::post('/challenges/delete/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'destroy'])->middleware(['auth.admin:admins','r_exists:challenge_owned']);
 
     Route::post('/challenges/update', [App\Http\Controllers\Admins\ChallengesController::class, 'update'])->middleware(['auth.admin:admins','r_exists:challenge_owned_uid']);
 
@@ -350,9 +347,9 @@ Route::prefix('control-panel')->group(function(){
 
     Route::post('/challenges_file/store', [App\Http\Controllers\Admins\ChallengesController::class, 'file_store'])->middleware(['auth.admin:admins','r_exists:challenge_owned_uid']);
 
-    Route::post('/challenges_file/update', [App\Http\Controllers\Admins\ChallengesController::class, 'file_update'])->middleware(['auth.admin:admins','r_exists:challenge_owned_uid']);
+    Route::post('/challenges_file/update', [App\Http\Controllers\Admins\ChallengesController::class, 'file_update'])->middleware(['auth.admin:admins','r_exists:file_owned_uid']);
 
-    Route::get('/challenges/files/delete/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'file_destroy'])->middleware(['auth.admin:admins','r_exists:challenge_owned']);
+    Route::post('/challenges/files/delete/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'file_destroy'])->middleware(['auth.admin:admins','r_exists:file_owned']);
 
-    Route::get('/challenges/status/{status}/{challenge_id}', [App\Http\Controllers\Admins\ChallengesController::class, 'status'])->middleware(['auth.admin:admins', 'perms'])->name('admin.challenges.status');
+    Route::post('/challenges/status/{status}/{challenge_id}', [App\Http\Controllers\Admins\ChallengesController::class, 'status'])->middleware(['auth.admin:admins', 'perms'])->name('admin.challenges.status');
 });

@@ -232,7 +232,7 @@ abstract class TestCase extends BaseTestCase
     // challenges and groups it created itself.
     //
     // Used by:
-    //   - the admin Feature and Defects tests
+    //   - the admin Feature tests
     // -----------------------------------------------------------
 
     protected function makeAdmin(bool $main = false, array $attributes = []): Admin
@@ -470,7 +470,7 @@ abstract class TestCase extends BaseTestCase
     // the session, never from the account.
     //
     // Used by:
-    //   - the admin Feature and Defects tests
+    //   - the admin Feature tests
     // -----------------------------------------------------------
 
     protected function signInAdmin(Admin $admin): static
@@ -494,7 +494,7 @@ abstract class TestCase extends BaseTestCase
     // a form asking for the wrong action.
     //
     // Used by:
-    //   - the registration, password reset and Defects tests
+    //   - the registration and password reset tests
     // -----------------------------------------------------------
 
     protected function fakeRecaptcha(string $action, float $score): void
@@ -539,7 +539,7 @@ abstract class TestCase extends BaseTestCase
     // page reads in its sidebar middleware.
     //
     // Used by:
-    //   - the settings and Defects tests
+    //   - the settings tests
     // -----------------------------------------------------------
 
     protected function setEventRange(string $range): void
@@ -562,7 +562,7 @@ abstract class TestCase extends BaseTestCase
     // so they have no field name to look them up by.
     //
     // Used by:
-    //   - the Feature and Defects tests that check refusals
+    //   - the Feature tests that check refusals
     // -----------------------------------------------------------
 
     protected function assertErrorFlashed(string $message): void

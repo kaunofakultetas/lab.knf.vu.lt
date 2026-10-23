@@ -6,9 +6,10 @@
 //  Laravel's CSRF check: every POST, PUT, PATCH and DELETE
 //  of the web group must carry the session's token, in the
 //  _token field or the X-CSRF-TOKEN header, or it ends on
-//  the 419 page. GET requests are never checked — and the
-//  control panel's delete and switch links are GETs
-//  (LAB-19).
+//  the 419 page. GET requests are never checked, so every
+//  change the control panel makes from its lists is a POST,
+//  which its script sends with the token of the page's
+//  csrf-token meta tag.
 //
 //  Used by:
 //    - app/Http/Kernel.php — the web group

@@ -27,10 +27,29 @@ function Confirm_Dialog(URL){
 	
 	if (confirm("You sure?")) {
 			
-		window.location.href = URL;
+		Post_Link(URL);
 				
 	}	 
 	   
+}
+
+// Sends a POST to the address, with the CSRF token of the
+// page's csrf-token meta tag: the control panel makes its
+// changes by POST only, which a link on another site cannot
+// send, and Laravel refuses a POST without the token
+function Post_Link(URL){
+	var form = document.createElement('form');
+	form.method = 'POST';
+	form.action = URL;
+
+	var token = document.createElement('input');
+	token.type = 'hidden';
+	token.name = '_token';
+	token.value = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+	form.appendChild(token);
+
+	document.body.appendChild(form);
+	form.submit();
 }
 
 function pgen(length) {

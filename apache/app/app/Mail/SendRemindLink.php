@@ -4,9 +4,9 @@
 //  [*] SendRemindLink — the password-reminder link
 //
 //  The mail of the forgotten-password form: a link to
-//  /reset/{token} on APP_URL, which sets and mails a new
-//  password once opened (LAB-27). The view is
-//  users.mail.userpassreset.
+//  /reset/{token} on APP_URL, good for an hour, which opens
+//  a page whose button sets and mails a new password. The
+//  view is users.mail.userpassreset.
 //
 //  Used by:
 //    - Users\RegisterController::forgotpassword

@@ -9,8 +9,8 @@
 //  admin may set a new password, switch an account active or
 //  inactive, or delete one. Two routes create accounts — the
 //  dialog's and an older plain one — and both are covered.
-//  Deleting an account is broken today and pinned in
-//  AdminDefectsTest; here only its refusal for lab admins.
+//  Deleting a VU account also removes its group
+//  memberships.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -82,7 +82,7 @@ final class UsersTest extends TestCase
     // -----------------------------------------------------------
     //
     // Each account shows its username, email, last login and
-    // an active or inactive badge that links the status
+    // an active or inactive badge that posts the status
     // switch; a main admin also gets edit and delete actions.
     //
     // Used by:
@@ -99,8 +99,8 @@ final class UsersTest extends TestCase
         $response->assertOk();
         $response->assertViewIs('admins.users');
         $response->assertSeeInOrder(['<td>NewerPlayer</td>', 'Not active', '<td>OlderPlayer</td>', '2026-02-03 04:05:06', 'Active'], false);
-        $response->assertSee("href=\"/control-panel/users/status/{$newer->id}/0\"", false);
-        $response->assertSee("href=\"/control-panel/users/status/{$older->id}/1\"", false);
+        $response->assertSee("onClick=\"Post_Link('/control-panel/users/status/{$newer->id}/0');\"", false);
+        $response->assertSee("onClick=\"Post_Link('/control-panel/users/status/{$older->id}/1');\"", false);
         $response->assertSee("users_form('edit', {$older->id})", false);
         $response->assertSee("/control-panel/users/delete/{$older->id}", false);
     }
@@ -381,7 +381,7 @@ final class UsersTest extends TestCase
     // test_the_status_switch_flips_an_account
     // -----------------------------------------------------------
     //
-    // The badge link turns an active account inactive — it
+    // The badge's switch turns an active account inactive — it
     // can no longer sign in — and back.
     //
     // Used by:
@@ -393,11 +393,11 @@ final class UsersTest extends TestCase
         $player = $this->makePlayer();
         $this->signInAdmin($this->makeAdmin(true));
 
-        $this->get("/control-panel/users/status/{$player->id}/1")->assertRedirect('/control-panel/users');
+        $this->post("/control-panel/users/status/{$player->id}/1")->assertRedirect('/control-panel/users');
         $this->assertSame(0, $player->refresh()->status);
         $this->assertSame('Status changed!', session('success'));
 
-        $this->get("/control-panel/users/status/{$player->id}/0");
+        $this->post("/control-panel/users/status/{$player->id}/0");
         $this->assertSame(1, $player->refresh()->status);
     }
 
@@ -427,9 +427,9 @@ final class UsersTest extends TestCase
         $this->post('/control-panel/dialog/users/update', ['uid' => $player->id, 'password' => 'taken-over-1'])
             ->assertRedirect('/control-panel/users');
         $this->assertErrorFlashed(self::REFUSAL);
-        $this->get("/control-panel/users/status/{$player->id}/1")->assertRedirect('/control-panel/users');
+        $this->post("/control-panel/users/status/{$player->id}/1")->assertRedirect('/control-panel/users');
         $this->assertErrorFlashed(self::REFUSAL);
-        $this->get("/control-panel/users/delete/{$player->id}")->assertRedirect('/control-panel/users');
+        $this->post("/control-panel/users/delete/{$player->id}")->assertRedirect('/control-panel/users');
         $this->assertErrorFlashed(self::REFUSAL);
 
         $player->refresh();
@@ -460,7 +460,7 @@ final class UsersTest extends TestCase
         $group = $this->makeGroup();
         $this->joinGroup($group, $player);
 
-        $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/delete/{$player->id}");
+        $response = $this->signInAdmin($this->makeAdmin(true))->post("/control-panel/users/delete/{$player->id}");
 
         $response->assertRedirect('/control-panel/users');
         $response->assertSessionHas('success', 'User deleted!');

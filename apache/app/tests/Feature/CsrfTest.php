@@ -118,7 +118,7 @@ final class CsrfTest extends TestCase
         $guest = $this->postRoutes(fn (string $uri) => !Str::startsWith($uri, ['user/', 'control-panel/']));
         $player = $this->postRoutes(fn (string $uri) => Str::startsWith($uri, 'user/'));
         $admin = $this->postRoutes(fn (string $uri) => Str::startsWith($uri, 'control-panel/'));
-        $this->assertEqualsCanonicalizing(['/login', '/register', '/forgot-password'], $guest);
+        $this->assertEqualsCanonicalizing(['/login', '/register', '/forgot-password', '/reset/1'], $guest);
 
         foreach ($guest as $address) {
             $this->post($address)->assertStatus(419);
@@ -222,5 +222,34 @@ final class CsrfTest extends TestCase
             ->assertStatus(419);
 
         $this->assertGuest('users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_panels_lists_post_with_the_pages_token
+    // -----------------------------------------------------------
+    //
+    // What Post_Link of custom_admin.js does with a delete
+    // button: the token of the page's csrf-token meta tag,
+    // sent as _token, carries the deletion through the check.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_panels_lists_post_with_the_pages_token(): void
+    {
+        $category = $this->makeCategory('Doomed');
+        $this->signInAdmin($this->makeAdmin(true));
+        preg_match('/<meta name="csrf-token" content="([^"]+)">/', $this->get('/control-panel/categories')->getContent(), $meta);
+
+        $this->from('/control-panel/categories')->post("/control-panel/category/delete/{$category->id}", ['_token' => $meta[1]])
+            ->assertRedirect('/control-panel/categories');
+
+        $this->assertNull($category->fresh());
     }
 }

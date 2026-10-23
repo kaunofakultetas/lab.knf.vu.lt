@@ -187,8 +187,8 @@ final class ChallengesTest extends TestCase
     // test_main_admins_get_the_visibility_switch
     // -----------------------------------------------------------
     //
-    // A main admin sees each challenge's visibility as a link
-    // that flips it.
+    // A main admin sees each challenge's visibility as a
+    // switch that posts the flip.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -201,8 +201,8 @@ final class ChallengesTest extends TestCase
 
         $response = $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/challenges');
 
-        $response->assertSee("href=\"/control-panel/challenges/status/1/{$visible->id}\"", false);
-        $response->assertSee("href=\"/control-panel/challenges/status/0/{$hidden->id}\"", false);
+        $response->assertSee("onClick=\"Post_Link('/control-panel/challenges/status/1/{$visible->id}');\"", false);
+        $response->assertSee("onClick=\"Post_Link('/control-panel/challenges/status/0/{$hidden->id}');\"", false);
     }
 
 
@@ -441,7 +441,7 @@ final class ChallengesTest extends TestCase
 
         $this->get("/control-panel/challenges/edit/{$challenge->id}")->assertRedirect('/control-panel/challenges');
         $this->assertErrorFlashed(self::REFUSAL);
-        $this->get("/control-panel/challenges/delete/{$challenge->id}")->assertRedirect('/control-panel/challenges');
+        $this->post("/control-panel/challenges/delete/{$challenge->id}")->assertRedirect('/control-panel/challenges');
         $this->assertErrorFlashed(self::REFUSAL);
         $this->post('/control-panel/challenges/update', $this->challengeForm(['uid' => $challenge->id, 'name' => 'Taken Over']));
         $this->assertErrorFlashed(self::REFUSAL);
@@ -513,7 +513,7 @@ final class ChallengesTest extends TestCase
 
         $response = $this->signInAdmin($this->makeAdmin(true))
             ->from('/control-panel/challenges')
-            ->get("/control-panel/challenges/delete/{$doomed->id}");
+            ->post("/control-panel/challenges/delete/{$doomed->id}");
 
         $response->assertRedirect('/control-panel/challenges');
         $response->assertSessionHas('success', 'Deleted!');
@@ -546,10 +546,10 @@ final class ChallengesTest extends TestCase
         $challenge = $this->makeChallenge();
         $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/challenges');
 
-        $this->get("/control-panel/challenges/status/1/{$challenge->id}")->assertRedirect('/control-panel/challenges');
+        $this->post("/control-panel/challenges/status/1/{$challenge->id}")->assertRedirect('/control-panel/challenges');
         $this->assertSame(1, $challenge->refresh()->hidden);
 
-        $this->get("/control-panel/challenges/status/0/{$challenge->id}");
+        $this->post("/control-panel/challenges/status/0/{$challenge->id}");
         $this->assertSame(0, $challenge->refresh()->hidden);
     }
 
@@ -574,7 +574,7 @@ final class ChallengesTest extends TestCase
         $admin = $this->makeAdmin();
         $challenge = $this->makeChallenge(['created_by' => $admin->id, 'hidden' => 1]);
 
-        $this->signInAdmin($admin)->from('/control-panel/challenges')->get("/control-panel/challenges/status/0/{$challenge->id}");
+        $this->signInAdmin($admin)->from('/control-panel/challenges')->post("/control-panel/challenges/status/0/{$challenge->id}");
 
         $this->assertErrorFlashed(self::REFUSAL);
         $this->assertSame(1, $challenge->refresh()->hidden);
@@ -734,5 +734,143 @@ final class ChallengesTest extends TestCase
         $response->assertSessionHasErrors(['partner_id', 'descr', 'content', 'answer', 'points']);
         $this->assertSame('Half a challenge', session()->getOldInput('name'));
         $this->assertSame(0, Challenges::where('name', 'Half a challenge')->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_lab_admins_challenge_carries_no_script
+    // -----------------------------------------------------------
+    //
+    // The content a lab admin saves loses its scripts and event
+    // handlers before it is stored, so the challenge page that
+    // prints it as HTML runs nothing in a player's browser;
+    // the formatting around them stays.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_lab_admins_challenge_carries_no_script(): void
+    {
+        $admin = $this->makeAdmin();
+        $group = $this->makeGroup($admin);
+        $player = $this->makeSsoPlayer();
+        $this->joinGroup($group, $player);
+        $this->signInAdmin($admin)->post('/control-panel/challenges/store', $this->challengeForm([
+            'name'    => 'Scripted Task',
+            'content' => '<p>Formatting stays</p><script>alert(document.domain)</script><img src="x" onerror="alert(2)">',
+        ]));
+        $challenge = Challenges::where('name', 'Scripted Task')->firstOrFail();
+        $this->assignToGroup($group, $challenge);
+
+        $page = $this->signIn($player)->get("/user/challenge/{$challenge->public_id}/{$group->public_id}");
+
+        $page->assertOk();
+        $page->assertSee('<p>Formatting stays</p>', false);
+        $page->assertDontSee('<script>alert(document.domain)</script>', false);
+        $page->assertDontSee('onerror=', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_lab_admins_update_is_cleaned_too
+    // -----------------------------------------------------------
+    //
+    // Changing its own challenge, a lab admin cannot bring a
+    // script or a javascript: link in either.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_lab_admins_update_is_cleaned_too(): void
+    {
+        $admin = $this->makeAdmin();
+        $challenge = $this->makeChallenge(['created_by' => $admin->id]);
+
+        $this->signInAdmin($admin)->post('/control-panel/challenges/update', $this->challengeForm([
+            'uid'     => $challenge->id,
+            'content' => '<p>Read <a href="javascript:alert(1)">this</a></p><svg onload="alert(3)"></svg><script>alert(4)</script>',
+        ]))->assertSessionHas('success', 'Updated!');
+
+        $content = $challenge->refresh()->content;
+        $this->assertStringContainsString('this</a></p>', $content);
+        $this->assertStringNotContainsString('javascript:', $content);
+        $this->assertStringNotContainsString('alert', $content);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_lab_admins_formatting_survives_the_cleaning
+    // -----------------------------------------------------------
+    //
+    // What the editor produces is kept: headings, aligned and
+    // coloured text, lists, tables with their classes, links
+    // that open in a new tab and a pasted picture embedded as
+    // a data: address.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_lab_admins_formatting_survives_the_cleaning(): void
+    {
+        $pixel = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+        $admin = $this->makeAdmin();
+
+        $this->signInAdmin($admin)->post('/control-panel/challenges/store', $this->challengeForm([
+            'content' => '<h2>Task</h2>'
+                . '<p style="text-align: center;"><b>Bold</b>, <i>italic</i> and <span style="color: rgb(255, 0, 0);">red</span></p>'
+                . '<ul><li>one</li><li>two</li></ul>'
+                . '<table class="table table-bordered"><tbody><tr><td>cell</td></tr></tbody></table>'
+                . '<p><a href="https://files.test/readme" target="_blank">readme</a></p>'
+                . '<p><img src="' . $pixel . '" style="width: 50%;"></p>',
+        ]));
+
+        $content = Challenges::where('name', 'Packet Detective')->value('content');
+        $this->assertStringContainsString('<h2>Task</h2>', $content);
+        $this->assertStringContainsString('<p style="text-align:center;"><b>Bold</b>, <i>italic</i> and <span style="color:', $content);
+        $this->assertStringContainsString('<ul><li>one</li><li>two</li></ul>', $content);
+        $this->assertStringContainsString('<table class="table table-bordered"><tbody><tr><td>cell</td></tr></tbody></table>', $content);
+        $this->assertMatchesRegularExpression('#<a href="https://files.test/readme" target="_blank"[^>]*>readme</a>#', $content);
+        $this->assertStringContainsString('src="' . $pixel . '"', $content);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_main_admins_content_is_kept_as_written
+    // -----------------------------------------------------------
+    //
+    // A main admin's content is stored exactly as sent,
+    // scripts included: main admins are trusted with the
+    // whole site already.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_main_admins_content_is_kept_as_written(): void
+    {
+        $content = '<p>Interactive</p><script>document.title = "task";</script>';
+
+        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/challenges/store', $this->challengeForm(['content' => $content]));
+
+        $this->assertSame($content, Challenges::where('name', 'Packet Detective')->value('content'));
     }
 }

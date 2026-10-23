@@ -14,11 +14,11 @@
 //    POST /control-panel/emails/store                       — adds
 //    GET  /control-panel/emails/edit/{uid}                  — the filled form
 //    POST /control-panel/emails/update                      — changes
-//    GET  /control-panel/emails/delete/{uid}                — deletes
+//    POST /control-panel/emails/delete/{uid}                — deletes
 //    GET  /control-panel/dialog/emails/send_test/{email_id} — test dialog
 //    POST /control-panel/emails/sending_test/{email_id}     — test mail
-//    GET  /control-panel/emails/send/{email_id}             — sends
-//    GET  /control-panel/emails/sync/{type}                 — list sync
+//    POST /control-panel/emails/send/{email_id}             — sends
+//    POST /control-panel/emails/sync/{type}                 — list sync
 //
 //  Used by:
 //    - routes/web.php — the routes above, all main-only
@@ -290,10 +290,9 @@ class EmailsController extends BaseController
     // destroy
     // -----------------------------------------------------------
     //
-    // GET /control-panel/emails/delete/{uid}
+    // POST /control-panel/emails/delete/{uid}
     //
-    // Deletes the template and goes back with "Deleted!" — a
-    // change made by a plain link (LAB-19).
+    // Deletes the template and goes back with "Deleted!".
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -372,7 +371,7 @@ class EmailsController extends BaseController
     // sync_with_lists
     // -----------------------------------------------------------
     //
-    // GET /control-panel/emails/sync/{type}
+    // POST /control-panel/emails/sync/{type}
     //
     // Copies addresses into a Mailjet contact list, one
     // addSubscriber call each: for registered, every active
@@ -380,12 +379,11 @@ class EmailsController extends BaseController
     // account that asked for the newsletter into list
     // 10226593. Any other type leaves the addresses undefined
     // and ends in a server error. Then back with the list
-    // named as synced. A change made by a plain link
-    // (LAB-19).
+    // named as synced.
     //
     // Used by:
-    //   - the registered and newsletters buttons of the
-    //     templates list
+    //   - Post_Link() of custom_admin.js — the registered and
+    //     newsletters buttons of the templates list
     // -----------------------------------------------------------
 
     public function sync_with_lists($type)
@@ -484,14 +482,14 @@ class EmailsController extends BaseController
     // send
     // -----------------------------------------------------------
     //
-    // GET /control-panel/emails/send/{email_id}
+    // POST /control-panel/emails/send/{email_id}
     //
     // Mails the template to the address of the registered
     // players' Mailjet list, MAILJET_REGISTERED_LIST, marks it
     // sent — its Send link then disappears — and goes to the
-    // list with "Email sent!". A change made by a plain link
-    // (LAB-19). The stack sets no MAILJET_REGISTERED_LIST, so
-    // in production the mail has no address to go to.
+    // list with "Email sent!". The stack sets no
+    // MAILJET_REGISTERED_LIST, so in production the mail has
+    // no address to go to.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the Send links

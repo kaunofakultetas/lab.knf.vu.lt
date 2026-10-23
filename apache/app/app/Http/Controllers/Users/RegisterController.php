@@ -6,16 +6,18 @@
 //  The life of a local account outside the lab: the
 //  registration, behind reCAPTCHA v3 and the registration
 //  switch; the verification link that activates it; and
-//  the forgotten-password reminder, whose link sets and
-//  mails a new password. VU accounts never come here — the
-//  SSO creates them, and the reminder skips them.
+//  the forgotten-password reminder, whose link — good for
+//  an hour — opens a page whose button sets and mails a new
+//  password. VU accounts never come here — the SSO creates
+//  them, and the reminder skips them.
 //
 //    GET  /register              — the registration form
 //    POST /register              — registers an account
 //    GET  /verify/{verify_token} — activates it
 //    GET  /forgot-password       — the reminder form
 //    POST /forgot-password       — mails a reminder link
-//    GET  /reset/{reset_token}   — mails a new password
+//    GET  /reset/{reset_token}   — the new-password button
+//    POST /reset/{reset_token}   — mails a new password
 //
 //  Used by:
 //    - routes/web.php — the routes above
@@ -56,6 +58,7 @@ use ReCaptcha\ReCaptcha;
 //   verify             — activates it
 //   ForgotPasswordForm — the reminder form
 //   forgotpassword     — mails a reminder link
+//   reset_form         — the new-password button
 //   reset_pass         — mails a new password
 //
 // Used by:
@@ -225,12 +228,16 @@ class RegisterController extends Controller
     //
     // Behind a reCAPTCHA v3 score of at least 0.6 for the
     // forgotpass action: when exactly one local account has
-    // the e-mail, mails it a reminder link with a fresh
-    // 50-character token and stores the token's SHA-256 hash
-    // in remember_token — never the token, so the users table
-    // alone resets no password. The answer is the same whether
-    // or not the account exists, so the form tells no one
-    // which addresses are registered.
+    // the e-mail, mails it a reminder link whose token is a
+    // fresh 50-character random string followed, after a
+    // dash, by the Unix time it is mailed, and stores the
+    // token's SHA-256 hash in remember_token — never the
+    // token, so the users table alone resets no password.
+    // ValidateReset reads the time back to refuse a link
+    // older than an hour; as the hash covers the time too, it
+    // cannot be moved on. The answer is the same whether or
+    // not the account exists, so the form tells no one which
+    // addresses are registered.
     //
     // Used by:
     //   - the form of users/forgot-password.blade.php
@@ -246,7 +253,7 @@ class RegisterController extends Controller
         ]);
 
         if (User::where(['email' => $request->input('email')])->where(function ($query) { $query->where('vu_id', '')->orWhereNull('vu_id'); })->count() == 1) {
-            $uid = Str::random(50);
+            $uid = Str::random(50) . '-' . now()->getTimestamp();
 
             Mail::to($request->input('email'))->send(new SendRemindLink(['uid'=>$uid]));
 
@@ -264,26 +271,46 @@ class RegisterController extends Controller
 
 
     // -----------------------------------------------------------
-    // reset_pass
+    // reset_form
     // -----------------------------------------------------------
     //
     // GET /reset/{reset_token}
     //
-    // Gives the account holding the token's hash a new random
-    // 12-character password, mails it, stores its hash and
-    // empties the token, then goes to the login page. The
-    // validate.reset middleware has refused unknown tokens
-    // already.
-    //
-    // Known bug LAB-27 (low): merely opening the link does the
-    // reset (RegisterController.php:297) — mail filters and link
-    // scanners that open the links of incoming mail use the
-    // reminder up and change the password before the player
-    // clicks anything. Fix: let the link open a page whose
-    // button posts the reset.
+    // The users.reset-password view: one button, which posts
+    // the reset to the same address. Opening the link changes
+    // nothing, as mail filters and link scanners open the
+    // links of incoming mail before the player does. The
+    // validate.reset middleware has refused unknown and
+    // expired tokens already.
     //
     // Used by:
     //   - the link of the reminder mail (SendRemindLink)
+    // -----------------------------------------------------------
+
+    public function reset_form($reset_token)
+    {
+        return view('users.reset-password', ['reset_token' => $reset_token]);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // reset_pass
+    // -----------------------------------------------------------
+    //
+    // POST /reset/{reset_token}
+    //
+    // Gives the account holding the token's hash a new random
+    // 12-character password, mails it, stores its hash and
+    // empties the token, then goes to the login page. The
+    // validate.reset middleware has refused unknown and
+    // expired tokens already.
+    //
+    // Used by:
+    //   - the button of users/reset-password.blade.php
     // -----------------------------------------------------------
 
     public function reset_pass($reset_token)

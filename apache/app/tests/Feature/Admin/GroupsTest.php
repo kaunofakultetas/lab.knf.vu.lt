@@ -8,10 +8,9 @@
 //  leaderboard. A main admin sees and manages every group; a
 //  lab admin only the groups it created — the r_exists
 //  middleware sends it back with an error from anyone
-//  else's, on the pages that name the group in the address
-//  and on the forms that post its id. Removing a single
-//  member or challenge is not ownership-checked today, which
-//  AdminDefectsTest pins.
+//  else's, on the pages that name the group in the address,
+//  on the forms that post its id, and on the removal of a
+//  single member or challenge.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -252,9 +251,9 @@ final class GroupsTest extends TestCase
             "/control-panel/users/vu-groups/users_list/{$group->id}",
             "/control-panel/users/vu-groups/challenges_list/{$group->id}",
             "/control-panel/users/vu-groups/leaderboard/{$group->id}",
-            "/control-panel/users/vu-groups/delete/{$group->id}",
         ];
         $forms = [
+            "/control-panel/users/vu-groups/delete/{$group->id}"     => [],
             '/control-panel/dialog/users/vu-groups/update'           => ['uid' => $group->id, 'name' => 'Taken Over'],
             '/control-panel/dialog/users/vu-groups/users_store'      => ['uid' => $group->id, 'vu_id' => 's9999999'],
             '/control-panel/dialog/users/vu-groups/challenges_store' => ['uid' => $group->id, 'challenge_id' => $challenge->id],
@@ -331,7 +330,7 @@ final class GroupsTest extends TestCase
 
         $response = $this->signInAdmin($admin)
             ->from('/control-panel/users/vu-groups')
-            ->get("/control-panel/users/vu-groups/delete/{$doomed->id}");
+            ->post("/control-panel/users/vu-groups/delete/{$doomed->id}");
 
         $response->assertRedirect('/control-panel/users/vu-groups');
         $response->assertSessionHas('success', 'Deleted!');
@@ -431,7 +430,7 @@ final class GroupsTest extends TestCase
 
         $response = $this->signInAdmin($this->makeAdmin(true))
             ->from("/control-panel/users/vu-groups/users_list/{$group->id}")
-            ->get("/control-panel/users/vu-groups/delete_group/{$leaving->id}");
+            ->post("/control-panel/users/vu-groups/delete_group/{$leaving->id}");
 
         $response->assertSessionHas('success', 'Deleted!');
         $this->assertSame(['s2222222'], GroupsUsers::where('group_id', $group->id)->pluck('vu_id')->all());
@@ -553,7 +552,7 @@ final class GroupsTest extends TestCase
 
         $this->signInAdmin($this->makeAdmin(true))
             ->from("/control-panel/users/vu-groups/challenges_list/{$group->id}")
-            ->get("/control-panel/users/vu-groups/delete_challenge/{$place->id}")
+            ->post("/control-panel/users/vu-groups/delete_challenge/{$place->id}")
             ->assertSessionHas('success', 'Deleted!');
 
         $this->assertNull(GroupsChallenges::find($place->id));
@@ -603,8 +602,8 @@ final class GroupsTest extends TestCase
     // -----------------------------------------------------------
     //
     // A lab admin cannot remove the members or challenges of a
-    // group another admin owns, even by the removal links' own
-    // addresses.
+    // group another admin owns, even by posting to the remove
+    // buttons' own addresses.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -617,8 +616,8 @@ final class GroupsTest extends TestCase
         $place = $this->assignToGroup($group, $this->makeChallenge());
         $this->signInAdmin($this->makeAdmin())->from('/control-panel/users/vu-groups');
 
-        $this->get("/control-panel/users/vu-groups/delete_group/{$membership->id}")->assertSessionHasErrors();
-        $this->get("/control-panel/users/vu-groups/delete_challenge/{$place->id}")->assertSessionHasErrors();
+        $this->post("/control-panel/users/vu-groups/delete_group/{$membership->id}")->assertSessionHasErrors();
+        $this->post("/control-panel/users/vu-groups/delete_challenge/{$place->id}")->assertSessionHasErrors();
 
         $this->assertNotNull(GroupsUsers::find($membership->id));
         $this->assertNotNull(GroupsChallenges::find($place->id));

@@ -61,8 +61,8 @@
                       <div class="table-responsive">
                       
                         <div style="float:right;"> 
-                        <a href="/control-panel/emails/sync/registered" class="btn btn-primary btn-sm"><i class="fas fa-sync-alt"></i> &nbsp; registered</a> &nbsp; 
-                        <a href="/control-panel/emails/sync/newsletters" class="btn btn-primary btn-sm"><i class="fas fa-sync-alt"></i> &nbsp; newsletters</a>
+                        <a href="#" onClick="Post_Link('/control-panel/emails/sync/registered');" class="btn btn-primary btn-sm"><i class="fas fa-sync-alt"></i> &nbsp; registered</a> &nbsp; 
+                        <a href="#" onClick="Post_Link('/control-panel/emails/sync/newsletters');" class="btn btn-primary btn-sm"><i class="fas fa-sync-alt"></i> &nbsp; newsletters</a>
                       	</div>
                       	
                         <table class="table mb-0 table">

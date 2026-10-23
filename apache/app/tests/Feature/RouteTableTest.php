@@ -13,7 +13,9 @@
 //  the lists hardened by the "Fix upload validation" commit
 //  among them. Next to the declarations, every guarded route
 //  is also requested for real by a guest and by a player
-//  session, and must turn them away.
+//  session, and must turn them away; and every change the
+//  control panel makes from its lists must refuse to happen
+//  by a plain link.
 //
 //  The routes the dev packages bring into the tests image
 //  (_ignition/*) do not exist in production and are left
@@ -26,6 +28,11 @@
 
 namespace Tests\Feature;
 
+use App\Models\ChallengesFiles;
+use App\Models\Emails;
+use App\Models\GroupsUsers;
+use App\Models\Pages;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route as Router;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -58,8 +65,8 @@ final class RouteTableTest extends TestCase
     // middleware
     private const MAIN_ONLY = [
         'GET control-panel/categories',
-        'GET control-panel/category/delete/{uid}',
-        'GET control-panel/challenges/status/{status}/{challenge_id}',
+        'POST control-panel/category/delete/{uid}',
+        'POST control-panel/challenges/status/{status}/{challenge_id}',
         'GET control-panel/dialog/category/edit/{uid}',
         'GET control-panel/dialog/category/new',
         'POST control-panel/dialog/category/store',
@@ -72,26 +79,26 @@ final class RouteTableTest extends TestCase
         'POST control-panel/dialog/users/update',
         'GET control-panel/emails',
         'GET control-panel/emails/create',
-        'GET control-panel/emails/delete/{uid}',
+        'POST control-panel/emails/delete/{uid}',
         'GET control-panel/emails/edit/{uid}',
-        'GET control-panel/emails/send/{email_id}',
+        'POST control-panel/emails/send/{email_id}',
         'POST control-panel/emails/sending_test/{email_id}',
         'POST control-panel/emails/store',
-        'GET control-panel/emails/sync/{type}',
+        'POST control-panel/emails/sync/{type}',
         'POST control-panel/emails/update',
         'GET control-panel/pages',
         'GET control-panel/pages/create',
-        'GET control-panel/pages/delete/{uid}',
+        'POST control-panel/pages/delete/{uid}',
         'GET control-panel/pages/edit/{uid}',
         'POST control-panel/pages/store',
         'POST control-panel/pages/update',
         'GET control-panel/partners',
-        'GET control-panel/partners/delete/{uid}',
+        'POST control-panel/partners/delete/{uid}',
         'GET control-panel/settings',
         'POST control-panel/settings/event_data',
         'POST control-panel/settings/reg_open',
-        'GET control-panel/users/delete/{uid}',
-        'GET control-panel/users/status/{user_id}/{status_id}',
+        'POST control-panel/users/delete/{uid}',
+        'POST control-panel/users/status/{user_id}/{status_id}',
     ];
 
     // The routes a lab admin may only use on its own records,
@@ -100,23 +107,24 @@ final class RouteTableTest extends TestCase
     // or from the posted uid field (the _uid checks); a
     // member's or a group challenge's row id leads to the
     // group that is checked (membership_owned,
-    // group_challenge_owned)
+    // group_challenge_owned), a file link's id to its
+    // challenge (file_owned, file_owned_uid)
     private const OWNERSHIP_CHECKS = [
-        'GET control-panel/challenges/delete/{uid}'                           => 'challenge_owned',
+        'POST control-panel/challenges/delete/{uid}'                          => 'challenge_owned',
         'GET control-panel/challenges/edit/{uid}'                             => 'challenge_owned',
-        'GET control-panel/challenges/files/delete/{uid}'                     => 'challenge_owned',
+        'POST control-panel/challenges/files/delete/{uid}'                    => 'file_owned',
         'GET control-panel/challenges/files/{uid}'                            => 'challenge_owned',
         'POST control-panel/challenges/categories/store'                      => 'challenge_owned_uid',
         'POST control-panel/challenges/update'                                => 'challenge_owned_uid',
         'POST control-panel/challenges_file/store'                            => 'challenge_owned_uid',
-        'POST control-panel/challenges_file/update'                           => 'challenge_owned_uid',
+        'POST control-panel/challenges_file/update'                           => 'file_owned_uid',
         'GET control-panel/dialog/users/vu-groups/challenge_add_{type}/{uid}' => 'group_owned',
         'GET control-panel/dialog/users/vu-groups/edit/{uid}'                 => 'group_owned',
         'GET control-panel/dialog/users/vu-groups/user_add_{type}/{uid}'      => 'group_owned',
         'GET control-panel/users/vu-groups/challenges_list/{uid}'             => 'group_owned',
-        'GET control-panel/users/vu-groups/delete/{uid}'                      => 'group_owned',
-        'GET control-panel/users/vu-groups/delete_challenge/{uid}'            => 'group_challenge_owned',
-        'GET control-panel/users/vu-groups/delete_group/{uid}'                => 'membership_owned',
+        'POST control-panel/users/vu-groups/delete/{uid}'                     => 'group_owned',
+        'POST control-panel/users/vu-groups/delete_challenge/{uid}'           => 'group_challenge_owned',
+        'POST control-panel/users/vu-groups/delete_group/{uid}'               => 'membership_owned',
         'GET control-panel/users/vu-groups/leaderboard/{uid}'                 => 'group_owned',
         'GET control-panel/users/vu-groups/users_list/{uid}'                  => 'group_owned',
         'POST control-panel/dialog/users/vu-groups/challenges_store'          => 'group_owned_uid',
@@ -135,6 +143,7 @@ final class RouteTableTest extends TestCase
         'GET register',
         'POST register',
         'GET reset/{reset_token}',
+        'POST reset/{reset_token}',
         'GET verify/{verify_token}',
     ];
 
@@ -475,5 +484,73 @@ final class RouteTableTest extends TestCase
     public function test_the_api_user_route_turns_anonymous_clients_away(): void
     {
         $this->getJson('/api/user')->assertUnauthorized();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_plain_link_never_changes_anything
+    // -----------------------------------------------------------
+    //
+    // Every change the control panel makes from its lists —
+    // deleting a category, partner, page, mail template,
+    // account, challenge, file link or group, removing a group
+    // member or challenge, switching an account or a
+    // challenge, sending a template to the whole list — is a
+    // POST. The same address opened as a link, which another
+    // site can make a signed-in admin follow, answers 405 and
+    // changes nothing; outside the tests the POST needs the
+    // CSRF token, which no other site has.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_plain_link_never_changes_anything(): void
+    {
+        Mail::fake();
+        $_SERVER['MAILJET_REGISTERED_LIST'] = 'registered@lists.test';
+        $category = $this->makeCategory('Kept Category');
+        $partner = $this->makePartner();
+        $page = Pages::create(['name' => 'Rules', 'content' => '<p>Rules</p>', 'alias' => 'rules']);
+        $template = Emails::create(['name' => 'Kept', 'subject' => 'Kept', 'content' => '<p>Kept</p>', 'sent' => 0]);
+        $unsent = Emails::create(['name' => 'Unsent', 'subject' => 'Unsent', 'content' => '<p>Unsent</p>', 'sent' => 0]);
+        $account = $this->makePlayer();
+        $active = $this->makePlayer();
+        $challenge = $this->makeChallenge();
+        $visible = $this->makeChallenge();
+        $file = ChallengesFiles::create(['challenge_id' => $this->makeChallenge()->id, 'name' => 'kept.pcap', 'file_url' => 'https://files.test/kept']);
+        $group = $this->makeGroup();
+        $other = $this->makeGroup();
+        $membership = GroupsUsers::create(['group_id' => $other->id, 'vu_id' => 's1234567']);
+        $place = $this->assignToGroup($other, $this->makeChallenge());
+        $links = [
+            'delete a category'        => ["/control-panel/category/delete/{$category->id}", fn () => $category->fresh() !== null],
+            'delete a partner'         => ["/control-panel/partners/delete/{$partner->id}", fn () => $partner->fresh() !== null],
+            'delete a page'            => ["/control-panel/pages/delete/{$page->id}", fn () => $page->fresh() !== null],
+            'delete a mail template'   => ["/control-panel/emails/delete/{$template->id}", fn () => $template->fresh() !== null],
+            'send a template to all'   => ["/control-panel/emails/send/{$unsent->id}", fn () => (int) $unsent->fresh()->sent === 0],
+            'delete an account'        => ["/control-panel/users/delete/{$account->id}", fn () => $account->fresh() !== null],
+            'switch an account off'    => ["/control-panel/users/status/{$active->id}/1", fn () => $active->fresh()->status === 1],
+            'delete a challenge'       => ["/control-panel/challenges/delete/{$challenge->id}", fn () => $challenge->fresh() !== null],
+            'hide a challenge'         => ["/control-panel/challenges/status/1/{$visible->id}", fn () => $visible->fresh()->hidden === 0],
+            'delete a file link'       => ["/control-panel/challenges/files/delete/{$file->id}", fn () => $file->fresh() !== null],
+            'delete a group'           => ["/control-panel/users/vu-groups/delete/{$group->id}", fn () => $group->fresh() !== null],
+            'remove a group member'    => ["/control-panel/users/vu-groups/delete_group/{$membership->id}", fn () => $membership->fresh() !== null],
+            'remove a group challenge' => ["/control-panel/users/vu-groups/delete_challenge/{$place->id}", fn () => $place->fresh() !== null],
+        ];
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/dashboard');
+
+        foreach ($links as $name => [$link]) {
+            $this->assertSame(405, $this->get($link)->getStatusCode(), $name);
+        }
+        unset($_SERVER['MAILJET_REGISTERED_LIST']);
+
+        $changed = array_keys(array_filter($links, fn (array $link) => !$link[1]()));
+        $this->assertSame([], $changed, 'plain links that changed data: ' . implode(', ', $changed));
+        Mail::assertNothingSent();
     }
 }
