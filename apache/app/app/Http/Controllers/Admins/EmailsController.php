@@ -50,12 +50,12 @@ use Mailjet\Resources;
 // EmailsController
 // -----------------------------------------------------------
 //
-// A new template needs a name, subject and content; the
-// edit form checks nothing. The Mailjet API this controller
-// calls for the list sync is not among the hosts the
-// stack's egress lets through (exit/Caddyfile: the SMTP
-// relay and reCAPTCHA only), so the sync cannot work in
-// production as it stands.
+// A template needs a name, subject and content, new or
+// edited, and a test mail an address. The Mailjet API this
+// controller calls for the list sync is not among the
+// hosts the stack's egress lets through (exit/Caddyfile:
+// the SMTP relay and reCAPTCHA only), so the sync cannot
+// work in production as it stands.
 //
 //   __construct     — the base's layout data
 //   index           — the templates list
@@ -232,7 +232,7 @@ class EmailsController extends BaseController
     // GET /control-panel/emails/edit/{uid}
     //
     // The template form filled with the template, posting to
-    // update.
+    // update; an unknown template is a 404.
     //
     // Used by:
     //   - the edit links of the templates list
@@ -242,9 +242,9 @@ class EmailsController extends BaseController
     {
         return view('admins.emails_form', [
             'url' => env('APP_URL') . '/control-panel/emails/update',
-            'name' => Emails::find($uid)->name,
-            'content' => Emails::find($uid)->content,
-            'subject' => Emails::find($uid)->subject,
+            'name' => Emails::findOrFail($uid)->name,
+            'content' => Emails::findOrFail($uid)->content,
+            'subject' => Emails::findOrFail($uid)->subject,
             'uid' => $uid
         ]);
     }
@@ -261,8 +261,9 @@ class EmailsController extends BaseController
     // POST /control-panel/emails/update
     //
     // Changes the template with the posted uid to the name,
-    // content and subject as sent, then goes to the list with
-    // "Updated!".
+    // content and subject — all three required, as in store, a
+    // form missing one going back with the errors and what was
+    // typed — then goes to the list with "Updated!".
     //
     // Used by:
     //   - the template form, for an existing template
@@ -270,6 +271,16 @@ class EmailsController extends BaseController
 
     public function update(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required',
+            'content' => 'required',
+            'subject' => 'required'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
         Emails::where(['id' => $request->get('uid')])->update([
             'name' => $request->get('name'),
             'content' => $request->get('content'),
@@ -320,7 +331,7 @@ class EmailsController extends BaseController
     // GET /control-panel/dialog/emails/send_test/{email_id}
     //
     // The admins.dialogs.email_test_form view, which asks for
-    // the address to test with.
+    // the address to test with; an unknown template is a 404.
     //
     // Used by:
     //   - email_test() of dialogs.js — the Test links of the
@@ -329,6 +340,8 @@ class EmailsController extends BaseController
 
     public function send_test(Request $request, $email_id)
     {
+        Emails::findOrFail($email_id);
+
         return view('admins.dialogs.email_test_form', [
             'uid' => $email_id
         ]);
@@ -345,9 +358,11 @@ class EmailsController extends BaseController
     //
     // POST /control-panel/emails/sending_test/{email_id}
     //
-    // Mails the template to the address typed in the dialog,
-    // unchecked, then goes to the list with "Test email
-    // sent!". The template stays marked as not sent.
+    // Mails the template to the address typed in the dialog —
+    // which must be an e-mail address, or the form goes back
+    // with the error — then goes to the list with "Test email
+    // sent!". The template stays marked as not sent; an
+    // unknown template is a 404.
     //
     // Used by:
     //   - the test dialog's form
@@ -355,7 +370,15 @@ class EmailsController extends BaseController
 
     public function sending_test(Request $request, $email_id)
     {
-        Mail::to($request->get('email'))->send(new SendMail(Emails::find($email_id)->subject, Emails::find($email_id)->content));
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
+        Mail::to($request->get('email'))->send(new SendMail(Emails::findOrFail($email_id)->subject, Emails::findOrFail($email_id)->content));
 
         session()->flash('success', 'Test email sent!');
 
@@ -377,8 +400,7 @@ class EmailsController extends BaseController
     // addSubscriber call each: for registered, every active
     // account into list 10226591; for newsletters, every
     // account that asked for the newsletter into list
-    // 10226593. Any other type leaves the addresses undefined
-    // and ends in a server error. Then back with the list
+    // 10226593. Any other type is a 404. Then back with the list
     // named as synced.
     //
     // Used by:
@@ -396,6 +418,8 @@ class EmailsController extends BaseController
             $listId = 10226593;
 
             $emails = User::select('email')->where(['newsletter'=>1])->get()->pluck('email')->toArray();
+        } else {
+            abort(404);
         }
 
         if(is_array($emails) && count($emails)>0){

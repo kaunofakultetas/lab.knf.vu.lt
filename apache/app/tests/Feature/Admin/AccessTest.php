@@ -346,4 +346,32 @@ final class AccessTest extends TestCase
             $response->assertSee('<script src="' . $script . '"></script>', false);
         }
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_signing_out_of_the_panel_is_never_a_plain_link
+    // -----------------------------------------------------------
+    //
+    // The top bar's sign-out posts; opened as a link, which
+    // another site can make an admin follow, the address
+    // answers 405 and the admin stays signed in.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_signing_out_of_the_panel_is_never_a_plain_link(): void
+    {
+        $admin = $this->makeAdmin(true);
+        $this->signInAdmin($admin);
+
+        $this->get('/control-panel/dashboard')->assertSee("onClick=\"Post_Link('https://lab.knf.vu.lt/control-panel/logout');\"", false);
+        $this->get('/control-panel/logout')->assertStatus(405);
+
+        $this->assertAuthenticatedAs($admin, 'admins');
+    }
 }

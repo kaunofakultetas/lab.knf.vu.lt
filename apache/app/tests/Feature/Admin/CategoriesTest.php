@@ -302,4 +302,54 @@ final class CategoriesTest extends TestCase
         $response->assertSessionHasErrors('name');
         $this->assertSame($before, Categories::count());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_empty_category_rename_is_refused
+    // -----------------------------------------------------------
+    //
+    // The rename dialog sent empty goes back with the error,
+    // and the category keeps its name.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_empty_category_rename_is_refused(): void
+    {
+        $category = $this->makeCategory('Kept Category');
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/categories')
+            ->post('/control-panel/dialog/category/update', ['uid' => $category->id, 'name' => '']);
+
+        $response->assertRedirect('/control-panel/categories');
+        $response->assertSessionHasErrors('name');
+        $this->assertSame('Kept Category', $category->refresh()->name);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_unknown_category_is_404
+    // -----------------------------------------------------------
+    //
+    // The rename dialog of a category that does not exist
+    // answers 404 instead of a server error.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_unknown_category_is_404(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/dialog/category/edit/987654321')->assertNotFound();
+    }
 }

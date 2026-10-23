@@ -621,8 +621,9 @@ final class ChallengeTest extends TestCase
     // -----------------------------------------------------------
     //
     // Hidden challenges — what lab admins create — stay off
-    // the dashboard but are played from the groups they are
-    // assigned to: the page opens and the answer pays.
+    // the dashboard but are played by the members of the
+    // groups they are assigned to: the page opens and the
+    // answer pays.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -633,11 +634,51 @@ final class ChallengeTest extends TestCase
         $challenge = $this->makeChallenge(['hidden' => 1]);
         $group = $this->makeGroup();
         $this->assignToGroup($group, $challenge);
+        $member = $this->makeSsoPlayer();
+        $this->joinGroup($group, $member);
+        $this->signIn($member);
 
         $this->get("/user/challenge/{$challenge->public_id}/{$group->public_id}")->assertOk();
         $this->answer($challenge, $challenge->answer, $group->public_id)->assertSessionHas('success');
 
-        $this->assertSame(10, $this->player->refresh()->points);
+        $this->assertSame(10, $member->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_hidden_challenge_stays_with_its_groups
+    // -----------------------------------------------------------
+    //
+    // To a player outside its groups — a local account, or a
+    // member of another group — a hidden challenge answers as
+    // an unknown one, with or without its group in the
+    // address, and its answer scores nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_hidden_challenge_stays_with_its_groups(): void
+    {
+        $group = $this->makeGroup();
+        $challenge = $this->makeChallenge(['hidden' => 1, 'answer' => 'group_only_flag', 'content' => '<p>For the group only</p>']);
+        $this->assignToGroup($group, $challenge);
+        $elsewhere = $this->makeSsoPlayer();
+        $this->joinGroup($this->makeGroup(), $elsewhere);
+
+        foreach ([$this->player, $elsewhere] as $outsider) {
+            $this->signIn($outsider);
+            $this->get("/user/challenge/{$challenge->public_id}")->assertRedirect('/user/dashboard');
+            $this->assertErrorFlashed("Challenge doesn't exists!");
+            $this->get("/user/challenge/{$challenge->public_id}/{$group->public_id}")->assertRedirect('/user/dashboard');
+            $this->answer($challenge, 'group_only_flag', $group->public_id)->assertRedirect('/user/dashboard');
+            $this->assertSame(0, $outsider->refresh()->points);
+        }
+        $this->assertSame(0, ChallengesSubmitted::where('challenge_id', $challenge->id)->count());
     }
 
 
@@ -806,5 +847,85 @@ final class ChallengeTest extends TestCase
         $response->assertRedirect("/user/challenge/{$challenge->public_id}");
         $response->assertSessionHasErrors();
         $this->assertSame(1, ChallengesSubmitted::where('user_id', $this->player->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_flag_saved_with_its_wrapper_is_solvable
+    // -----------------------------------------------------------
+    //
+    // A flag saved with its VU{…} wrapper matches the answer
+    // given with the wrapper or without it.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_flag_saved_with_its_wrapper_is_solvable(): void
+    {
+        $wrapped = $this->makeChallenge(['answer' => 'VU{wrapped_flag}', 'points' => 10]);
+        $other = $this->makeChallenge(['answer' => 'VU{other_flag}', 'points' => 20]);
+
+        $this->answer($wrapped, 'VU{wrapped_flag}')->assertSessionHas('success');
+        $this->answer($other, 'other_flag')->assertSessionHas('success');
+
+        $this->assertSame(30, $this->player->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_flag_with_a_brace_inside_is_solvable
+    // -----------------------------------------------------------
+    //
+    // A flag with a closing brace inside matches when typed as
+    // it was saved.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_flag_with_a_brace_inside_is_solvable(): void
+    {
+        $challenge = $this->makeChallenge(['answer' => 'brace}inside', 'points' => 10]);
+
+        $this->answer($challenge, 'brace}inside')->assertSessionHas('success');
+
+        $this->assertSame(10, $this->player->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_empty_answer_never_solves
+    // -----------------------------------------------------------
+    //
+    // An answer that is empty once the wrapper is stripped is
+    // wrong, even against a flag saved as a bare wrapper.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_empty_answer_never_solves(): void
+    {
+        $challenge = $this->makeChallenge(['answer' => 'VU{}']);
+
+        $this->answer($challenge, '');
+        $this->assertErrorFlashed('Wrong answer');
+        $this->answer($challenge, 'VU{}');
+        $this->assertErrorFlashed('Wrong answer');
+
+        $this->assertSame(0, $this->player->refresh()->points);
     }
 }

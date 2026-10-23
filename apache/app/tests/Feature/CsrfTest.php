@@ -19,6 +19,7 @@
 namespace Tests\Feature;
 
 use App\Models\Feedback;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -251,5 +252,33 @@ final class CsrfTest extends TestCase
             ->assertRedirect('/control-panel/categories');
 
         $this->assertNull($category->fresh());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vote_posts_with_the_pages_token
+    // -----------------------------------------------------------
+    //
+    // What the vote script of custom.js does: the token of the
+    // challenge page's csrf-token meta tag, sent as _token,
+    // carries the vote through the check.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vote_posts_with_the_pages_token(): void
+    {
+        $challenge = $this->makeChallenge();
+        $this->signIn($this->makePlayer());
+        preg_match('/<meta name="csrf-token" content="([^"]+)">/', $this->get("/user/challenge/{$challenge->public_id}")->getContent(), $meta);
+
+        $this->post("/user/challenge/vote/up/{$challenge->public_id}", ['_token' => $meta[1] ?? 'none'])->assertOk();
+
+        $this->assertSame('1', Redis::get("ThumbsUp_{$challenge->public_id}"));
     }
 }

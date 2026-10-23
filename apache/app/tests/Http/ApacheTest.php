@@ -13,8 +13,9 @@
 //  rules hand pretty addresses to Laravel, that pages carry
 //  no PHP diagnostics, that directories are never listed,
 //  that uploads are served from /upload and no PHP there
-//  ever runs, that a forged client address is ignored, and
-//  that CSRF is enforced outside PHPUnit.
+//  ever runs, that a forged client address is ignored, that
+//  no answer names the server's versions, and that CSRF is
+//  enforced outside PHPUnit.
 //
 //  Used by:
 //    - PHPUnit — the Http suite (runTests.sh)
@@ -439,5 +440,35 @@ final class ApacheTest extends TestCase
         $this->assertNotEmpty($lines);
         $this->assertStringStartsWith('127.0.0.1 ', end($lines));
         $this->assertStringNotContainsString('203.0.113.66', end($lines));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_responses_name_no_versions
+    // -----------------------------------------------------------
+    //
+    // No answer names the PHP or Apache version: no
+    // X-Powered-By header, a bare "Apache" for Server, and no
+    // signature under Apache's own error pages, such as the 403
+    // of a script in the upload folder.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_responses_name_no_versions(): void
+    {
+        $this->plantUpload('shell.php', '<?php echo 1;');
+
+        foreach (['/', '/robots.txt', '/upload/shell.php'] as $path) {
+            $response = $this->fetch('GET', $path);
+            $this->assertSame('', $response->header('X-Powered-By'), $path);
+            $this->assertSame('Apache', $response->header('Server'), $path);
+            $this->assertDoesNotMatchRegularExpression('#Apache/\d|PHP/\d#', $response->body(), $path);
+        }
     }
 }

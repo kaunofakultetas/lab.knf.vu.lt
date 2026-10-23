@@ -15,7 +15,6 @@
 //
 //  Used by:
 //    - every test class under tests/Defects
-//    - ApacheTest (tests/Http)
 // -----------------------------------------------------------
 
 
@@ -43,7 +42,7 @@ use PHPUnit\Framework\AssertionFailedError;
 // turned into a failure by the test itself.
 //
 // Used by:
-//   - every test class under tests/Defects, ApacheTest
+//   - every test class under tests/Defects
 // -----------------------------------------------------------
 
 trait KnownDefects

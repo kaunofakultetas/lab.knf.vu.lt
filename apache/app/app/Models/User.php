@@ -5,15 +5,18 @@
 //
 //  One cyber_users row per player. A local account
 //  registers with a username, e-mail and password and stays
-//  inactive (status 0) until the link of its verify_token
-//  mail is opened; an SSO account is created active at the
+//  inactive (status 0) until the link of its verification
+//  mail is opened — verify_token holds the SHA-256 hash of
+//  the link's token; an SSO account is created active at the
 //  first VU login, with vu_id set, the VU user id as
 //  username and an empty password no sign-in matches.
 //  points is the sum of the player's solves, kept by
 //  submit_answer; user_type is 1 for an individual and 2
 //  for a team. remember_token holds the SHA-256 hash of the
-//  password-reminder token, never Laravel's remember-me one
-//  — the login never asks to be remembered.
+//  password-reminder token, never Laravel's remember-me one:
+//  the login never asks to be remembered, and
+//  rememberTokenName tells Laravel so, which keeps its
+//  logout off the column.
 //
 //  Used by:
 //    - config/auth.php — the users provider, behind the
@@ -73,6 +76,11 @@ class User extends Authenticatable
     // The table, which has no created_at / updated_at columns
     public $timestamps = false;
     protected $table = 'cyber_users';
+
+    // No remember-me token: Laravel's logout would otherwise
+    // renew remember_token, and with it kill a pending
+    // password reminder
+    protected $rememberTokenName = '';
 
     // The columns registration, the SSO login and the
     // control panel write

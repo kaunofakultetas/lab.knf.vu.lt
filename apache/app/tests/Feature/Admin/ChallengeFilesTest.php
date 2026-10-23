@@ -363,4 +363,66 @@ final class ChallengeFilesTest extends TestCase
             'overlong name'           => [str_repeat('n', 256), 'https://files.test/dump.zip', 'name'],
         ];
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_link_dialogs_are_for_the_challenges_owner
+    // -----------------------------------------------------------
+    //
+    // A lab admin opens the new-link and edit-link dialogs of
+    // its own challenges, and is sent back with the
+    // permissions error from another admin's, whose links it
+    // never sees.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_link_dialogs_are_for_the_challenges_owner(): void
+    {
+        $admin = $this->makeAdmin();
+        $own = $this->makeChallenge(['created_by' => $admin->id]);
+        $other = $this->makeChallenge();
+        $ownLink = ChallengesFiles::create(['challenge_id' => $own->id, 'name' => 'own.pcap', 'file_url' => 'https://files.test/own']);
+        $otherLink = ChallengesFiles::create(['challenge_id' => $other->id, 'name' => 'secret.pcap', 'file_url' => 'https://files.test/secret']);
+        $this->signInAdmin($admin)->from('/control-panel/challenges');
+
+        $this->get("/control-panel/dialog/challenge_file/new/{$own->id}")->assertOk();
+        $this->get("/control-panel/dialog/challenge_file/edit/{$ownLink->id}")->assertOk()->assertSee('own.pcap');
+
+        $this->get("/control-panel/dialog/challenge_file/new/{$other->id}")->assertRedirect('/control-panel/challenges');
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->get("/control-panel/dialog/challenge_file/edit/{$otherLink->id}")->assertRedirect('/control-panel/challenges');
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_unknown_link_dialog_is_404
+    // -----------------------------------------------------------
+    //
+    // A dialog type other than new or edit, and the edit
+    // dialog of a link that does not exist, answer 404 instead
+    // of a server error.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_unknown_link_dialog_is_404(): void
+    {
+        $challenge = $this->makeChallenge();
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->get("/control-panel/dialog/challenge_file/bogus/{$challenge->id}")->assertNotFound();
+        $this->get('/control-panel/dialog/challenge_file/edit/987654321')->assertNotFound();
+    }
 }

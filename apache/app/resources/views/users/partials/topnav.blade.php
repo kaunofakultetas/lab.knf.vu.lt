@@ -18,9 +18,9 @@
                 <li class="nav-item">
                 
                 @if($vu_id == NULL)
-                	<a class="nav-link text-white" href="{{ env('APP_URL') }}/user/logout">
+                	<a class="nav-link text-white" href="#" onClick="Post_Link('{{ env('APP_URL') }}/user/logout');">
                 @elseif($vu_id != NULL)
-                	<a class="nav-link text-white" href="{{ env('APP_URL') }}/user/logout_saml">
+                	<a class="nav-link text-white" href="#" onClick="Post_Link('{{ env('APP_URL') }}/user/logout_saml');">
                 @endif
                 
                 <span class="d-none d-sm-inline">Logout</span>

@@ -2178,7 +2178,7 @@ function thumbs(type, public_id){
 				
 	 $('.thumbs-up, .thumbs-down').attr('disabled', 'disabled');	 
 	 
-	 $.get('/user/challenge/vote/'+type+'/'+public_id); 
+	 $.post('/user/challenge/vote/'+type+'/'+public_id, {_token: $('meta[name="csrf-token"]').attr('content')}); 
 	   
 }  
 
@@ -2196,7 +2196,7 @@ function thumbs_list(type, public_id){
 				
 	 $('.thumbs-up-'+public_id+', .thumbs-down-'+public_id).attr('disabled', 'disabled');	 
 	 
-	 $.get('/user/challenge/vote/'+type+'/'+public_id); 
+	 $.post('/user/challenge/vote/'+type+'/'+public_id, {_token: $('meta[name="csrf-token"]').attr('content')}); 
 	   
 }  
 
@@ -2226,4 +2226,23 @@ function Confirm_Dialog(URL){
 				
 	}	 
 	   
+}
+
+// Sends a POST to the address, with the CSRF token of the
+// page's csrf-token meta tag: signing out is a POST only,
+// which a link on another site cannot send, and Laravel
+// refuses a POST without the token
+function Post_Link(URL){
+	var form = document.createElement('form');
+	form.method = 'POST';
+	form.action = URL;
+
+	var token = document.createElement('input');
+	token.type = 'hidden';
+	token.name = '_token';
+	token.value = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+	form.appendChild(token);
+
+	document.body.appendChild(form);
+	form.submit();
 }  

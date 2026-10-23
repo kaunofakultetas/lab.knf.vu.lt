@@ -171,8 +171,8 @@ class PagesController extends BaseController
     //
     // Adds a page with a name, content and an alias no other
     // page has, then goes to the list with "Created!". A
-    // refused form only goes back — without the errors or the
-    // typed text, so the admin sees nothing happen.
+    // refused form goes back with the errors and what was
+    // typed.
     //
     // Used by:
     //   - the page form, for a new page
@@ -187,7 +187,7 @@ class PagesController extends BaseController
         ]);
 
         if ($validator->fails()) {
-            return back();
+            return back()->withErrors($validator)->withInput();
         }
 
         Pages::create([
@@ -212,7 +212,8 @@ class PagesController extends BaseController
     //
     // GET /control-panel/pages/edit/{uid}
     //
-    // The page form filled with the page, posting to update.
+    // The page form filled with the page, posting to update;
+    // an unknown page is a 404.
     //
     // Used by:
     //   - the edit links of the pages list
@@ -222,9 +223,9 @@ class PagesController extends BaseController
     {
         return view('admins.pages_form', [
             'url' => env('APP_URL') . '/control-panel/pages/update',
-            'name' => Pages::find($uid)->name,
-            'content' => Pages::find($uid)->content,
-            'alias' => Pages::find($uid)->alias,
+            'name' => Pages::findOrFail($uid)->name,
+            'content' => Pages::findOrFail($uid)->content,
+            'alias' => Pages::findOrFail($uid)->alias,
             'uid' => $uid
         ]);
     }
@@ -241,8 +242,9 @@ class PagesController extends BaseController
     // POST /control-panel/pages/update
     //
     // Changes the page with the posted uid to the name,
-    // content and alias as sent — nothing is checked, not even
-    // that the alias is still free — then goes to the list
+    // content and alias — all three required, the alias free
+    // but for the page's own, a refused form going back with
+    // the errors and what was typed — then goes to the list
     // with "Updated!".
     //
     // Used by:
@@ -251,6 +253,17 @@ class PagesController extends BaseController
 
     public function update(Request $request)
     {
+        // The uid is cast, as it goes into the rule's text
+        $validator = Validator::make($request->all(), [
+            'name' => ['required'],
+            'content' => ['required'],
+            'alias' => ['required', 'unique:cyber_pages,alias,' . (int) $request->get('uid')]
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
         Pages::where(['id' => $request->get('uid')])->update([
             'name' => $request->get('name'),
             'content' => $request->get('content'),

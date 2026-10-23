@@ -204,9 +204,11 @@ class UsersController extends BaseController
     // e-mail and password as sent, unless the e-mail or the
     // username is taken; with notif set to 1, mails the
     // password to the new account (SendNewPass). Then to the
-    // accounts page with "User created!", or with the error;
-    // a form missing the username, e-mail or password goes
-    // back with the errors.
+    // accounts page with "User created!", or with the error.
+    // A form missing the username, e-mail or password, or with
+    // an e-mail that is no address or a password shorter than
+    // the 8 characters the login form asks for, goes back with
+    // the errors.
     //
     // Used by:
     //   - the account dialog, for a new account
@@ -215,9 +217,9 @@ class UsersController extends BaseController
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'username' => 'required',
-            'email' => 'required',
-            'password' => 'required'
+            'username' => 'required|max:255',
+            'email' => 'required|email|max:255',
+            'password' => 'required|min:8|max:255'
         ]);
 
         if ($validator->fails()) {
@@ -258,8 +260,8 @@ class UsersController extends BaseController
     // GET /control-panel/dialog/users/edit/{uid}
     //
     // The account dialog showing the account's username and
-    // e-mail, for a new password. The url it is handed goes
-    // unused, as in create.
+    // e-mail, for a new password; an unknown account is a 404.
+    // The url it is handed goes unused, as in create.
     //
     // Used by:
     //   - users_form() of dialogs.js — the edit buttons of the
@@ -270,8 +272,8 @@ class UsersController extends BaseController
     {
         return view('admins.dialogs.users_form', [
             'url' => env('APP_URL') . '/control-panel/users/update',
-            'username' => User::find($uid)->username,
-            'email' => User::find($uid)->email,
+            'username' => User::findOrFail($uid)->username,
+            'email' => User::findOrFail($uid)->email,
             'uid'=>$uid,
             'type'=>'edit'
         ]);
@@ -291,7 +293,9 @@ class UsersController extends BaseController
     // Gives the account with the posted uid the password as
     // sent — the only thing the dialog changes — and, with
     // notif set to 1, mails it to the account (SendNewPass).
-    // Then to the accounts page with "Updated!".
+    // Then to the accounts page with "Updated!". A password
+    // shorter than the 8 characters the login form asks for
+    // goes back with the error.
     //
     // Used by:
     //   - the account dialog, for an existing account
@@ -299,6 +303,14 @@ class UsersController extends BaseController
 
     public function update(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'password' => 'required|min:8|max:255'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         User::where(['id' => $request->get('uid')])->update([
             'password' => Hash::make($request->get('password'))
         ]);
@@ -326,9 +338,11 @@ class UsersController extends BaseController
     // Switches the account to the other status — the address
     // carries the current one, 0 or 1 — and goes to the
     // accounts page with "Status changed!"; any other status
-    // in the address leaves the new one undefined and ends in
-    // a server error. An inactive account can no longer sign
-    // in, through the login form or the VU SSO alike.
+    // in the address is a 404. An inactive account can no
+    // longer sign in, through the login form or the VU SSO
+    // alike. A verification still pending is dropped, so no
+    // verification link — old, or new from the login form —
+    // switches the account back.
     //
     // Used by:
     //   - Post_Link() of custom_admin.js — the status switches
@@ -341,10 +355,13 @@ class UsersController extends BaseController
             $new_status = 1;
         } elseif($status_id == 1){
             $new_status = 0;
+        } else {
+            abort(404);
         }
 
         $update = array(
-            'status' => $new_status
+            'status' => $new_status,
+            'verify_token' => ''
         );
 
         User::where(['id' => $user_id])->update($update);

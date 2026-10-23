@@ -6,10 +6,12 @@
 //  The vote route counts one thumb per player and challenge
 //  in Redis — ThumbsUp_ and ThumbsDown_ keys per challenge,
 //  and a Vote_ key per challenge and player that locks the
-//  player's buttons. It is a plain GET the page's script
-//  calls, answers with an empty body, and asks for a session
-//  but not for a solve: the buttons sit on the challenge page
-//  too, before the answer.
+//  player's buttons. It is a POST the page's script sends
+//  with the CSRF token of the page's csrf-token meta tag,
+//  answers with an empty body, and asks for a session but
+//  not for a solve: the buttons sit on the challenge page
+//  too, before the answer. Only up and down are votes, and
+//  only for a challenge the player may open.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -56,8 +58,8 @@ final class VotingTest extends TestCase
     // vote
     // -----------------------------------------------------------
     //
-    // Signs the player in and calls the vote route with the
-    // vote type given — up, down or anything else.
+    // Signs the player in and posts to the vote route with
+    // the vote type given — up, down or anything else.
     //
     // Used by:
     //   - the tests below
@@ -65,7 +67,7 @@ final class VotingTest extends TestCase
 
     private function vote(User $player, string $type, Challenges $challenge): TestResponse
     {
-        return $this->signIn($player)->get("/user/challenge/vote/{$type}/{$challenge->public_id}");
+        return $this->signIn($player)->post("/user/challenge/vote/{$type}/{$challenge->public_id}");
     }
 
 
@@ -237,26 +239,26 @@ final class VotingTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_an_unknown_vote_type_uses_up_the_vote
+    // test_an_unknown_vote_type_uses_up_nothing
     // -----------------------------------------------------------
     //
-    // A type other than up or down counts nothing, yet marks
-    // the player as having voted, so a later real vote is
-    // ignored.
+    // A type other than up or down answers 404 and counts
+    // nothing, and the player's real vote still counts after
+    // it.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_an_unknown_vote_type_uses_up_the_vote(): void
+    public function test_an_unknown_vote_type_uses_up_nothing(): void
     {
         $player = $this->makePlayer();
         $challenge = $this->makeChallenge();
 
-        $this->vote($player, 'sideways', $challenge)->assertOk();
-        $this->vote($player, 'up', $challenge);
+        $this->vote($player, 'sideways', $challenge)->assertNotFound();
+        $this->vote($player, 'up', $challenge)->assertOk();
 
-        $this->assertSame(0, $this->counter('ThumbsUp', $challenge));
+        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
         $this->assertSame(0, $this->counter('ThumbsDown', $challenge));
     }
 
@@ -330,5 +332,113 @@ final class VotingTest extends TestCase
         $this->vote($this->makePlayer(), 'up', $challenge);
 
         $this->assertSame(1 + ($interleaved ? 1 : 0), $this->counter('ThumbsUp', $challenge));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vote_is_never_a_plain_link
+    // -----------------------------------------------------------
+    //
+    // Opened as a link, which another site can make a
+    // signed-in player follow, the vote address answers 405
+    // and counts nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vote_is_never_a_plain_link(): void
+    {
+        $player = $this->makePlayer();
+        $challenge = $this->makeChallenge();
+
+        $this->signIn($player)->get("/user/challenge/vote/up/{$challenge->public_id}")->assertStatus(405);
+
+        $this->assertSame(0, $this->counter('ThumbsUp', $challenge));
+        $this->assertNull(Redis::get("Vote_{$challenge->public_id}_{$player->id}"));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vote_for_an_unknown_challenge_is_404
+    // -----------------------------------------------------------
+    //
+    // A public id no challenge has answers 404 and leaves no
+    // counter or lock behind in Redis.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vote_for_an_unknown_challenge_is_404(): void
+    {
+        $this->signIn($this->makePlayer())->post('/user/challenge/vote/up/no-such-challenge')->assertNotFound();
+
+        $this->assertSame([], Redis::keys('*no-such-challenge*'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_hidden_challenge_takes_votes_from_its_groups_only
+    // -----------------------------------------------------------
+    //
+    // A hidden challenge counts the votes of the members of
+    // its groups; anyone else gets 404 and counts nothing, as
+    // for its page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_hidden_challenge_takes_votes_from_its_groups_only(): void
+    {
+        $challenge = $this->makeChallenge(['hidden' => 1]);
+        $group = $this->makeGroup();
+        $this->assignToGroup($group, $challenge);
+        $member = $this->makeSsoPlayer();
+        $this->joinGroup($group, $member);
+
+        $this->vote($this->makePlayer(), 'up', $challenge)->assertNotFound();
+        $this->vote($member, 'up', $challenge)->assertOk();
+
+        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_challenge_page_carries_the_csrf_token
+    // -----------------------------------------------------------
+    //
+    // The page whose buttons vote carries the session's CSRF
+    // token in a csrf-token meta tag, which the vote script of
+    // custom.js sends with the vote.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_challenge_page_carries_the_csrf_token(): void
+    {
+        $challenge = $this->makeChallenge();
+
+        $page = $this->signIn($this->makePlayer())->get("/user/challenge/{$challenge->public_id}");
+
+        $page->assertSee('<meta name="csrf-token" content="' . csrf_token() . '">', false);
     }
 }

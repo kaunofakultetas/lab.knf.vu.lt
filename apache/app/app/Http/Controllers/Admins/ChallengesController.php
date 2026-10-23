@@ -24,7 +24,8 @@
 //    GET  /control-panel/dialog/challenges/categories/{uid}        — categories dialog
 //    POST /control-panel/challenges/categories/store               — sets categories
 //    GET  /control-panel/challenges/files/{uid}                    — the file links
-//    GET  /control-panel/dialog/challenge_file/{type}/{uid}        — link dialog
+//    GET  /control-panel/dialog/challenge_file/new/{uid}           — new-link dialog
+//    GET  /control-panel/dialog/challenge_file/edit/{uid}          — edit-link dialog
 //    POST /control-panel/challenges_file/store                     — adds a link
 //    POST /control-panel/challenges_file/update                    — changes a link
 //    POST /control-panel/challenges/files/delete/{uid}             — deletes a link
@@ -76,7 +77,9 @@ use App\Models\GroupsChallenges;
 //   categories       — the categories dialog
 //   categories_store — sets a challenge's categories
 //   file_list        — a challenge's file links
-//   file_form        — the link dialog
+//   file_form_new    — the new-link dialog
+//   file_form_edit   — the edit-link dialog
+//   file_form        — either link dialog
 //   file_store       — adds a link
 //   file_update      — changes a link
 //   file_destroy     — deletes a link
@@ -314,10 +317,12 @@ class ChallengesController extends BaseController
     // POST /control-panel/challenges/update
     //
     // Changes the challenge with the posted uid to the form's
-    // fields as sent — the content through clean_content, as
-    // in store — then goes to the list with "Updated!". The
-    // hidden switch and the author stay as they were, so a lab
-    // admin keeps a challenge a main admin corrected.
+    // fields — every one required, as in store, a form
+    // missing one going back with the errors and what was
+    // typed — with the content through clean_content, then
+    // goes to the list with "Updated!". The hidden switch and
+    // the author stay as they were, so a lab admin keeps a
+    // challenge a main admin corrected.
     //
     // Used by:
     //   - the challenge form, for an existing challenge
@@ -325,6 +330,19 @@ class ChallengesController extends BaseController
 
     public function update(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required',
+            'partner_id' => 'required',
+            'descr' => 'required',
+            'content' => 'required',
+            'answer' => 'required',
+            'points' => 'required'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
         Challenges::where(['id' => $request->get('uid')])->update([
             'name' => $request->get('name'),
             'partner_id' => $request->get('partner_id'),
@@ -386,9 +404,10 @@ class ChallengesController extends BaseController
     //
     // The admins.dialogs.challenges_categories view: every
     // category, the challenge's ticked, posting to
-    // categories_store. The route checks no ownership, so any
-    // admin may open the dialog of any challenge; saving it is
-    // checked.
+    // categories_store. The route's r_exists check
+    // (challenge_owned) keeps a lab admin to the dialogs of
+    // its own challenges, as for saving them, and answers an
+    // unknown challenge with "No challenge!".
     //
     // Used by:
     //   - challenge_categories() of dialogs.js — the category
@@ -505,24 +524,69 @@ class ChallengesController extends BaseController
 
 
     // -----------------------------------------------------------
-    // file_form
+    // file_form_new
     // -----------------------------------------------------------
     //
-    // GET /control-panel/dialog/challenge_file/{type}/{uid}
+    // GET /control-panel/dialog/challenge_file/new/{uid}
+    //
+    // file_form for a new link of the challenge uid. The
+    // route's r_exists check (challenge_owned) keeps a lab
+    // admin to its own challenges.
+    //
+    // Used by:
+    //   - challenge_files_form() of dialogs.js — the add
+    //     button of the file links page
+    // -----------------------------------------------------------
+
+    public function file_form_new(Request $request, $uid)
+    {
+        return $this->file_form($request, 'new', $uid);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // file_form_edit
+    // -----------------------------------------------------------
+    //
+    // GET /control-panel/dialog/challenge_file/edit/{uid}
+    //
+    // file_form for the link uid. The route's r_exists check
+    // (file_owned) keeps a lab admin to the links of its own
+    // challenges.
+    //
+    // Used by:
+    //   - challenge_files_form() of dialogs.js — the edit
+    //     buttons of the file links page
+    // -----------------------------------------------------------
+
+    public function file_form_edit(Request $request, $uid)
+    {
+        return $this->file_form($request, 'edit', $uid);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // file_form
+    // -----------------------------------------------------------
     //
     // The admins.dialogs.challenge_files_form view: for new,
     // an empty link of the challenge uid, posting to
     // file_store; for edit, the link uid, posting to
-    // file_update. Any other type leaves the address undefined
-    // and ends in a server error. The route checks no
-    // ownership.
+    // file_update — a link that does not exist is a 404.
     //
     // Used by:
-    //   - challenge_files_form() of dialogs.js — the add and
-    //     edit buttons of the file links page
+    //   - file_form_new and file_form_edit (above)
     // -----------------------------------------------------------
 
-    public function file_form(Request $request, $type, $uid)
+    private function file_form(Request $request, $type, $uid)
     {
         if($type =='new'){
             $url = env('APP_URL')."/control-panel/challenges_file/store";
@@ -530,8 +594,8 @@ class ChallengesController extends BaseController
             $file_url = '';
         } elseif($type =='edit'){
             $url = env('APP_URL')."/control-panel/challenges_file/update";
-            $name = ChallengesFiles::find($uid)->name;
-            $file_url = ChallengesFiles::find($uid)->file_url;
+            $name = ChallengesFiles::findOrFail($uid)->name;
+            $file_url = ChallengesFiles::findOrFail($uid)->file_url;
         }
 
         return view('admins.dialogs.challenge_files_form', [
@@ -661,7 +725,8 @@ class ChallengesController extends BaseController
     //
     // Writes the status from the address into the challenge's
     // hidden column — 1 hides it from the main dashboard, 0
-    // shows it — and goes back. Main-only.
+    // shows it, any other value is a 404 — and goes back.
+    // Main-only.
     //
     // Used by:
     //   - Post_Link() of custom_admin.js — the Visible and
@@ -670,6 +735,10 @@ class ChallengesController extends BaseController
 
     public function status(Request $request, $status, $challenge_id)
     {
+        if (! in_array($status, ['0', '1'], true)) {
+            abort(404);
+        }
+
         Challenges::where(['id'=>$challenge_id])->update(['hidden'=>$status]);
 
         return back();

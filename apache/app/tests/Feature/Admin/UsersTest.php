@@ -24,6 +24,7 @@ use App\Models\GroupsUsers;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -493,5 +494,141 @@ final class UsersTest extends TestCase
         $response->assertRedirect('/control-panel/users');
         $response->assertSessionHasErrors(['username', 'email', 'password']);
         $this->assertSame($before, User::count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_new_password_must_be_usable
+    // -----------------------------------------------------------
+    //
+    // Setting a password that is empty or shorter than the 8
+    // characters the login form asks for is refused with the
+    // error, and the old password keeps working.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_new_password_must_be_usable(): void
+    {
+        $player = $this->makePlayer();
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/users');
+
+        $this->post('/control-panel/dialog/users/update', ['uid' => $player->id, 'password' => ''])->assertSessionHasErrors('password');
+        $this->post('/control-panel/dialog/users/update', ['uid' => $player->id, 'password' => 'short'])->assertSessionHasErrors('password');
+
+        $this->assertTrue(Hash::check(self::PASSWORD, $player->refresh()->password));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_new_account_needs_a_usable_login
+    // -----------------------------------------------------------
+    //
+    // An account the dialog creates needs an e-mail address
+    // and a password of at least 8 characters, as the login
+    // form does; otherwise nothing is created.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_new_account_needs_a_usable_login(): void
+    {
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/users');
+
+        $this->post('/control-panel/dialog/users/store', ['username' => 'Shorty', 'email' => 'shorty@players.test', 'password' => 'short'])
+            ->assertSessionHasErrors('password');
+        $this->post('/control-panel/dialog/users/store', ['username' => 'Nomail', 'email' => 'not-an-address', 'password' => 'long-enough-1'])
+            ->assertSessionHasErrors('email');
+
+        $this->assertSame(0, User::whereIn('username', ['Shorty', 'Nomail'])->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_unknown_account_is_404
+    // -----------------------------------------------------------
+    //
+    // The edit dialog of an account that does not exist
+    // answers 404 instead of a server error.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_unknown_account_is_404(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/dialog/users/edit/987654321')->assertNotFound();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_status_switch_takes_only_0_or_1
+    // -----------------------------------------------------------
+    //
+    // A hand-made status other than 0 or 1 answers 404 instead
+    // of a server error, and the account keeps its status.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_status_switch_takes_only_0_or_1(): void
+    {
+        $player = $this->makePlayer();
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->post("/control-panel/users/status/{$player->id}/7")->assertNotFound();
+
+        $this->assertSame(1, $player->refresh()->status);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_admin_switch_ends_a_pending_verification
+    // -----------------------------------------------------------
+    //
+    // Switching an account never verified drops its pending
+    // verification, so its link can no longer switch it back
+    // on after an admin switched it off.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_admin_switch_ends_a_pending_verification(): void
+    {
+        $token = Str::random(50) . '-' . now()->getTimestamp();
+        $player = $this->makePlayer(['status' => 0, 'verify_token' => hash('sha256', $token)]);
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->post("/control-panel/users/status/{$player->id}/0");
+        $this->post("/control-panel/users/status/{$player->id}/1");
+
+        $this->assertSame('', $player->refresh()->verify_token);
+        $this->app['auth']->guard('admins')->logout();
+        $this->get("/verify/{$token}")->assertNotFound();
+        $this->assertSame(0, $player->refresh()->status);
     }
 }

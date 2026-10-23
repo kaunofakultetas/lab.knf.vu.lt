@@ -14,6 +14,10 @@ RUN apt-get -y update \
 # the pages, as PHP 8.1 had none to show
 RUN echo 'error_reporting = E_ALL & ~E_DEPRECATED' > "$PHP_INI_DIR/conf.d/error-reporting.ini"
 
+# Without a php.ini, PHP names its exact version in an X-Powered-By
+# header on every page
+RUN echo 'expose_php = Off' > "$PHP_INI_DIR/conf.d/expose-php.ini"
+
 # Apache
 RUN a2enmod rewrite remoteip
 

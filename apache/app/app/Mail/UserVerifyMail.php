@@ -4,11 +4,12 @@
 //  [*] UserVerifyMail — the account verification link
 //
 //  The mail a new local account gets at registration: a
-//  link to /verify/{token} on APP_URL, which activates the
-//  account once opened. The view is users.mail.verification.
+//  link to /verify/{token} on APP_URL, good for a day,
+//  which activates the account once opened. The view is
+//  users.mail.verification.
 //
 //  Used by:
-//    - Users\RegisterController::store
+//    - Users\RegisterController::send_verification
 // -----------------------------------------------------------
 
 
@@ -36,7 +37,7 @@ use Illuminate\Queue\SerializesModels;
 //   build       — the message with its link
 //
 // Used by:
-//   - Users\RegisterController::store
+//   - Users\RegisterController::send_verification
 // -----------------------------------------------------------
 
 class UserVerifyMail extends Mailable
@@ -60,7 +61,7 @@ class UserVerifyMail extends Mailable
     // Keeps the token for build.
     //
     // Used by:
-    //   - Users\RegisterController::store
+    //   - Users\RegisterController::send_verification
     // -----------------------------------------------------------
 
     public function __construct($data)

@@ -60,10 +60,9 @@ use App\Models\GroupsUsers;
 // UsersGroupsController
 // -----------------------------------------------------------
 //
-// An empty group form goes back with the error. The member
-// and challenge forms are not validated — their dialogs
-// always send a value, so only a hand-made request ends in a
-// server error on a NOT NULL column.
+// A group form without a name, a member form without a VU
+// id and a challenge form without an existing challenge go
+// back with the error.
 //
 //   __construct              — the base's layout data
 //   index                    — the groups list
@@ -272,7 +271,7 @@ class UsersGroupsController extends BaseController
     // POST /control-panel/dialog/users/vu-groups/update
     //
     // Renames the group with the posted uid, then goes back
-    // with "Updated!".
+    // with "Updated!"; an empty name goes back with the error.
     //
     // Used by:
     //   - the group dialog, for an existing group
@@ -280,6 +279,14 @@ class UsersGroupsController extends BaseController
 
     public function update(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         Groups::where(['id' => $request->get('uid')])->update(['name' => $request->get('name')]);
 
         session()->flash('success', 'Updated!');
@@ -416,7 +423,7 @@ class UsersGroupsController extends BaseController
     // it is there already, then goes back with "Added!" or
     // "User already added!". The id need not belong to an
     // account yet: it becomes one at the student's first VU
-    // login.
+    // login. A form without a VU id goes back with the error.
     //
     // Used by:
     //   - the member dialog's form
@@ -424,6 +431,14 @@ class UsersGroupsController extends BaseController
 
     public function users_store(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'vu_id' => 'required|max:255'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         $num = GroupsUsers::where(['vu_id' => $request->get('vu_id'), 'group_id' => $request->get('uid')])->get()->count();
 
         if($num == 0){
@@ -600,7 +615,9 @@ class UsersGroupsController extends BaseController
     //
     // Adds the challenge to the group with the posted uid
     // unless it is there already, then goes back with "Added!"
-    // or "Challenge already added!".
+    // or "Challenge already added!". A form without a
+    // challenge, or naming one that does not exist, goes back
+    // with the error.
     //
     // Used by:
     //   - the challenge dialog's form
@@ -608,6 +625,14 @@ class UsersGroupsController extends BaseController
 
     public function challenges_store(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'challenge_id' => 'required|exists:cyber_challenges,id'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         $num = GroupsChallenges::where(['group_id' => $request->get('uid'), 'challenge_id' => $request->get('challenge_id')])->get()->count();
 
         if($num == 0){
@@ -676,9 +701,8 @@ class UsersGroupsController extends BaseController
     //
     // A copy of Users\GroupsController::get_group_leaderboard:
     // every player with a solve of one of the challenges —
-    // members or not — ranked by lab-wide points, with a last
-    // solve that is whichever MySQL reads first (as in
-    // LAB-01).
+    // members or not — ranked by lab-wide points, with the
+    // player's latest solve of them.
     //
     // Used by:
     //   - group_leaderboard (above)
@@ -691,8 +715,8 @@ class UsersGroupsController extends BaseController
             ->whereIn('cyber_challenges_submitted.challenge_id', $challenges)
             ->groupBy('cyber_users.id')
             ->orderByDesc('cyber_users.points')
-            ->orderBy('cyber_challenges_submitted.created')
-            ->selectRaw('row_number() OVER (ORDER BY `cyber_users`.`points` DESC) AS `position`, `cyber_users`.`id` AS `id`, `cyber_users`.`points` AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, `cyber_challenges_submitted`.`created` AS `last_challenge`')
+            ->orderBy('last_challenge')
+            ->selectRaw('row_number() OVER (ORDER BY `cyber_users`.`points` DESC) AS `position`, `cyber_users`.`id` AS `id`, `cyber_users`.`points` AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
             ->get()->toArray();
 
         return $data;

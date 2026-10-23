@@ -35,6 +35,8 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
 use App\Models\Groups;
+use App\Models\GroupsChallenges;
+use App\Models\GroupsUsers;
 use App\Models\User;
 use App\Models\Feedback;
 use App\Models\Partners;
@@ -56,13 +58,15 @@ use App\Models\ChallengesSubmitted;
 // ChallengesController
 // -----------------------------------------------------------
 //
-//   __construct     — the base's layout data
-//   index           — the dashboard
-//   show            — a challenge's page
-//   submit_answer   — an answer, and a solve when it is right
-//   vote            — a thumbs-up or thumbs-down
-//   dialog_feedback — the feedback dialog
-//   feedback_save   — stores feedback
+//   __construct      — the base's layout data
+//   index            — the dashboard
+//   show             — a challenge's page
+//   submit_answer    — an answer, and a solve when it is right
+//   vote             — a thumbs-up or thumbs-down
+//   dialog_feedback  — the feedback dialog
+//   feedback_save    — stores feedback
+//   hiddenFromPlayer — whether a hidden challenge is closed
+//                      to the player
 //
 // Used by:
 //   - routes/web.php
@@ -206,11 +210,13 @@ class ChallengesController extends BaseController
     // it was saved — its partner, file links and votes. An
     // unknown challenge goes back to the dashboard with
     // "Challenge doesn't exists!", an unknown group back with
-    // "Error!". The group only has to exist: neither the
-    // membership nor the challenge's place in the group is
-    // checked, and a hidden challenge opens like any other.
-    // The validate.ifsolved middleware has sent solved ones to
-    // the dashboard already.
+    // "Error!". A hidden challenge — one kept for groups —
+    // answers as an unknown one, whatever group the address
+    // names, unless the player is a member of a group it is
+    // placed in (hiddenFromPlayer). The validate.ifsolved
+    // middleware has sent solved ones to the dashboard
+    // already. A challenge whose partner was deleted shows
+    // without the partner card.
     //
     // Used by:
     //   - the challenge cards of the dashboard and of a
@@ -231,6 +237,10 @@ class ChallengesController extends BaseController
             if(Groups::groupExists($public_group_id) == false){
                 return back()->withErrors(['Error!']);
             }
+        }
+
+        if ($this->hiddenFromPlayer($public_id)) {
+            return redirect(route('user_dashboard'))->withErrors(['Challenge doesn\'t exists!']);
         }
 
         $files = ChallengesFiles::getFilesById(Challenges::getIdByPublicId($public_id));
@@ -263,16 +273,19 @@ class ChallengesController extends BaseController
     // a row of the solve feed and a fresh tasks_history in
     // Redis; then back to the dashboard — or the group's page
     // — with the points won. Every "VU{" and "}" is removed
-    // from the answer before the compare, so the flag matches
-    // with or without its wrapper — and a stored flag must be
-    // saved without it; the compare is exact, so a numeric
-    // flag matches only as written. Wrong answers and solved
+    // from the answer and from the stored flag alike before
+    // the compare, so a flag matches with or without its
+    // wrapper, however it was saved; past that the compare is
+    // exact, so a numeric flag matches only as written, and
+    // an empty answer never matches. Wrong answers and solved
     // challenges go back with "Wrong answer" or "Already
     // solved". The points are added in SQL, so solves two tabs
     // book at the same moment all count; the same right answer
     // sent twice at once — a double click — passes both
     // "already solved" checks, and the second solve, which the
-    // table's unique key refuses, goes back as solved too.
+    // table's unique key refuses, goes back as solved too. A
+    // hidden challenge takes no answer from a player it is
+    // hidden from, as in show.
     //
     // Known bug LAB-21 (low): answers have no rate limit
     // (routes/web.php), so flags can be guessed without end.
@@ -284,8 +297,9 @@ class ChallengesController extends BaseController
 
     public function submit_answer(Request $request, $public_id, $public_group_id=NULL)
     {
-        // STEP 1: the challenge and the group must exist
-        // ==============================================
+        // STEP 1: the challenge and the group must exist, and
+        //         the challenge must be open to the player
+        // ===================================================
         $validator = Validator::make(['public_id'=>$public_id], [
             'public_id' => ['required', 'exists:cyber_challenges,public_id']
         ]);
@@ -300,15 +314,20 @@ class ChallengesController extends BaseController
             }
         }
 
+        if ($this->hiddenFromPlayer($public_id)) {
+            return redirect(route('user_dashboard'))->withErrors(['Challenge doesn\'t exists!']);
+        }
 
-        // STEP 2: the answer without its wrapper, and the
-        // challenge's flag and points
-        // ===============================================
+
+        // STEP 2: the answer and the challenge's flag, both
+        //         without the wrapper, and the challenge's points
+        // =======================================================
         $answer = trim(str_replace("VU{","",str_replace("}","",$request->get('answer'))));
 
         $challenge_id = Challenges::getIdByPublicId($public_id);
 
         $challenge_answer = Challenges::where(['public_id' => $public_id])->get()->pluck('answer')->first();
+        $challenge_answer = trim(str_replace("VU{","",str_replace("}","",$challenge_answer)));
 
         $challenge_points = Challenges::where(['public_id' => $public_id])->get()->pluck('points')->first();
 
@@ -319,7 +338,7 @@ class ChallengesController extends BaseController
         // feed row and the cached feed
         // =======================================================
         if ($solved == 0) {
-            if (trim($challenge_answer) === $answer) {
+            if ($answer !== '' && $challenge_answer === $answer) {
                 $submitTask = new ChallengesSubmitted();
                 $submitTask->user_id = Auth::guard('users')->id();
                 $submitTask->challenge_id = $challenge_id;
@@ -385,14 +404,15 @@ class ChallengesController extends BaseController
     // vote
     // -----------------------------------------------------------
     //
-    // GET /user/challenge/vote/{type}/{public_id}
+    // POST /user/challenge/vote/{type}/{public_id}
     //
     // One vote per player and challenge: up or down adds one
     // to the challenge's ThumbsUp_ or ThumbsDown_ counter in
     // Redis — INCR, so votes cast at the same moment all
-    // count — and any type marks the player as having voted.
-    // The answer is an empty page; the challenge is never
-    // looked up, so any public id collects votes.
+    // count — and marks the player as having voted. Any other
+    // type, a challenge that does not exist and a hidden one
+    // the player may not open (hiddenFromPlayer) are a 404
+    // and count nothing. The answer is an empty page.
     //
     // Used by:
     //   - thumbs() and thumbs_list() of custom.js — the vote
@@ -401,6 +421,10 @@ class ChallengesController extends BaseController
 
     public function vote(Request $req, $type, $public_id)
     {
+        if (! in_array($type, ['up', 'down'], true) || Challenges::where(['public_id' => $public_id])->doesntExist() || $this->hiddenFromPlayer($public_id)) {
+            abort(404);
+        }
+
         $voted = Redis::get('Vote_'.$public_id.'_'.Auth::guard('users')->id()) ?? 0;
 
         if($voted == 0){
@@ -466,5 +490,45 @@ class ChallengesController extends BaseController
         ]);
 
         return back()->withSuccess("Thank you for your feedback!");
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // hiddenFromPlayer
+    // -----------------------------------------------------------
+    //
+    // Whether the challenge is closed to the signed-in player:
+    // a hidden challenge — one a lab admin keeps for groups —
+    // is open only to the members of a group it is placed in,
+    // the membership the group pages check (GroupExists).
+    // Members are kept by VU id, so a local account is never
+    // one. A challenge that is not hidden is open to every
+    // player.
+    //
+    // Used by:
+    //   - show, submit_answer and vote (above)
+    // -----------------------------------------------------------
+
+    private function hiddenFromPlayer($public_id)
+    {
+        $challenge = Challenges::where(['public_id' => $public_id])->first();
+
+        if ($challenge->hidden != 1) {
+            return false;
+        }
+
+        $vu_id = Auth::guard('users')->user()->vu_id;
+
+        if (empty($vu_id)) {
+            return true;
+        }
+
+        return ! GroupsChallenges::where(['challenge_id' => $challenge->id])
+            ->whereIn('group_id', GroupsUsers::where(['vu_id' => $vu_id])->pluck('group_id'))
+            ->exists();
     }
 }

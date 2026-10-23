@@ -652,4 +652,35 @@ final class PasswordResetTest extends TestCase
         $this->assertSame(hash('sha256', $link), $player->refresh()->remember_token);
         $this->assertFalse(DB::table('password_resets')->where('token', $link)->exists());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_signing_out_keeps_a_reminder_link
+    // -----------------------------------------------------------
+    //
+    // A player who asked for a reminder and then signs out of
+    // a session left open still has a working link: Laravel's
+    // logout no longer renews remember_token, where the
+    // reminder's hash is kept. A real request loads the
+    // account afresh, reminder and all, while the test's guard
+    // keeps the model it is handed — hence the refresh.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_signing_out_keeps_a_reminder_link(): void
+    {
+        $player = $this->makePlayer();
+        $link = $this->mailedLink($player);
+
+        $this->signIn($player->refresh())->post('/user/logout')->assertRedirect('/');
+
+        $this->get("/reset/{$link}")->assertOk();
+        $this->assertSame(hash('sha256', $link), $player->refresh()->remember_token);
+    }
 }

@@ -649,4 +649,130 @@ final class GroupsTest extends TestCase
         $response->assertSessionHasErrors('name');
         $this->assertSame($before, Groups::count());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_empty_group_rename_is_refused
+    // -----------------------------------------------------------
+    //
+    // The rename dialog sent empty goes back with the error,
+    // and the group keeps its name.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_empty_group_rename_is_refused(): void
+    {
+        $admin = $this->makeAdmin();
+        $group = $this->makeGroup($admin, ['name' => 'Kept Lab']);
+
+        $response = $this->signInAdmin($admin)
+            ->from('/control-panel/users/vu-groups')
+            ->post('/control-panel/dialog/users/vu-groups/update', ['uid' => $group->id, 'name' => '']);
+
+        $response->assertRedirect('/control-panel/users/vu-groups');
+        $response->assertSessionHasErrors('name');
+        $this->assertSame('Kept Lab', $group->refresh()->name);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_member_needs_a_vu_id
+    // -----------------------------------------------------------
+    //
+    // The add-member dialog sent without a VU user id goes
+    // back with the error instead of a server error, and adds
+    // no one.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_member_needs_a_vu_id(): void
+    {
+        $admin = $this->makeAdmin();
+        $group = $this->makeGroup($admin);
+
+        $response = $this->signInAdmin($admin)
+            ->from("/control-panel/users/vu-groups/users_list/{$group->id}")
+            ->post('/control-panel/dialog/users/vu-groups/users_store', ['uid' => $group->id, 'vu_id' => '']);
+
+        $response->assertRedirect("/control-panel/users/vu-groups/users_list/{$group->id}");
+        $response->assertSessionHasErrors('vu_id');
+        $this->assertSame(0, GroupsUsers::where('group_id', $group->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_group_challenge_must_exist
+    // -----------------------------------------------------------
+    //
+    // The add-challenge dialog sent without a challenge, or
+    // with an id no challenge has, goes back with the error
+    // and places nothing in the group.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_group_challenge_must_exist(): void
+    {
+        $admin = $this->makeAdmin();
+        $group = $this->makeGroup($admin);
+        $this->signInAdmin($admin)->from("/control-panel/users/vu-groups/challenges_list/{$group->id}");
+
+        $this->post('/control-panel/dialog/users/vu-groups/challenges_store', ['uid' => $group->id])
+            ->assertSessionHasErrors('challenge_id');
+        $this->post('/control-panel/dialog/users/vu-groups/challenges_store', ['uid' => $group->id, 'challenge_id' => 987654321])
+            ->assertSessionHasErrors('challenge_id');
+
+        $this->assertSame(0, GroupsChallenges::where('group_id', $group->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_group_leaderboard_shows_the_latest_group_solve
+    // -----------------------------------------------------------
+    //
+    // The panel's group leaderboard gives each solver's latest
+    // solve of the group's challenges, wherever it sits among
+    // the rows.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_group_leaderboard_shows_the_latest_group_solve(): void
+    {
+        $group = $this->makeGroup();
+        $player = $this->makePlayer();
+        foreach (['-5 days', '-2 hours', '-10 days'] as $when) {
+            $challenge = $this->makeChallenge();
+            $this->assignToGroup($group, $challenge);
+            $this->recordSolve($player, $challenge, date('Y-m-d H:i:s', strtotime($when)));
+        }
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/vu-groups/leaderboard/{$group->id}");
+
+        $response->assertSee('2 hours ago');
+        $response->assertDontSee('5 days ago');
+        $response->assertDontSee('1 week ago');
+    }
 }

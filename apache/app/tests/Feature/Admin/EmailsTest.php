@@ -438,4 +438,114 @@ final class EmailsTest extends TestCase
         $response->assertSessionHasErrors(['name', 'subject', 'content']);
         $this->assertSame($before, Emails::count());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_incomplete_template_update_is_refused
+    // -----------------------------------------------------------
+    //
+    // A template update missing its subject or content goes
+    // back with the errors and what was typed, and the
+    // template stays as it was.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_incomplete_template_update_is_refused(): void
+    {
+        $template = $this->makeTemplate(['name' => 'Kept One']);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from("/control-panel/emails/edit/{$template->id}")
+            ->post('/control-panel/emails/update', ['uid' => $template->id, 'name' => 'Half a template']);
+
+        $response->assertRedirect("/control-panel/emails/edit/{$template->id}");
+        $response->assertSessionHasErrors(['subject', 'content']);
+        $this->assertSame('Half a template', session()->getOldInput('name'));
+        $template->refresh();
+        $this->assertSame('Kept One', $template->name);
+        $this->assertSame('The spring challenges are open', $template->subject);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_test_mail_needs_an_address
+    // -----------------------------------------------------------
+    //
+    // The test-mail dialog's form is refused, with the error
+    // under the field, when the address is missing or is no
+    // address at all; nothing is mailed.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_test_mail_needs_an_address(): void
+    {
+        $template = $this->makeTemplate();
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/emails');
+
+        $this->post("/control-panel/emails/sending_test/{$template->id}", [])->assertSessionHasErrors('email');
+        $this->post("/control-panel/emails/sending_test/{$template->id}", ['email' => 'not-an-address'])->assertSessionHasErrors('email');
+
+        Mail::assertNothingSent();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_unknown_template_is_404
+    // -----------------------------------------------------------
+    //
+    // The edit form, the test-mail dialog and the test sending
+    // of a template that does not exist answer 404 instead of
+    // a server error.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_unknown_template_is_404(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->get('/control-panel/emails/edit/987654321')->assertNotFound();
+        $this->get('/control-panel/dialog/emails/send_test/987654321')->assertNotFound();
+        $this->post('/control-panel/emails/sending_test/987654321', ['email' => 'me@admins.test'])->assertNotFound();
+
+        Mail::assertNothingSent();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_unknown_list_sync_is_404
+    // -----------------------------------------------------------
+    //
+    // A list other than registered or newsletters answers 404
+    // instead of a server error, before any call to Mailjet.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_unknown_list_sync_is_404(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/emails/sync/everyone')->assertNotFound();
+    }
 }

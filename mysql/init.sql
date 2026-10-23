@@ -240,7 +240,7 @@ SELECT
   `cyber_users`.`email`,
   `cyber_users`.`username`,
   `cyber_users`.`user_type`,
-  `cyber_challenges_submitted`.`created` AS `last_challenge`
+  MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`
 FROM `cyber_users`
 LEFT JOIN `cyber_challenges_submitted`
   ON `cyber_challenges_submitted`.`user_id` = `cyber_users`.`id`

@@ -100,8 +100,10 @@ class UserAuthController extends BaseController
     // Signs a local account in by e-mail and password. A
     // refused form, wrong credentials and an inactive account
     // — one not verified yet, or switched off in the control
-    // panel — go back to the login page with the error; a
-    // good login records the time and address and goes on to
+    // panel — go back to the login page with the error, an
+    // account never verified with a fresh verification link
+    // mailed, as the first may have expired; a good login
+    // records the time and address and goes on to
     // the page the player first asked for, or the dashboard.
     // A refused form comes back with the e-mail refilled; the
     // password is left out, so it never sits in the session.
@@ -137,6 +139,12 @@ class UserAuthController extends BaseController
             } else {
                 Auth::guard('users')->logout();
 
+                if (! empty($user->verify_token)) {
+                    RegisterController::send_verification($user);
+
+                    return redirect()->route('login_users')->withErrors(['Your account is not verified yet. We sent you a new verification link.']);
+                }
+
                 return redirect()->route('login_users')->withErrors(['Your account is not active']);
             }
         } else {
@@ -153,14 +161,17 @@ class UserAuthController extends BaseController
     // logout
     // -----------------------------------------------------------
     //
-    // GET /user/logout
+    // POST /user/logout
     //
     // Signs the player out of the lab and goes to the login
-    // page; an SSO session at VU stays open.
+    // page; an SSO session at VU stays open. A password
+    // reminder mailed before stays good, as the User model
+    // keeps Laravel's logout off remember_token.
     //
     // Used by:
-    //   - the sign-out link of the player top bar, for local
-    //     accounts (users/partials/topnav.blade.php)
+    //   - Post_Link() of custom.js — the sign-out link of the
+    //     player top bar, for local accounts
+    //     (users/partials/topnav.blade.php)
     // -----------------------------------------------------------
 
     public function logout()
@@ -286,15 +297,16 @@ class UserAuthController extends BaseController
     // logout_saml
     // -----------------------------------------------------------
     //
-    // GET /user/logout_saml
+    // POST /user/logout_saml
     //
     // Signs the player out of the lab, then sends the browser
     // to the SSO's logout, which returns to the site's front
     // page.
     //
     // Used by:
-    //   - the sign-out link of the player top bar, for VU
-    //     accounts (users/partials/topnav.blade.php)
+    //   - Post_Link() of custom.js — the sign-out link of the
+    //     player top bar, for VU accounts
+    //     (users/partials/topnav.blade.php)
     // -----------------------------------------------------------
 
     public function logout_saml()

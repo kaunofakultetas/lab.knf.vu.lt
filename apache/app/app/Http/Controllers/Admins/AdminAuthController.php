@@ -12,7 +12,7 @@
 //
 //    GET /control-panel        — the login page
 //    GET /control-panel/login  — the end of the SSO login
-//    GET /control-panel/logout — sign-out
+//    POST /control-panel/logout — sign-out
 //
 //  Used by:
 //    - routes/web.php — the routes above
@@ -128,15 +128,15 @@ class AdminAuthController extends Controller
     // logout
     // -----------------------------------------------------------
     //
-    // GET /control-panel/logout
+    // POST /control-panel/logout
     //
     // Signs the admin out of the panel, then sends the browser
     // to the SSO's logout, which returns to the control-panel
     // login page. The session — and its main flag — stays.
     //
     // Used by:
-    //   - the sign-out link of the panel's top bar
-    //     (admins/partials/topnav.blade.php)
+    //   - Post_Link() of custom_admin.js — the sign-out link of
+    //     the panel's top bar (admins/partials/topnav.blade.php)
     // -----------------------------------------------------------
 
     public function logout()

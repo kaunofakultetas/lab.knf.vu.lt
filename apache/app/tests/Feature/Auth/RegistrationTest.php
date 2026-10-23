@@ -43,6 +43,7 @@ use Tests\TestCase;
 //
 //   submitRegistration — posts the form with valid values,
 //                        any of them overridden
+//   verificationLink   — a link as the registration mails it
 //
 // Used by:
 //   - PHPUnit — the Feature suite (runTests.sh)
@@ -98,6 +99,30 @@ final class RegistrationTest extends TestCase
             'password_confirmation' => 'long-enough-1',
             'g-recaptcha-response'  => self::RECAPTCHA_TOKEN,
         ], $fields));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // verificationLink
+    // -----------------------------------------------------------
+    //
+    // A token as a verification mail carries it — 50 random
+    // characters, a dash and the Unix time — after storing its
+    // hash on the account given, as send_verification does.
+    //
+    // Used by:
+    //   - the link tests below
+    // -----------------------------------------------------------
+
+    private function verificationLink(User $player): string
+    {
+        $token = Str::random(50) . '-' . now()->getTimestamp();
+        $player->update(['verify_token' => hash('sha256', $token)]);
+        return $token;
     }
 
 
@@ -188,7 +213,7 @@ final class RegistrationTest extends TestCase
         $this->assertSame(0, $player->points);
         $this->assertSame(0, $player->newsletter);
         $this->assertNull($player->vu_id);
-        $this->assertSame(50, strlen($player->verify_token));
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{64}$/', $player->verify_token);
         $this->assertTrue(Hash::check('long-enough-1', $player->password));
     }
 
@@ -201,8 +226,9 @@ final class RegistrationTest extends TestCase
     // test_registering_mails_the_verification_token
     // -----------------------------------------------------------
     //
-    // The new address receives the verification mail built
-    // around the very token stored on the account.
+    // The new address receives the verification mail, whose
+    // token — 50 random characters, a dash and the time — is
+    // stored on the account only as its SHA-256 hash.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -216,7 +242,9 @@ final class RegistrationTest extends TestCase
 
         $player = User::where('email', 'jonas@players.test')->firstOrFail();
         Mail::assertSent(UserVerifyMail::class, function (UserVerifyMail $mail) use ($player) {
-            return $mail->hasTo('jonas@players.test') && $mail->data['uid'] === $player->verify_token;
+            return $mail->hasTo('jonas@players.test')
+                && preg_match('/^[A-Za-z0-9]{50}-\d+$/', $mail->data['uid']) === 1
+                && hash('sha256', $mail->data['uid']) === $player->verify_token;
         });
         Mail::assertSent(UserVerifyMail::class, 1);
     }
@@ -482,8 +510,8 @@ final class RegistrationTest extends TestCase
 
     public function test_following_the_link_activates_the_account(): void
     {
-        $token = Str::random(50);
-        $player = $this->makePlayer(['status' => 0, 'verify_token' => $token]);
+        $player = $this->makePlayer(['status' => 0]);
+        $token = $this->verificationLink($player);
 
         $response = $this->get("/verify/{$token}");
 
@@ -512,8 +540,7 @@ final class RegistrationTest extends TestCase
 
     public function test_a_link_works_only_once(): void
     {
-        $token = Str::random(50);
-        $this->makePlayer(['status' => 0, 'verify_token' => $token]);
+        $token = $this->verificationLink($this->makePlayer(['status' => 0]));
 
         $this->get("/verify/{$token}")->assertRedirect('/');
 
@@ -540,7 +567,7 @@ final class RegistrationTest extends TestCase
     {
         $this->makePlayer(['status' => 0, 'verify_token' => Str::random(50)]);
 
-        $this->get('/verify/' . Str::random(50))->assertNotFound();
+        $this->get('/verify/' . Str::random(50) . '-' . now()->getTimestamp())->assertNotFound();
         $this->get('/verify/')->assertNotFound();
     }
 
@@ -562,8 +589,8 @@ final class RegistrationTest extends TestCase
 
     public function test_an_sso_account_is_never_verified_by_link(): void
     {
-        $token = Str::random(50);
-        $player = $this->makeSsoPlayer(['status' => 0, 'verify_token' => $token]);
+        $player = $this->makeSsoPlayer(['status' => 0]);
+        $token = $this->verificationLink($player);
 
         $this->get("/verify/{$token}")->assertNotFound();
 
@@ -588,13 +615,13 @@ final class RegistrationTest extends TestCase
 
     public function test_a_signed_in_player_following_a_link_goes_to_the_dashboard(): void
     {
-        $token = Str::random(50);
-        $pending = $this->makePlayer(['status' => 0, 'verify_token' => $token]);
+        $pending = $this->makePlayer(['status' => 0]);
+        $token = $this->verificationLink($pending);
         $this->signIn($this->makePlayer());
 
         $this->get("/verify/{$token}")->assertRedirect('/user/dashboard');
 
-        $this->assertSame($token, $pending->refresh()->verify_token);
+        $this->assertSame(hash('sha256', $token), $pending->refresh()->verify_token);
     }
 
 
@@ -607,7 +634,8 @@ final class RegistrationTest extends TestCase
     // -----------------------------------------------------------
     //
     // The whole way in: register, be refused at the login form
-    // while inactive, follow the mailed link, sign in.
+    // while unverified — which mails a fresh link — follow the
+    // newest mailed link, sign in.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -620,9 +648,9 @@ final class RegistrationTest extends TestCase
         $credentials = ['email' => 'jonas@players.test', 'password' => 'long-enough-1'];
 
         $this->post('/login', $credentials)->assertRedirect('/');
-        $this->assertErrorFlashed('Your account is not active');
+        $this->assertErrorFlashed('Your account is not verified yet. We sent you a new verification link.');
 
-        $token = User::where('email', 'jonas@players.test')->value('verify_token');
+        $token = Mail::sent(UserVerifyMail::class)->last()->data['uid'];
         $this->get("/verify/{$token}")->assertRedirect('/');
         $this->post('/login', $credentials)->assertRedirect('/user/dashboard');
         $this->assertAuthenticated('users');
@@ -653,5 +681,153 @@ final class RegistrationTest extends TestCase
         $this->assertSame('jonas@players.test', session()->getOldInput('email'));
         $this->assertNull(session()->getOldInput('password'));
         $this->assertNull(session()->getOldInput('password_confirmation'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_verification_link_expires_after_a_day
+    // -----------------------------------------------------------
+    //
+    // A link opened 23 hours after it was mailed activates the
+    // account; one opened after the day answers 404 and leaves
+    // the account inactive.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_verification_link_expires_after_a_day(): void
+    {
+        $early = $this->makePlayer(['status' => 0]);
+        $late = $this->makePlayer(['status' => 0]);
+        $earlyLink = $this->verificationLink($early);
+        $lateLink = $this->verificationLink($late);
+
+        $this->travel(23)->hours();
+        $this->get("/verify/{$earlyLink}")->assertRedirect('/');
+
+        $this->travel(2)->hours();
+        $this->get("/verify/{$lateLink}")->assertNotFound();
+
+        $this->assertSame(1, $early->refresh()->status);
+        $this->assertSame(0, $late->refresh()->status);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_verification_link_with_a_changed_time_is_404
+    // -----------------------------------------------------------
+    //
+    // The stored hash covers the time the token ends with, so
+    // an expired link whose time is moved on matches no
+    // account.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_verification_link_with_a_changed_time_is_404(): void
+    {
+        $player = $this->makePlayer(['status' => 0]);
+        $link = $this->verificationLink($player);
+        $this->travel(2)->days();
+
+        $this->get('/verify/' . Str::beforeLast($link, '-') . '-' . now()->getTimestamp())->assertNotFound();
+
+        $this->assertSame(0, $player->refresh()->status);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_link_stored_as_mailed_is_404
+    // -----------------------------------------------------------
+    //
+    // A token as links were mailed before they expired —
+    // stored as is, without a time — no longer activates; the
+    // account gets a fresh link at its next sign-in.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_link_stored_as_mailed_is_404(): void
+    {
+        $token = Str::random(50);
+        $player = $this->makePlayer(['status' => 0, 'verify_token' => $token]);
+
+        $this->get("/verify/{$token}")->assertNotFound();
+
+        $this->assertSame(0, $player->refresh()->status);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_signing_in_unverified_mails_a_fresh_link
+    // -----------------------------------------------------------
+    //
+    // The right password for an account never verified is
+    // refused with a message saying a new link is on its way,
+    // and the new link replaces the old one.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_signing_in_unverified_mails_a_fresh_link(): void
+    {
+        $player = $this->makePlayer(['status' => 0]);
+        $old = $this->verificationLink($player);
+
+        $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD])->assertRedirect('/');
+
+        $this->assertErrorFlashed('Your account is not verified yet. We sent you a new verification link.');
+        $this->assertGuest('users');
+        $fresh = Mail::sent(UserVerifyMail::class, fn (UserVerifyMail $mail) => $mail->hasTo($player->email))->last()->data['uid'];
+        $this->get("/verify/{$old}")->assertNotFound();
+        $this->get("/verify/{$fresh}")->assertRedirect('/');
+        $this->assertSame(1, $player->refresh()->status);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_switched_off_account_gets_no_new_link
+    // -----------------------------------------------------------
+    //
+    // An account an admin switched off — verified once, so
+    // holding no token — is refused as inactive, and no mail
+    // goes out.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_switched_off_account_gets_no_new_link(): void
+    {
+        $player = $this->makePlayer(['status' => 0, 'verify_token' => '']);
+
+        $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD])->assertRedirect('/');
+
+        $this->assertErrorFlashed('Your account is not active');
+        Mail::assertNothingSent();
     }
 }

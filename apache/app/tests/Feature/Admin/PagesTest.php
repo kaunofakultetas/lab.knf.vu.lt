@@ -244,4 +244,118 @@ final class PagesTest extends TestCase
         $this->assertSame('Rules of Play', $page->refresh()->name);
         $this->assertSame(1, Pages::count());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_incomplete_page_update_is_refused
+    // -----------------------------------------------------------
+    //
+    // A page update missing its content or alias goes back
+    // with the errors and what was typed, and the page stays
+    // as it was.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_incomplete_page_update_is_refused(): void
+    {
+        $page = Pages::create(['name' => 'Rules', 'content' => '<p>Rules</p>', 'alias' => 'rules']);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from("/control-panel/pages/edit/{$page->id}")
+            ->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'Half a page']);
+
+        $response->assertRedirect("/control-panel/pages/edit/{$page->id}");
+        $response->assertSessionHasErrors(['content', 'alias']);
+        $this->assertSame('Half a page', session()->getOldInput('name'));
+        $this->assertSame('rules', $page->refresh()->alias);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_page_cannot_take_another_pages_alias
+    // -----------------------------------------------------------
+    //
+    // An update may keep the page's own alias but not take
+    // another page's, which would leave two pages behind one
+    // address.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_page_cannot_take_another_pages_alias(): void
+    {
+        $page = Pages::create(['name' => 'Rules', 'content' => '<p>Rules</p>', 'alias' => 'rules']);
+        Pages::create(['name' => 'About', 'content' => '<p>About</p>', 'alias' => 'about']);
+        $this->signInAdmin($this->makeAdmin(true))->from("/control-panel/pages/edit/{$page->id}");
+
+        $this->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'Rules', 'content' => '<p>New</p>', 'alias' => 'about'])
+            ->assertSessionHasErrors('alias');
+        $this->assertSame('rules', $page->refresh()->alias);
+
+        $this->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'Rules', 'content' => '<p>New</p>', 'alias' => 'rules'])
+            ->assertSessionHas('success', 'Updated!');
+        $this->assertSame('<p>New</p>', $page->refresh()->content);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_new_page_says_why
+    // -----------------------------------------------------------
+    //
+    // A new page missing a field, or taking an alias in use,
+    // goes back with the errors and what was typed rather than
+    // silently.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_new_page_says_why(): void
+    {
+        Pages::create(['name' => 'About', 'content' => '<p>About</p>', 'alias' => 'about']);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/pages/create')
+            ->post('/control-panel/pages/store', ['name' => 'Second About', 'alias' => 'about']);
+
+        $response->assertRedirect('/control-panel/pages/create');
+        $response->assertSessionHasErrors(['content', 'alias']);
+        $this->assertSame('Second About', session()->getOldInput('name'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_unknown_page_is_404
+    // -----------------------------------------------------------
+    //
+    // The edit form of a page that does not exist answers 404
+    // instead of a server error.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_unknown_page_is_404(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/pages/edit/987654321')->assertNotFound();
+    }
 }

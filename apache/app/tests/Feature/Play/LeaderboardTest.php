@@ -329,4 +329,36 @@ final class LeaderboardTest extends TestCase
         $response->assertSee('2nd</span> place', false);
         $response->assertSee('<span style="font-weight:bold!important;">40</span> points', false);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_leaderboard_shows_the_latest_solve
+    // -----------------------------------------------------------
+    //
+    // "Last challenge solved" is the player's latest solve.
+    // It sits in the middle both by row id and by challenge
+    // id, so no plan that keeps the first or the last row it
+    // reads can show it by chance.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_leaderboard_shows_the_latest_solve(): void
+    {
+        $player = $this->makePlayer();
+        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-5 days')));
+        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-2 hours')));
+        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-10 days')));
+
+        $response = $this->signIn($this->makePlayer())->get('/user/leaderboard');
+
+        $response->assertSeeInOrder(['Last challenge solved', '2 hours ago']);
+        $response->assertDontSee('5 days ago');
+        $response->assertDontSee('1 week ago');
+    }
 }

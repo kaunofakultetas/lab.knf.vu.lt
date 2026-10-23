@@ -382,13 +382,13 @@ final class LoginTest extends TestCase
             'group challenge'   => ['GET', '/user/challenge/some-challenge/some-group'],
             'answer'            => ['POST', '/user/challenge/some-challenge'],
             'group answer'      => ['POST', '/user/challenge/some-challenge/some-group'],
-            'vote'              => ['GET', '/user/challenge/vote/up/some-challenge'],
+            'vote'              => ['POST', '/user/challenge/vote/up/some-challenge'],
             'leaderboard'       => ['GET', '/user/leaderboard'],
             'group'             => ['GET', '/user/group/some-group'],
             'group leaderboard' => ['GET', '/user/group/leaderboard/some-group'],
             'feedback dialog'   => ['GET', '/user/dialog/feedback'],
             'feedback'          => ['POST', '/user/feedback'],
-            'logout'            => ['GET', '/user/logout'],
+            'logout'            => ['POST', '/user/logout'],
         ];
     }
 
@@ -448,8 +448,8 @@ final class LoginTest extends TestCase
     // test_signing_out_ends_the_session
     // -----------------------------------------------------------
     //
-    // The logout link of a local account closes the session
-    // and returns to the front page.
+    // Signing out of a local account closes the session and
+    // returns to the front page.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -459,7 +459,7 @@ final class LoginTest extends TestCase
     {
         $this->signIn($this->makePlayer());
 
-        $this->get('/user/logout')->assertRedirect('/');
+        $this->post('/user/logout')->assertRedirect('/');
 
         $this->assertGuest('users');
     }
@@ -473,9 +473,9 @@ final class LoginTest extends TestCase
     // test_the_logout_link_matches_the_way_the_player_signed_in
     // -----------------------------------------------------------
     //
-    // A local account signs out through /user/logout; an SSO
-    // account through /user/logout_saml, which also ends the
-    // VU SSO session.
+    // A local account's sign-out link posts to /user/logout;
+    // an SSO account's to /user/logout_saml, which also ends
+    // the VU SSO session.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -485,11 +485,11 @@ final class LoginTest extends TestCase
     {
         $this->signIn($this->makePlayer());
         $this->get('/user/leaderboard')
-            ->assertSee('href="https://lab.knf.vu.lt/user/logout"', false)
+            ->assertSee("onClick=\"Post_Link('https://lab.knf.vu.lt/user/logout');\"", false)
             ->assertDontSee('/user/logout_saml', false);
 
         $this->signIn($this->makeSsoPlayer());
-        $this->get('/user/leaderboard')->assertSee('href="https://lab.knf.vu.lt/user/logout_saml"', false);
+        $this->get('/user/leaderboard')->assertSee("onClick=\"Post_Link('https://lab.knf.vu.lt/user/logout_saml');\"", false);
     }
 
 
@@ -515,5 +515,33 @@ final class LoginTest extends TestCase
 
         $this->assertSame('jonas@players.test', session()->getOldInput('email'));
         $this->assertNull(session()->getOldInput('password'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_signing_out_is_never_a_plain_link
+    // -----------------------------------------------------------
+    //
+    // Opened as a link — which another site can make a
+    // signed-in player follow — both sign-out addresses answer
+    // 405, and the player stays signed in.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_signing_out_is_never_a_plain_link(): void
+    {
+        $player = $this->makePlayer();
+        $this->signIn($player);
+
+        $this->get('/user/logout')->assertStatus(405);
+        $this->get('/user/logout_saml')->assertStatus(405);
+
+        $this->assertAuthenticatedAs($player, 'users');
     }
 }

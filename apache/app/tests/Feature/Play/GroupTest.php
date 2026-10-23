@@ -246,4 +246,39 @@ final class GroupTest extends TestCase
         $response->assertSee("href=\"https://lab.knf.vu.lt/user/group/leaderboard/{$beta->public_id}\"", false);
         $response->assertDontSee("href=\"https://lab.knf.vu.lt/user/group/leaderboard/{$alpha->public_id}\"", false);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_group_leaderboard_shows_the_latest_group_solve
+    // -----------------------------------------------------------
+    //
+    // A member's last solve on the group leaderboard is the
+    // latest solve of the group's challenges, wherever it sits
+    // among the rows.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_group_leaderboard_shows_the_latest_group_solve(): void
+    {
+        $group = $this->makeGroup();
+        $member = $this->makeSsoPlayer();
+        $this->joinGroup($group, $member);
+        foreach (['-5 days', '-2 hours', '-10 days'] as $when) {
+            $challenge = $this->makeChallenge();
+            $this->assignToGroup($group, $challenge);
+            $this->recordSolve($member, $challenge, date('Y-m-d H:i:s', strtotime($when)));
+        }
+
+        $response = $this->signIn($member)->get("/user/group/leaderboard/{$group->public_id}");
+
+        $response->assertSee('2 hours ago');
+        $response->assertDontSee('5 days ago');
+        $response->assertDontSee('1 week ago');
+    }
 }

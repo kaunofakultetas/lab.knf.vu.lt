@@ -7,6 +7,7 @@
     <meta name="description" content="">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="robots" content="noindex,nofollow">  
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link href="/assets/img/favicon.ico" rel="shortcut icon" type="image/vnd.microsoft.icon" />
     
     <link rel="stylesheet" href="/static/fontawesome/6/css/all.min.css">

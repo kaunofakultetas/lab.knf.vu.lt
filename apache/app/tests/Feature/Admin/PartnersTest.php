@@ -518,6 +518,35 @@ final class PartnersTest extends TestCase
 
 
     // -----------------------------------------------------------
+    // test_a_deleted_partners_challenges_still_open
+    // -----------------------------------------------------------
+    //
+    // A deleted partner's challenges keep pointing at it; their
+    // page still opens for players, without the partner card.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_deleted_partners_challenges_still_open(): void
+    {
+        $partner = $this->makePartner();
+        $challenge = $this->makeChallenge(['partner_id' => $partner->id]);
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/partners')->post("/control-panel/partners/delete/{$partner->id}");
+
+        $page = $this->signIn($this->makePlayer())->get("/user/challenge/{$challenge->public_id}");
+
+        $page->assertOk();
+        $page->assertSee($challenge->name);
+        $page->assertDontSee('Challenge created by');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
     // test_lab_admins_cannot_touch_partners
     // -----------------------------------------------------------
     //
@@ -572,5 +601,26 @@ final class PartnersTest extends TestCase
             }
             $this->assertNotSame(Partners::where('name', "First {$n}")->value('picture'), Partners::where('name', "Second {$n}")->value('picture'));
         }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_unknown_partner_is_404
+    // -----------------------------------------------------------
+    //
+    // The edit dialog of a partner that does not exist answers
+    // 404 instead of a server error.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_unknown_partner_is_404(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/dialog/partners/edit/987654321')->assertNotFound();
     }
 }

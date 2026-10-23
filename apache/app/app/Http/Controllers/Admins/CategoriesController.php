@@ -175,7 +175,8 @@ class CategoriesController extends BaseController
     //
     // GET /control-panel/dialog/category/edit/{uid}
     //
-    // The category dialog filled with the category's name.
+    // The category dialog filled with the category's name; an
+    // unknown category is a 404.
     //
     // Used by:
     //   - category_form() of dialogs.js — the rename buttons
@@ -185,7 +186,7 @@ class CategoriesController extends BaseController
     public function edit(Request $request, $uid)
     {
         return view('admins.dialogs.category_form', [
-            'name' => Categories::find($uid)->name,
+            'name' => Categories::findOrFail($uid)->name,
             'type'=>'edit',
             'uid'=>$uid
         ]);
@@ -203,7 +204,7 @@ class CategoriesController extends BaseController
     // POST /control-panel/dialog/category/update
     //
     // Renames the category with the posted uid, then goes back
-    // with "Updated!".
+    // with "Updated!"; an empty name goes back with the error.
     //
     // Used by:
     //   - the category dialog, for an existing category
@@ -211,6 +212,14 @@ class CategoriesController extends BaseController
 
     public function update(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'name' => 'required'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         Categories::where(['id' => $request->get('uid')])->update(['name' => $request->get('name')]);
 
         session()->flash('success', 'Updated!');

@@ -118,6 +118,9 @@ final class RouteTableTest extends TestCase
         'POST control-panel/challenges/update'                                => 'challenge_owned_uid',
         'POST control-panel/challenges_file/store'                            => 'challenge_owned_uid',
         'POST control-panel/challenges_file/update'                           => 'file_owned_uid',
+        'GET control-panel/dialog/challenge_file/edit/{uid}'                  => 'file_owned',
+        'GET control-panel/dialog/challenge_file/new/{uid}'                   => 'challenge_owned',
+        'GET control-panel/dialog/challenges/categories/{uid}'                => 'challenge_owned',
         'GET control-panel/dialog/users/vu-groups/challenge_add_{type}/{uid}' => 'group_owned',
         'GET control-panel/dialog/users/vu-groups/edit/{uid}'                 => 'group_owned',
         'GET control-panel/dialog/users/vu-groups/user_add_{type}/{uid}'      => 'group_owned',
@@ -153,7 +156,7 @@ final class RouteTableTest extends TestCase
     private const OPEN = [
         'GET page/{alias}',
         'GET sanctum/csrf-cookie',
-        'GET user/logout_saml',
+        'POST user/logout_saml',
     ];
 
 
@@ -259,7 +262,7 @@ final class RouteTableTest extends TestCase
     public function test_every_player_route_needs_a_player(): void
     {
         foreach ($this->routes() as $name => $middleware) {
-            if (preg_match('#^\w+ user/#', $name) && $name !== 'GET user/logout_saml') {
+            if (preg_match('#^\w+ user/#', $name) && $name !== 'POST user/logout_saml') {
                 $this->assertContains('auth:users', $middleware, $name);
             }
         }

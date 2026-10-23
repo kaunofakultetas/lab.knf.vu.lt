@@ -873,4 +873,97 @@ final class ChallengesTest extends TestCase
 
         $this->assertSame($content, Challenges::where('name', 'Packet Detective')->value('content'));
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_incomplete_challenge_update_is_refused
+    // -----------------------------------------------------------
+    //
+    // A challenge update missing fields goes back with an error
+    // for each of them and what was typed, and the challenge
+    // keeps every field — its flag above all.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_incomplete_challenge_update_is_refused(): void
+    {
+        $challenge = $this->makeChallenge(['name' => 'Kept Task', 'answer' => 'kept_flag']);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from("/control-panel/challenges/edit/{$challenge->id}")
+            ->post('/control-panel/challenges/update', ['uid' => $challenge->id, 'name' => 'Half an update']);
+
+        $response->assertRedirect("/control-panel/challenges/edit/{$challenge->id}");
+        $response->assertSessionHasErrors(['partner_id', 'descr', 'content', 'answer', 'points']);
+        $this->assertSame('Half an update', session()->getOldInput('name'));
+        $challenge->refresh();
+        $this->assertSame('Kept Task', $challenge->name);
+        $this->assertSame('kept_flag', $challenge->answer);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_visibility_switch_takes_only_0_or_1
+    // -----------------------------------------------------------
+    //
+    // A hand-made status other than 0 or 1 answers 404 and
+    // leaves the challenge's hidden column alone; written as
+    // given, it would leave the list without a switch for the
+    // challenge.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_visibility_switch_takes_only_0_or_1(): void
+    {
+        $challenge = $this->makeChallenge();
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->post("/control-panel/challenges/status/7/{$challenge->id}")->assertNotFound();
+
+        $this->assertSame(0, $challenge->refresh()->hidden);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_categories_dialog_is_for_the_challenges_owner
+    // -----------------------------------------------------------
+    //
+    // A lab admin opens the categories dialog of its own
+    // challenge but is sent back with the permissions error
+    // from another admin's; an unknown challenge gets "No
+    // challenge!" instead of a server error.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_categories_dialog_is_for_the_challenges_owner(): void
+    {
+        $admin = $this->makeAdmin();
+        $own = $this->makeChallenge(['name' => 'Own Task', 'created_by' => $admin->id]);
+        $other = $this->makeChallenge(['name' => 'Their Task']);
+        $this->signInAdmin($admin)->from('/control-panel/challenges');
+
+        $this->get("/control-panel/dialog/challenges/categories/{$own->id}")->assertOk()->assertSee('Own Task');
+        $this->get("/control-panel/dialog/challenges/categories/{$other->id}")->assertRedirect('/control-panel/challenges');
+        $this->assertErrorFlashed(self::REFUSAL);
+        $this->get('/control-panel/dialog/challenges/categories/987654321')->assertRedirect('/control-panel/challenges');
+        $this->assertErrorFlashed('No challenge!');
+    }
 }

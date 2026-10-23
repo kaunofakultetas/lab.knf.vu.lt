@@ -5,7 +5,8 @@
 //
 //  The life of a local account outside the lab: the
 //  registration, behind reCAPTCHA v3 and the registration
-//  switch; the verification link that activates it; and
+//  switch; the verification link — good for a day — that
+//  activates it; and
 //  the forgotten-password reminder, whose link — good for
 //  an hour — opens a page whose button sets and mails a new
 //  password. VU accounts never come here — the SSO creates
@@ -56,6 +57,7 @@ use ReCaptcha\ReCaptcha;
 //   create             — the registration form
 //   store              — registers an account
 //   verify             — activates it
+//   send_verification  — mails a verification link
 //   ForgotPasswordForm — the reminder form
 //   forgotpassword     — mails a reminder link
 //   reset_form         — the new-password button
@@ -107,9 +109,9 @@ class RegisterController extends Controller
     // digits, blanks and . , _ - that is still free, an e-mail
     // still free, a confirmed password of 8 or more, and a
     // reCAPTCHA v3 score of at least 0.6 for the register
-    // action. The account starts inactive with a 50-character
-    // verify_token, which the verification mail carries; tags
-    // are stripped from the username and e-mail first. A
+    // action. The account starts inactive and is mailed its
+    // verification link (send_verification); tags are
+    // stripped from the username and e-mail first. A
     // refused form comes back refilled but for both passwords,
     // which never sit in the session.
     //
@@ -132,19 +134,16 @@ class RegisterController extends Controller
             return redirect()->route('register_users')->withErrors($validator)->withInput($request->except('password', 'password_confirmation'));
         }
 
-        $uid_token = Str::random(50);
-
         $user = User::create([
             'user_type' => 1,
             'username' => trim(strip_tags($request->input('username'))),
             'email' => trim(strip_tags($request->input('email'))),
             'password' => Hash::make($request->input('password')),
             'status'=>0,
-            'newsletter' => 0,
-            'verify_token'=>$uid_token
+            'newsletter' => 0
         ]);
 
-        Mail::to($request->input('email'))->send(new UserVerifyMail(['uid'=>$uid_token]));
+        self::send_verification($user);
 
         session()->flash('success', 'You are registered! Check your email for verification link.');
 
@@ -162,12 +161,12 @@ class RegisterController extends Controller
     //
     // GET /verify/{verify_token}
     //
-    // Activates the account holding the token and empties the
-    // token, so the link works once, then goes to the login
-    // page with "User verified! Now you can login.". The
-    // validate.verify middleware has refused unknown tokens
-    // already; anything that still gets through ends on the
-    // front page.
+    // Activates the account holding the token's hash and
+    // empties it, so the link works once, then goes to the
+    // login page with "User verified! Now you can login.". The
+    // validate.verify middleware has refused unknown and
+    // expired tokens already; anything that still gets through
+    // ends on the front page.
     //
     // Used by:
     //   - the link of the verification mail (UserVerifyMail)
@@ -176,9 +175,9 @@ class RegisterController extends Controller
     public function verify(Request $request, $verify_token)
     {
         if($verify_token <> ''){
-            if(User::where(array('verify_token' => $verify_token))->count() == 0) {
+            if(User::where(array('verify_token' => hash('sha256', $verify_token)))->count() == 0) {
             } else {
-                User::where(['verify_token' => $verify_token])->update(['status'=>1,'verify_token'=>'']);
+                User::where(['verify_token' => hash('sha256', $verify_token)])->update(['status'=>1,'verify_token'=>'']);
 
                 session()->flash('success', 'User verified! Now you can login.');
 
@@ -190,6 +189,39 @@ class RegisterController extends Controller
 
         // The "already verified" message is switched off
         return redirect('/');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // send_verification
+    // -----------------------------------------------------------
+    //
+    // Mails the account a verification link and stores the
+    // link's token as its SHA-256 hash in verify_token — never
+    // the token, so the users table alone activates nothing.
+    // The token is 50 random characters followed, after a
+    // dash, by the Unix time it is mailed, which
+    // ValidateVerify reads back to refuse a link older than a
+    // day; as the hash covers the time too, it cannot be moved
+    // on. A newer link replaces the one before.
+    //
+    // Used by:
+    //   - store (above) — a new registration
+    //   - UserAuthController::login — an account never
+    //     verified signing in, whose link may have expired
+    // -----------------------------------------------------------
+
+    public static function send_verification(User $user)
+    {
+        $uid_token = Str::random(50) . '-' . now()->getTimestamp();
+
+        User::where(['id' => $user->id])->update(['verify_token' => hash('sha256', $uid_token)]);
+
+        Mail::to($user->email)->send(new UserVerifyMail(['uid' => $uid_token]));
     }
 
 

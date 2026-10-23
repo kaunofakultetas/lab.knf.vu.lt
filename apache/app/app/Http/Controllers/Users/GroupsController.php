@@ -224,9 +224,9 @@ class GroupsController extends BaseController
     //
     // Every player with a solve of one of the given challenges
     // — members or not — ranked by their lab-wide points, not
-    // by the group's. The last challenge is a solve column
-    // read without aggregation, so it is whichever of the
-    // player's solves MySQL reads first, as in LAB-01.
+    // by the group's. The last challenge is the player's
+    // latest solve of them, which also orders players with
+    // the same points, earliest first.
     //
     // Used by:
     //   - group_leaderboard (above)
@@ -239,8 +239,8 @@ class GroupsController extends BaseController
             ->whereIn('cyber_challenges_submitted.challenge_id', $challenges)
             ->groupBy('cyber_users.id')
             ->orderByDesc('cyber_users.points')
-            ->orderBy('cyber_challenges_submitted.created')
-            ->selectRaw('row_number() OVER (ORDER BY `cyber_users`.`points` DESC) AS `position`, `cyber_users`.`id` AS `id`, `cyber_users`.`points` AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, `cyber_challenges_submitted`.`created` AS `last_challenge`')
+            ->orderBy('last_challenge')
+            ->selectRaw('row_number() OVER (ORDER BY `cyber_users`.`points` DESC) AS `position`, `cyber_users`.`id` AS `id`, `cyber_users`.`points` AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
             ->get()->toArray();
 
         return $data;

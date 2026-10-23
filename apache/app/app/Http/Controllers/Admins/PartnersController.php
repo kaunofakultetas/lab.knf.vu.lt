@@ -190,7 +190,8 @@ class PartnersController extends BaseController
     //
     // GET /control-panel/dialog/partners/edit/{uid}
     //
-    // The partner dialog filled with the partner's name.
+    // The partner dialog filled with the partner's name; an
+    // unknown partner is a 404.
     //
     // Used by:
     //   - partners_form() of dialogs.js — the edit buttons of
@@ -200,7 +201,7 @@ class PartnersController extends BaseController
     public function edit(Request $request, $uid)
     {
         return view('admins.dialogs.partners_form', [
-            'name' => Partners::find($uid)->name,
+            'name' => Partners::findOrFail($uid)->name,
             'type'=>'edit',
             'uid'=>$uid
         ]);
@@ -266,7 +267,8 @@ class PartnersController extends BaseController
     // POST /control-panel/partners/delete/{uid}
     //
     // Deletes the partner and goes back with "Deleted!". Its
-    // challenges keep pointing at the deleted partner.
+    // challenges keep pointing at it, and their page then
+    // leaves the partner card out.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete

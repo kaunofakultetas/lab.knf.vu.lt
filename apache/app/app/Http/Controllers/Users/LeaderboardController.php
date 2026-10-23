@@ -6,8 +6,7 @@
 //  The lab-wide ranking, read from the Redis copy of the
 //  cyber_users_ranks view: every player with a solve, by
 //  points, with an ordinal rank and how long ago the
-//  player's last challenge was — which is not always the
-//  latest solve (LAB-01, in the view).
+//  player's latest solve was.
 //
 //  Used by:
 //    - routes/web.php — GET /user/leaderboard

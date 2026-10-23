@@ -32,11 +32,11 @@
 //    GET|POST  /forgot-password
 //    GET       /cp
 //    GET       /page/{alias}
-//    GET       /user/logout_saml
+//    POST      /user/logout_saml
 //    GET       /user/dashboard
 //    GET|POST  /user/challenge/{public_id}/{public_group_id?}
-//    GET       /user/challenge/vote/{type}/{public_id}
-//    GET       /user/logout
+//    POST      /user/challenge/vote/{type}/{public_id}
+//    POST      /user/logout
 //    GET       /user/leaderboard
 //    GET       /user/group/{public_id}
 //    GET       /user/group/leaderboard/{public_id}
@@ -47,7 +47,7 @@
 //
 //    GET       /control-panel
 //    GET       /control-panel/login
-//    GET       /control-panel/logout
+//    POST      /control-panel/logout
 //    GET       /control-panel/dashboard
 //
 //  The control panel, main admins only — the categories,
@@ -76,7 +76,8 @@
 //    GET|POST  /control-panel/challenges[/…]
 //    POST      /control-panel/challenges_file/…
 //    GET       /control-panel/dialog/challenges/categories/{uid}
-//    GET       /control-panel/dialog/challenge_file/{type}/{uid}
+//    GET       /control-panel/dialog/challenge_file/new/{uid}
+//    GET       /control-panel/dialog/challenge_file/edit/{uid}
 //
 //  Used by:
 //    - RouteServiceProvider::boot — loads it under the web
@@ -90,7 +91,7 @@ use Illuminate\Support\Facades\Route;
 // form; signed-in visitors go to their dashboard (guest).
 //
 // Known bug LAB-20 (medium): the login form's route has no
-// rate limit, lockout or reCAPTCHA (web.php:98), so a password
+// rate limit, lockout or reCAPTCHA (web.php:99), so a password
 // can be guessed without end. Fix: throttle the route, by
 // address and e-mail.
 Route::get('', [App\Http\Controllers\Users\UserAuthController::class, 'index'])->name('login_users')->middleware(['guest']);
@@ -131,7 +132,7 @@ Route::prefix('user')->group(function(){
     // dashboard.
     //
     // Known bug LAB-21 (low): the answer route has no rate limit
-    // (web.php:140), so flags can be guessed without end. Fix:
+    // (web.php:141), so flags can be guessed without end. Fix:
     // throttle it per player.
     Route::get('/dashboard', [App\Http\Controllers\Users\ChallengesController::class, 'index'])->middleware(['event.status', 'auth:users'])->name('user_dashboard');
 
@@ -139,17 +140,17 @@ Route::prefix('user')->group(function(){
 
     Route::post('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'submit_answer'])->middleware(['event.status', 'auth:users', 'validate.ifsolved']);
 
-    // A vote, which the dashboard and the challenge page send by
-    // script
-    Route::get('/challenge/vote/{type}/{public_id}', [App\Http\Controllers\Users\ChallengesController::class, 'vote'])->middleware(['auth:users']);
+    // A vote, which the dashboard and the challenge page post by
+    // script with the page's CSRF token
+    Route::post('/challenge/vote/{type}/{public_id}', [App\Http\Controllers\Users\ChallengesController::class, 'vote'])->middleware(['auth:users']);
 
     // Signing out, and the leaderboard
-    Route::get('/logout', [App\Http\Controllers\Users\UserAuthController::class, 'logout'])->middleware(['event.status', 'auth:users'])->name('user_logout');
+    Route::post('/logout', [App\Http\Controllers\Users\UserAuthController::class, 'logout'])->middleware(['event.status', 'auth:users'])->name('user_logout');
 
     Route::get('/leaderboard', [App\Http\Controllers\Users\LeaderboardController::class, 'index'])->middleware(['event.status', 'auth:users'])->name('user_leaderboard');
 
     // Signing out of the SSO too; open to anyone
-    Route::get('/logout_saml', [App\Http\Controllers\Users\UserAuthController::class, 'logout_saml']);
+    Route::post('/logout_saml', [App\Http\Controllers\Users\UserAuthController::class, 'logout_saml']);
 
     // A group's page and leaderboard, for its members
     // (group.exists)
@@ -188,7 +189,7 @@ Route::prefix('control-panel')->group(function(){
     Route::post('/settings/reg_open', [App\Http\Controllers\Admins\SettingsController::class, 'reg_open'])->middleware(['perms', 'auth.admin:admins'])->name('settings.reg_open');
 
     // Signing out
-    Route::get('/logout', [App\Http\Controllers\Admins\AdminAuthController::class, 'logout'])->middleware(['auth.admin:admins'])->name('admin_logout');
+    Route::post('/logout', [App\Http\Controllers\Admins\AdminAuthController::class, 'logout'])->middleware(['auth.admin:admins'])->name('admin_logout');
 
     // The forms the panel's pages open in a modal, and the POSTs
     // they send
@@ -224,11 +225,15 @@ Route::prefix('control-panel')->group(function(){
         // The test-mail dialog — main-only
         Route::get('/emails/send_test/{email_id}', [App\Http\Controllers\Admins\EmailsController::class, 'send_test'])->middleware(['auth.admin:admins', 'perms']);
 
-        // A challenge's categories dialog and file link dialog;
-        // neither checks whose challenge it is — saving them does
-        Route::get('/challenges/categories/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'categories'])->middleware(['auth.admin:admins']);
+        // A challenge's categories dialog and its new-link and
+        // edit-link dialogs, checked as saving them is: the
+        // challenge — an edited link's challenge — must be the
+        // admin's (r_exists)
+        Route::get('/challenges/categories/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'categories'])->middleware(['auth.admin:admins','r_exists:challenge_owned']);
 
-        Route::get('/challenge_file/{type}/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'file_form'])->middleware(['auth.admin:admins']);
+        Route::get('/challenge_file/new/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'file_form_new'])->middleware(['auth.admin:admins','r_exists:challenge_owned']);
+
+        Route::get('/challenge_file/edit/{uid}', [App\Http\Controllers\Admins\ChallengesController::class, 'file_form_edit'])->middleware(['auth.admin:admins','r_exists:file_owned']);
 
         // The group dialogs: add and rename a group, add a member or
         // a challenge; but for adding a group, r_exists checks the

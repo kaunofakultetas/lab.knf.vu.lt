@@ -30,7 +30,7 @@ use Tests\TestCase;
 // PlayerDefectsTest
 // -----------------------------------------------------------
 //
-// LAB-01, LAB-20 and LAB-21.
+// LAB-20 and LAB-21.
 //
 // Used by:
 //   - PHPUnit — the Defects suite (runTests.sh)
@@ -40,48 +40,6 @@ final class PlayerDefectsTest extends TestCase
 {
 
     use KnownDefects;
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_lab_01_the_leaderboard_shows_the_latest_solve
-    // -----------------------------------------------------------
-    //
-    // Known bug LAB-01 (low): "Last challenge solved" on the
-    // leaderboards is not the latest solve but whichever of
-    // the player's solves MySQL reads first. The
-    // cyber_ranking_table view (mysql/init.sql) groups the
-    // submissions per user and selects their created column
-    // without aggregating it; the plan in use reads them in
-    // index order, so it is usually the solve of the oldest
-    // challenge. Fix: select
-    // MAX(cyber_challenges_submitted.created) in the view.
-    //
-    // The latest of the three solves sits in the middle both
-    // by row id and by challenge id, so no plan that keeps
-    // the first or the last row it reads can show it by
-    // chance.
-    //
-    // Used by:
-    //   - PHPUnit — the Defects suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    public function test_lab_01_the_leaderboard_shows_the_latest_solve(): void
-    {
-        $player = $this->makePlayer();
-        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-5 days')));
-        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-2 hours')));
-        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-10 days')));
-
-        $response = $this->signIn($this->makePlayer())->get('/user/leaderboard');
-
-        $this->assertDefectStillOpen('LAB-01', function () use ($response) {
-            $response->assertSee('2 hours ago');
-        });
-    }
 
 
 

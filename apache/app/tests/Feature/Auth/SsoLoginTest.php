@@ -164,7 +164,7 @@ final class SsoLoginTest extends TestCase
             ->andReturn('https://idp.sso.test/logout?ReturnTo=lab');
         $this->signIn($this->makeSsoPlayer());
 
-        $this->get('/user/logout_saml')->assertRedirect('https://idp.sso.test/logout?ReturnTo=lab');
+        $this->post('/user/logout_saml')->assertRedirect('https://idp.sso.test/logout?ReturnTo=lab');
 
         $this->assertGuest('users');
     }
@@ -251,7 +251,7 @@ final class SsoLoginTest extends TestCase
             ->andReturn('https://idp.sso.test/logout?ReturnTo=cp');
         $this->signInAdmin($this->makeAdmin());
 
-        $this->get('/control-panel/logout')->assertRedirect('https://idp.sso.test/logout?ReturnTo=cp');
+        $this->post('/control-panel/logout')->assertRedirect('https://idp.sso.test/logout?ReturnTo=cp');
 
         $this->assertGuest('admins');
     }
