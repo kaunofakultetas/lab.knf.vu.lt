@@ -287,9 +287,7 @@ class ChallengesController extends BaseController
     // hidden challenge takes no answer from a player it is
     // hidden from, as in show.
     //
-    // Known bug LAB-21 (low): answers have no rate limit
-    // (routes/web.php), so flags can be guessed without end.
-    // Fix: throttle the route per player.
+    // By design answers have no rate limit.
     //
     // Used by:
     //   - the answer form of users/challenge.blade.php

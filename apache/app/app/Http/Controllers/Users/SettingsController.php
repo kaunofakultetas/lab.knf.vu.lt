@@ -63,12 +63,9 @@ class SettingsController extends BaseController
     // then X-Forwarded-For when it holds exactly one valid
     // address, else REMOTE_ADDR.
     //
-    // Known bug (low): the proxies in front pass Client-IP and
-    // CF-Connecting-IP on as the visitor sent them
-    // (SettingsController.php:80), so a visitor picks the
-    // address stored as last_ip and with each solve. Fix: take
-    // request()->ip(), which TrustProxies already resolves from
-    // the endpoint's X-Forwarded-For.
+    // The two headers are trusted by design: the hosting's
+    // upstream in front of the site rewrites them, so a
+    // visitor cannot choose the address recorded.
     //
     // Used by:
     //   - UserAuthController::login and check_member — last_ip

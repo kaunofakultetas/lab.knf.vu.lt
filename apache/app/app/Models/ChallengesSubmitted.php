@@ -19,8 +19,7 @@
 //    - Groups::groupPointsPercent (this folder)
 //    - Admins\LeaderboardController::dashboard and
 //      Admins\ChallengesController::destroy
-//    - HomeController::ip and ApiController, which no route
-//      reaches
+//    - ApiController, which no route reaches
 // -----------------------------------------------------------
 
 

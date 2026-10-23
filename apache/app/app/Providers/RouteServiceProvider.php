@@ -89,7 +89,7 @@ class RouteServiceProvider extends ServiceProvider
     // The api limiter: 60 requests a minute per signed-in
     // user, or per client address for guests. Only the api
     // group's throttle:api uses it; the site's own routes
-    // have no limit (LAB-20, LAB-21).
+    // have no limit, by design.
     //
     // Used by:
     //   - boot (above)

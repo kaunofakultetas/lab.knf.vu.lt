@@ -14,8 +14,9 @@
 //  no PHP diagnostics, that directories are never listed,
 //  that uploads are served from /upload and no PHP there
 //  ever runs, that a forged client address is ignored, that
-//  no answer names the server's versions, and that CSRF is
-//  enforced outside PHPUnit.
+//  no answer names the server's versions, that PHP takes no
+//  arguments from a query string, and that CSRF is enforced
+//  outside PHPUnit.
 //
 //  Used by:
 //    - PHPUnit — the Http suite (runTests.sh)
@@ -470,5 +471,37 @@ final class ApacheTest extends TestCase
             $this->assertSame('Apache', $response->header('Server'), $path);
             $this->assertDoesNotMatchRegularExpression('#Apache/\d|PHP/\d#', $response->body(), $path);
         }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_php_takes_no_arguments_from_a_query_string
+    // -----------------------------------------------------------
+    //
+    // The image's PHP settings, which Apache's PHP reads as
+    // well, turn register_argc_argv off, so a web request's
+    // query string never becomes $_SERVER['argv'], which
+    // Laravel 10.6 would read to pick its environment
+    // (CVE-2024-52301). The command line keeps its arguments
+    // whatever the setting, so the settings files are read
+    // here instead.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_php_takes_no_arguments_from_a_query_string(): void
+    {
+        $settings = [];
+        foreach (array_filter(array_map('trim', explode(',', (string) php_ini_scanned_files()))) as $file) {
+            $settings += parse_ini_file($file);
+        }
+
+        $this->assertArrayHasKey('register_argc_argv', $settings);
+        $this->assertSame('', $settings['register_argc_argv']);
     }
 }

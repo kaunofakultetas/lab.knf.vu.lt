@@ -18,12 +18,18 @@ RUN echo 'error_reporting = E_ALL & ~E_DEPRECATED' > "$PHP_INI_DIR/conf.d/error-
 # header on every page
 RUN echo 'expose_php = Off' > "$PHP_INI_DIR/conf.d/expose-php.ini"
 
+# Without a php.ini, PHP also fills $_SERVER['argv'] from a web
+# request's query string, which Laravel 10.6 reads to pick its
+# environment (CVE-2024-52301); web requests take no arguments
+RUN echo 'register_argc_argv = Off' > "$PHP_INI_DIR/conf.d/register-argc-argv.ini"
+
 # Apache
 RUN a2enmod rewrite remoteip
 
-# Install composer and its dependencies
+# Install composer and its dependencies; Composer at an exact version,
+# so that every build installs the vendor the same way
 RUN apt-get update && apt-get install -y --no-install-recommends unzip && rm -rf /var/lib/apt/lists/*
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.10.3 /usr/bin/composer /usr/bin/composer
 
 
 

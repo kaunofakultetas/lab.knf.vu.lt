@@ -10,9 +10,8 @@
 //  in three defaults — the name, the URL and the Vilnius
 //  time zone — and in the packages it adds: laravel/ui,
 //  laravelcollective/html (the Form and Html facades the
-//  views build their forms with), the reCAPTCHA v3 rule
-//  (josiasmontag/laravel-recaptchav3) and
-//  barryvdh/laravel-dompdf (PDF), which nothing uses.
+//  views build their forms with) and the reCAPTCHA v3 rule
+//  (josiasmontag/laravel-recaptchav3).
 //
 //  In production the values come from the environment the
 //  vuknflab-apache service gets in docker-compose.yml —
@@ -121,14 +120,12 @@ return [
         Laravel\Ui\UiServiceProvider::class,
         Collective\Html\HtmlServiceProvider::class,
         Lunaweb\RecaptchaV3\Providers\RecaptchaV3ServiceProvider::class,
-        Barryvdh\DomPDF\ServiceProvider::class,
     ],
 
     // The facade aliases: Laravel's, plus the forms' Form and
-    // Html and the unused PDF
+    // Html
     'aliases' => Facade::defaultAliases()->merge([
         'Form' => Collective\Html\FormFacade::class,
         'Html' => Collective\Html\HtmlFacade::class,
-        'PDF' => Barryvdh\DomPDF\Facade::class,
     ])->toArray(),
 ];

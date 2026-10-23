@@ -7,8 +7,8 @@
 //  create local ones, which are active at once and may have
 //  their login mailed to them in plain text. Only a main
 //  admin may set a new password, switch an account active or
-//  inactive, or delete one. Two routes create accounts — the
-//  dialog's and an older plain one — and both are covered.
+//  inactive, or delete one; accounts are created in a
+//  dialog.
 //  Deleting a VU account also removes its group
 //  memberships.
 //
@@ -25,7 +25,6 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
-use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 
@@ -200,7 +199,7 @@ final class UsersTest extends TestCase
     // test_an_admin_creates_an_active_account
     // -----------------------------------------------------------
     //
-    // Either route creates an active account with the given
+    // The dialog creates an active account with the given
     // username and a hashed password, and returns to the list
     // with a message — for lab admins too.
     //
@@ -208,10 +207,9 @@ final class UsersTest extends TestCase
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    #[DataProvider('storeRoutes')]
-    public function test_an_admin_creates_an_active_account(string $route): void
+    public function test_an_admin_creates_an_active_account(): void
     {
-        $response = $this->signInAdmin($this->makeAdmin())->post($route, [
+        $response = $this->signInAdmin($this->makeAdmin())->post('/control-panel/dialog/users/store', [
             'username' => 'NewPlayer',
             'email'    => 'new@players.test',
             'password' => 'given-password-1',
@@ -224,29 +222,6 @@ final class UsersTest extends TestCase
         $this->assertSame(1, $player->status);
         $this->assertTrue(Hash::check('given-password-1', $player->password));
         Mail::assertNothingSent();
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // storeRoutes
-    // -----------------------------------------------------------
-    //
-    // The two routes that create an account.
-    //
-    // Used by:
-    //   - test_an_admin_creates_an_active_account (above)
-    // -----------------------------------------------------------
-
-    public static function storeRoutes(): array
-    {
-        return [
-            'dialog route' => ['/control-panel/dialog/users/store'],
-            'plain route'  => ['/control-panel/users/store'],
-        ];
     }
 
 

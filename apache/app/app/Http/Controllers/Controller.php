@@ -11,8 +11,8 @@
 //  Used by:
 //    - Users\BaseController and Admins\BaseController — the
 //      bases of the player and control-panel controllers
-//    - Users\RegisterController, Admins\AdminAuthController,
-//      HomeController and ApiController — directly
+//    - Users\RegisterController, Admins\AdminAuthController
+//      and ApiController — directly
 // -----------------------------------------------------------
 
 

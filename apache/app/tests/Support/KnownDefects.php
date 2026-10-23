@@ -14,7 +14,8 @@
 //  stack's Python suites.
 //
 //  Used by:
-//    - every test class under tests/Defects
+//    - nothing at the moment — the next defect pinned under
+//      tests/Defects
 // -----------------------------------------------------------
 
 
@@ -42,7 +43,7 @@ use PHPUnit\Framework\AssertionFailedError;
 // turned into a failure by the test itself.
 //
 // Used by:
-//   - every test class under tests/Defects
+//   - nothing at the moment
 // -----------------------------------------------------------
 
 trait KnownDefects

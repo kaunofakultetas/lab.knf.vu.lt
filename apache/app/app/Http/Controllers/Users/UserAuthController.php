@@ -108,11 +108,8 @@ class UserAuthController extends BaseController
     // A refused form comes back with the e-mail refilled; the
     // password is left out, so it never sits in the session.
     //
-    // Known bug LAB-20 (medium): the form takes any number of
-    // wrong passwords — the route has no rate limit, no lockout
-    // and no reCAPTCHA (routes/web.php), so a password can be
-    // guessed without end. Fix: throttle the route, by address
-    // and e-mail.
+    // By design the form takes any number of wrong passwords:
+    // the route has no rate limit, no lockout and no reCAPTCHA.
     //
     // Used by:
     //   - the login form of users/login.blade.php

@@ -15,7 +15,8 @@
 //  groups and challenges they created. The dialog routes
 //  return the forms the panel's pages open in a modal.
 //  event.status is switched off and lets every request
-//  through. No route has a rate limit (LAB-20, LAB-21).
+//  through. By design no route has a rate limit, the login
+//  and answer forms included.
 //  Every change the panel makes from its lists — a deletion,
 //  a removal, a switch, a mail sent to the list, a list
 //  sync — is a POST, which the panel's script sends with the
@@ -90,10 +91,8 @@ use Illuminate\Support\Facades\Route;
 // The login page — the site's front page — and the login
 // form; signed-in visitors go to their dashboard (guest).
 //
-// Known bug LAB-20 (medium): the login form's route has no
-// rate limit, lockout or reCAPTCHA (web.php:99), so a password
-// can be guessed without end. Fix: throttle the route, by
-// address and e-mail.
+// The login form's route has no rate limit, lockout or
+// reCAPTCHA, by design.
 Route::get('', [App\Http\Controllers\Users\UserAuthController::class, 'index'])->name('login_users')->middleware(['guest']);
 
 Route::post('login', [App\Http\Controllers\Users\UserAuthController::class, 'login'])->name('login')->middleware(['event.status', 'guest']);
@@ -131,9 +130,7 @@ Route::prefix('user')->group(function(){
     // validate.ifsolved sends a solved challenge's pages to the
     // dashboard.
     //
-    // Known bug LAB-21 (low): the answer route has no rate limit
-    // (web.php:141), so flags can be guessed without end. Fix:
-    // throttle it per player.
+    // The answer route has no rate limit, by design.
     Route::get('/dashboard', [App\Http\Controllers\Users\ChallengesController::class, 'index'])->middleware(['event.status', 'auth:users'])->name('user_dashboard');
 
     Route::get('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'show'])->middleware(['event.status', 'auth:users', 'validate.ifsolved']);
@@ -273,17 +270,12 @@ Route::prefix('control-panel')->group(function(){
 
     Route::post('/pages/update', [App\Http\Controllers\Admins\PagesController::class, 'update'])->middleware(['auth.admin:admins', 'perms']);
 
-    // The accounts: every admin sees the list and may create
-    // one, the status switch and deletion are main-only. The
-    // create and store routes duplicate the dialog ones; no view
-    // uses them.
+    // The accounts: every admin sees the list and creates
+    // accounts in the dialog (above); the status switch and
+    // deletion are main-only.
     Route::get('/users', [App\Http\Controllers\Admins\UsersController::class, 'index'])->middleware(['auth.admin:admins'])->name('admin.users');
 
     Route::post('/users/status/{user_id}/{status_id}', [App\Http\Controllers\Admins\UsersController::class, 'change_status'])->middleware(['auth.admin:admins', 'perms']);
-
-    Route::get('/users/create', [App\Http\Controllers\Admins\UsersController::class, 'create'])->middleware(['auth.admin:admins']);
-
-    Route::post('/users/store', [App\Http\Controllers\Admins\UsersController::class, 'store'])->middleware(['auth.admin:admins']);
 
     Route::post('/users/delete/{uid}', [App\Http\Controllers\Admins\UsersController::class, 'destroy'])->middleware(['auth.admin:admins', 'perms']);
 

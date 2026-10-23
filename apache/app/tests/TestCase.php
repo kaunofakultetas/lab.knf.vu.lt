@@ -171,7 +171,7 @@ abstract class TestCase extends BaseTestCase
     // the defaults.
     //
     // Used by:
-    //   - the Feature and Defects tests that need a player
+    //   - the Feature tests that need a player
     // -----------------------------------------------------------
 
     protected function makePlayer(array $attributes = []): User
@@ -307,7 +307,7 @@ abstract class TestCase extends BaseTestCase
     // players type around it.
     //
     // Used by:
-    //   - most Feature and Defects tests
+    //   - most Feature tests
     // -----------------------------------------------------------
 
     protected function makeChallenge(array $attributes = []): Challenges
@@ -447,7 +447,7 @@ abstract class TestCase extends BaseTestCase
     // /user route checks.
     //
     // Used by:
-    //   - the player-side Feature and Defects tests
+    //   - the player-side Feature tests
     // -----------------------------------------------------------
 
     protected function signIn(User $player): static

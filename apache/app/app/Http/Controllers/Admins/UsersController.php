@@ -18,11 +18,6 @@
 //    POST /control-panel/dialog/users/update                — new password
 //    POST /control-panel/users/status/{user_id}/{status_id} — switches
 //    POST /control-panel/users/delete/{uid}                 — deletes
-//    GET  /control-panel/users/create                       — create dialog
-//    POST /control-panel/users/store                        — creates
-//
-//  The last two duplicate the dialog routes; no view uses
-//  them.
 //
 //  Used by:
 //    - routes/web.php — the routes above
@@ -166,11 +161,9 @@ class UsersController extends BaseController
     // -----------------------------------------------------------
     //
     // GET /control-panel/dialog/users/new
-    // GET /control-panel/users/create
     //
-    // The admins.dialogs.users_form view, empty. The url it is
-    // handed goes unused: the dialog posts to the dialog
-    // store route itself.
+    // The admins.dialogs.users_form view, empty; the dialog
+    // posts to store itself.
     //
     // Used by:
     //   - users_form() of dialogs.js — the add button of the
@@ -180,7 +173,6 @@ class UsersController extends BaseController
     public function create()
     {
         return view('admins.dialogs.users_form', [
-            'url' => env('APP_URL') . '/control-panel/users/store',
             'username' => '',
             'email' => '',
             'uid'=>'',
@@ -198,7 +190,6 @@ class UsersController extends BaseController
     // -----------------------------------------------------------
     //
     // POST /control-panel/dialog/users/store
-    // POST /control-panel/users/store
     //
     // Creates an active local account with the username,
     // e-mail and password as sent, unless the e-mail or the
@@ -261,7 +252,6 @@ class UsersController extends BaseController
     //
     // The account dialog showing the account's username and
     // e-mail, for a new password; an unknown account is a 404.
-    // The url it is handed goes unused, as in create.
     //
     // Used by:
     //   - users_form() of dialogs.js — the edit buttons of the
@@ -271,7 +261,6 @@ class UsersController extends BaseController
     public function edit(Request $request, $uid)
     {
         return view('admins.dialogs.users_form', [
-            'url' => env('APP_URL') . '/control-panel/users/update',
             'username' => User::findOrFail($uid)->username,
             'email' => User::findOrFail($uid)->email,
             'uid'=>$uid,
