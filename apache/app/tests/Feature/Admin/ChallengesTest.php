@@ -25,6 +25,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Http\Controllers\Admins\ChallengesController;
 use App\Models\Admin;
 use App\Models\Challenges;
 use App\Models\ChallengesCategories;
@@ -32,6 +33,9 @@ use App\Models\ChallengesFiles;
 use App\Models\ChallengesHistory;
 use App\Models\ChallengesSubmitted;
 use App\Models\GroupsChallenges;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Redis;
 use Tests\TestCase;
 
 
@@ -216,8 +220,10 @@ final class ChallengesTest extends TestCase
     // test_lab_admins_get_edit_links_only_for_their_own
     // -----------------------------------------------------------
     //
-    // A lab admin sees every challenge but gets edit links for
-    // its own ones only, and no visibility switch.
+    // A lab admin sees every challenge but gets the edit,
+    // delete, Categories and Files links for its own ones
+    // only, as the others' would all refuse it, and no
+    // visibility switch.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -234,6 +240,10 @@ final class ChallengesTest extends TestCase
         $response->assertSee('<td>Other Task</td>', false);
         $response->assertSee("href=\"/control-panel/challenges/edit/{$own->id}\"", false);
         $response->assertDontSee("href=\"/control-panel/challenges/edit/{$other->id}\"", false);
+        $response->assertSee("challenge_categories({$own->id})", false);
+        $response->assertDontSee("challenge_categories({$other->id})", false);
+        $response->assertSee("href=\"/control-panel/challenges/files/{$own->id}\"", false);
+        $response->assertDontSee("href=\"/control-panel/challenges/files/{$other->id}\"", false);
         $response->assertDontSee('/control-panel/challenges/status/', false);
     }
 
@@ -1009,5 +1019,201 @@ final class ChallengesTest extends TestCase
         $this->assertErrorFlashed(self::REFUSAL);
         $this->get('/control-panel/dialog/challenges/categories/987654321')->assertRedirect('/control-panel/challenges');
         $this->assertErrorFlashed('No challenge!');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_deleting_a_challenge_takes_it_out_of_the_shared_history
+    // -----------------------------------------------------------
+    //
+    // The shared history in the players' sidebar is rebuilt when
+    // a challenge is deleted, so it no longer lists the deleted
+    // challenge's solves.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_deleting_a_challenge_takes_it_out_of_the_shared_history(): void
+    {
+        $challenge = $this->makeChallenge(['name' => 'Doomed Task']);
+        $this->signIn($this->makePlayer())->post("/user/challenge/{$challenge->public_id}", ['answer' => $challenge->answer]);
+        $this->assertStringContainsString('Doomed Task', (string) Redis::get('tasks_history'));
+
+        $this->signInAdmin($this->makeAdmin(true))->post("/control-panel/challenges/delete/{$challenge->id}");
+
+        $this->assertStringNotContainsString('Doomed Task', (string) Redis::get('tasks_history'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_renaming_or_hiding_a_challenge_updates_the_shared_history
+    // -----------------------------------------------------------
+    //
+    // A rename shows in the shared history at once, and hiding
+    // the challenge takes its solves out of it, as the history
+    // lists only challenges every player may see.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_renaming_or_hiding_a_challenge_updates_the_shared_history(): void
+    {
+        $admin = $this->makeAdmin(true);
+        $challenge = $this->makeChallenge(['name' => 'Old Name', 'created_by' => $admin->id, 'answer' => 'packet_wizard']);
+        $this->signIn($this->makePlayer())->post("/user/challenge/{$challenge->public_id}", ['answer' => 'packet_wizard']);
+
+        $this->signInAdmin($admin)->post('/control-panel/challenges/update', $this->challengeForm(['uid' => $challenge->id, 'name' => 'New Name']));
+        $history = (string) Redis::get('tasks_history');
+        $this->assertStringContainsString('New Name', $history);
+        $this->assertStringNotContainsString('Old Name', $history);
+
+        $this->post("/control-panel/challenges/status/1/{$challenge->id}");
+        $this->assertStringNotContainsString('New Name', (string) Redis::get('tasks_history'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_two_deletes_take_the_points_off_once
+    // -----------------------------------------------------------
+    //
+    // Two admins deleting the same challenge at the same moment
+    // take its points off the solvers once: the delete locks the
+    // challenge's row before it touches the totals. The second
+    // delete runs in full right after the first one's first step
+    // on the challenge, where an unlocked delete let it take the
+    // points off a second time.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_two_deletes_take_the_points_off_once(): void
+    {
+        $player = $this->makePlayer();
+        $doomed = $this->makeChallenge(['points' => 40]);
+        $this->recordSolve($player, $this->makeChallenge(['points' => 10]));
+        $this->recordSolve($player, $doomed);
+        $this->signInAdmin($this->makeAdmin(true));
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($doomed, &$interleaved) {
+            $sql = strtolower($query->sql);
+            if (!$interleaved && (str_contains($sql, 'for update') || str_starts_with($sql, 'update `cyber_users`'))) {
+                $interleaved = true;
+                app(ChallengesController::class)->destroy($doomed->id);
+            }
+        });
+
+        $this->post("/control-panel/challenges/delete/{$doomed->id}");
+
+        $this->assertTrue($interleaved);
+        $this->assertSame(10, $player->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_name_or_flag_longer_than_its_column_is_refused
+    // -----------------------------------------------------------
+    //
+    // A name or a flag holds up to the 255 characters of its
+    // column. A longer one is refused with the error, rather
+    // than stored cut short, which would leave a flag no player
+    // could ever match.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_name_or_flag_longer_than_its_column_is_refused(): void
+    {
+        $admin = $this->makeAdmin(true);
+        $challenge = $this->makeChallenge(['created_by' => $admin->id, 'name' => 'Kept Name']);
+        $this->signInAdmin($admin)->from('/control-panel/challenges/create');
+
+        $this->post('/control-panel/challenges/store', $this->challengeForm(['answer' => str_repeat('f', 256)]))->assertSessionHasErrors('answer');
+        $this->post('/control-panel/challenges/store', $this->challengeForm(['name' => str_repeat('n', 256)]))->assertSessionHasErrors('name');
+        $this->post('/control-panel/challenges/update', $this->challengeForm(['uid' => $challenge->id, 'name' => str_repeat('n', 256)]))->assertSessionHasErrors('name');
+        $this->assertSame(1, Challenges::count());
+        $this->assertSame('Kept Name', $challenge->refresh()->name);
+
+        $this->post('/control-panel/challenges/store', $this->challengeForm(['answer' => str_repeat('f', 255)]))->assertSessionHasNoErrors();
+        $this->assertSame(2, Challenges::count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_deleted_partner_stays_off_an_edited_challenge
+    // -----------------------------------------------------------
+    //
+    // The edit form of a challenge whose partner was deleted
+    // selects "No partner (deleted)" rather than the first
+    // partner of the list, so saving the form keeps the
+    // challenge without a partner.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_deleted_partner_stays_off_an_edited_challenge(): void
+    {
+        $admin = $this->makeAdmin(true);
+        $this->makePartner(['name' => 'Still Here']);
+        $gone = $this->makePartner(['name' => 'Gone Partner']);
+        $challenge = $this->makeChallenge(['created_by' => $admin->id, 'partner_id' => $gone->id]);
+        $gone->delete();
+
+        $this->signInAdmin($admin)->get("/control-panel/challenges/edit/{$challenge->id}")
+            ->assertSee("<option value=\"{$gone->id}\" selected=\"selected\">No partner (deleted)</option>", false);
+        $this->post('/control-panel/challenges/update', $this->challengeForm(['uid' => $challenge->id, 'partner_id' => $gone->id]));
+
+        $this->assertSame($gone->id, $challenge->refresh()->partner_id);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_search_for_0_is_a_search
+    // -----------------------------------------------------------
+    //
+    // The search term 0 narrows the list like any other term,
+    // rather than counting as no search at all.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_search_for_0_is_a_search(): void
+    {
+        $this->makeChallenge(['name' => 'Port 80 Scan']);
+        $this->makeChallenge(['name' => 'Hidden Flag']);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/challenges?q=0');
+
+        $response->assertSee('<td>Port 80 Scan</td>', false);
+        $response->assertDontSee('<td>Hidden Flag</td>', false);
     }
 }

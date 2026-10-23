@@ -46,7 +46,8 @@ use Illuminate\Http\Response;
 //   login        — the login form
 //   logout       — sign-out
 //   dashboard    — dead: no route reaches it
-//   cp           — on to the dashboard after the SSO login
+//   cp           — on to the page asked for, or the
+//                  dashboard, after the SSO login
 //   check_member — the player account of a VU user
 //   logout_saml  — sign-out from the SSO too
 //
@@ -103,8 +104,9 @@ class UserAuthController extends BaseController
     // panel — go back to the login page with the error, an
     // account never verified with a fresh verification link
     // mailed, as the first may have expired; a good login
-    // records the time and address and goes on to the page
-    // the player first asked for, or the dashboard. A refused
+    // records the time and address and goes on to the player
+    // page first asked for, or the dashboard (intendedWithin,
+    // which never resumes a page elsewhere). A refused
     // form comes back with the e-mail refilled; the password
     // is left out, so it never sits in the session.
     //
@@ -132,7 +134,7 @@ class UserAuthController extends BaseController
             if ($user->status == 1) {
                 User::where(['id'=>Auth::guard('users')->id()])->update(['last_login'=>date("Y-m-d H:i:s"),'last_ip'=>SettingsController::getUserIP()]);
 
-                return redirect()->intended('/user/dashboard');
+                return $this->intendedWithin('/user', route('user_dashboard'));
             } else {
                 Auth::guard('users')->logout();
 
@@ -161,7 +163,9 @@ class UserAuthController extends BaseController
     // POST /user/logout
     //
     // Signs the player out of the lab and goes to the login
-    // page; an SSO session at VU stays open. A password
+    // page; an SSO session at VU stays open. The page asked
+    // for before a login is forgotten, so the next person to
+    // sign in on the computer is not sent there. A password
     // reminder mailed before stays good, as the User model
     // keeps Laravel's logout off remember_token.
     //
@@ -174,6 +178,7 @@ class UserAuthController extends BaseController
     public function logout()
     {
         Auth::guard('users')->logout();
+        session()->forget('url.intended');
 
         return redirect('/');
     }
@@ -211,8 +216,10 @@ class UserAuthController extends BaseController
     // GET /cp
     //
     // The end of the SSO login: the saml_auth middleware has
-    // signed the player in by now, so this only goes on to the
-    // dashboard.
+    // signed the player in by now, so this only goes on, to
+    // the player page asked for before the login — a shared
+    // challenge link, say — or the dashboard, taking that
+    // page out of the session (intendedWithin).
     //
     // Used by:
     //   - the VU login button of users/login.blade.php
@@ -220,7 +227,7 @@ class UserAuthController extends BaseController
 
     public function cp(Request $request)
     {
-        return redirect('/user/dashboard');
+        return $this->intendedWithin('/user', route('user_dashboard'));
     }
 
 
@@ -296,9 +303,13 @@ class UserAuthController extends BaseController
     //
     // POST /user/logout_saml
     //
-    // Signs the player out of the lab, then sends the browser
-    // to the SSO's logout, which returns to the site's front
-    // page.
+    // Signs the player out of the lab, forgets the page asked
+    // for before a login, as logout does, then hands the
+    // browser to the SSO's logout, which returns to the site's
+    // front page. The hand-over is the sso_logout page, which
+    // moves on by itself: a redirect of the sign-out form to
+    // the identity provider would be stopped by the site's
+    // CSP, which lets a form's navigation reach the site only.
     //
     // Used by:
     //   - Post_Link() of custom.js — the sign-out link of the
@@ -309,8 +320,9 @@ class UserAuthController extends BaseController
     public function logout_saml()
     {
         Auth::guard('users')->logout();
+        session()->forget('url.intended');
         $as = new \SimpleSAML\Auth\Simple('default-sp');
 
-        return redirect($as->getLogoutURL(env('APP_URL').'/'));
+        return view('sso_logout', ['logout_url' => $as->getLogoutURL(env('APP_URL').'/')]);
     }
 }

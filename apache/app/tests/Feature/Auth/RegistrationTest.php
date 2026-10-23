@@ -830,4 +830,32 @@ final class RegistrationTest extends TestCase
         $this->assertErrorFlashed('Your account is not active');
         Mail::assertNothingSent();
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_verification_link_ends_on_the_login_page
+    // -----------------------------------------------------------
+    //
+    // An opened verification link leads to the login page with
+    // its message, whatever page an earlier visit left asked for
+    // in the session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_verification_link_ends_on_the_login_page(): void
+    {
+        $player = $this->makePlayer(['status' => 0]);
+        $token = $this->verificationLink($player);
+
+        $this->withSession(['url.intended' => 'https://lab.knf.vu.lt/user/leaderboard'])
+            ->get("/verify/{$token}")
+            ->assertRedirect('/')
+            ->assertSessionHas('success', 'User verified! Now you can login.');
+    }
 }

@@ -70,7 +70,9 @@ class BaseController extends Controller
     // refreshes on every request; a player without a solve has
     // neither, and then no username either. The groups are the
     // player's memberships by VU id, the feed is tasks_history
-    // — the six latest solves — with how long ago each was.
+    // — the six latest solves of challenges every player may
+    // see (ChallengesHistory::refreshFeed) — with how long ago
+    // each was.
     //
     // Used by:
     //   - Laravel, when it builds a player controller for a

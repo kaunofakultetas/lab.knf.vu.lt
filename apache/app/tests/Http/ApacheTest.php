@@ -322,7 +322,7 @@ final class ApacheTest extends TestCase
 
     public function test_nothing_outside_public_can_be_fetched(): void
     {
-        foreach (['/.env', '/composer.json', '/storage/logs/laravel.log', '/app/Models/User.php', '/../.env'] as $path) {
+        foreach (['/.env', '/composer.json', '/storage/logs/laravel.log', '/app/Models/User.php'] as $path) {
             $response = $this->fetch('GET', $path);
             $this->assertSame(404, $response->status(), $path);
             $this->assertStringContainsString('Page not found', $response->body(), $path);
@@ -503,5 +503,34 @@ final class ApacheTest extends TestCase
 
         $this->assertArrayHasKey('register_argc_argv', $settings);
         $this->assertSame('', $settings['register_argc_argv']);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_path_above_the_document_root_is_refused
+    // -----------------------------------------------------------
+    //
+    // A request whose path climbs above the document root, sent
+    // as written: curl, under the HTTP client, removes the dot
+    // segments before sending unless told to keep the path as
+    // it is. Apache refuses such a path itself with a 400, and
+    // the environment file next to public/ never comes back.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_path_above_the_document_root_is_refused(): void
+    {
+        $response = Http::withOptions(['allow_redirects' => false, 'curl' => [CURLOPT_PATH_AS_IS => true]])
+            ->timeout(20)
+            ->get(self::SERVER . '/../.env');
+
+        $this->assertSame(400, $response->status());
+        $this->assertStringNotContainsString('APP_KEY', $response->body());
     }
 }

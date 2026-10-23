@@ -28,8 +28,20 @@ $(document).ready(function(){
 		  if(Cookies.get('filter_points_from') != undefined && Cookies.get('filter_points_to') != undefined && Cookies.get('filter_category') != undefined){
 			  $('#min').val(Cookies.get('filter_points_from'));
 			  $('#max').val(Cookies.get('filter_points_to'))
+			  // Only a category one of the page's own buttons carries
+			  // comes back from the cookie: other hosts of the domain
+			  // can set the cookie too, and .is() builds HTML out of
+			  // a string that looks like it; anything else, an
+			  // "undefined" saved by a Filter click without a
+			  // category among them, means no category
 			  var category = Cookies.get('filter_category');
-			  $("[data-filter='"+Cookies.get('filter_category')+"']").addClass('active');
+			  var $button = $('.button-group-cats .button-group').filter(function() {
+				  return $(this).attr('data-filter') === category;
+			  });
+			  if ($button.length === 0) {
+				  category = '';
+			  }
+			  $button.addClass('active');
 			  
 			  $grid.isotope({
 				      filter: function() {

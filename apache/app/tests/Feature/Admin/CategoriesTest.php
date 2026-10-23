@@ -352,4 +352,65 @@ final class CategoriesTest extends TestCase
     {
         $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/dialog/category/edit/987654321')->assertNotFound();
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_name_longer_than_its_column_is_refused
+    // -----------------------------------------------------------
+    //
+    // A category name holds up to the 255 characters of its
+    // column; a longer one is refused with the error rather than
+    // stored cut short.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_name_longer_than_its_column_is_refused(): void
+    {
+        $category = $this->makeCategory('Kept Name');
+        $categories = Categories::count();
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/categories');
+
+        $this->post('/control-panel/dialog/category/store', ['name' => str_repeat('n', 256)])->assertSessionHasErrors('name');
+        $this->post('/control-panel/dialog/category/update', ['uid' => $category->id, 'name' => str_repeat('n', 256)])->assertSessionHasErrors('name');
+
+        $this->assertSame($categories, Categories::count());
+        $this->assertSame('Kept Name', $category->refresh()->name);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_renaming_a_deleted_category_says_so
+    // -----------------------------------------------------------
+    //
+    // A category another admin deleted in the meantime is not
+    // reported as renamed: the dialog's form goes back with
+    // "No category!".
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_renaming_a_deleted_category_says_so(): void
+    {
+        $category = $this->makeCategory('Doomed');
+        $category->delete();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/categories')
+            ->post('/control-panel/dialog/category/update', ['uid' => $category->id, 'name' => 'Renamed']);
+
+        $response->assertRedirect('/control-panel/categories');
+        $this->assertErrorFlashed('No category!');
+        $response->assertSessionMissing('success');
+    }
 }

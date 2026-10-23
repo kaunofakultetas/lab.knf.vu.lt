@@ -274,21 +274,26 @@ class ChallengesController extends BaseController
     // Checks an answer and books a right one: the solve with
     // its points and address, the points added to the player,
     // a row of the solve feed and a fresh tasks_history in
-    // Redis; then back to the dashboard — or the group's page
-    // — with the points won. Every "VU{" and "}" is removed
-    // from the answer and from the stored flag alike before
-    // the compare, so a flag matches with or without its
-    // wrapper, however it was saved; past that the compare is
-    // exact, so a numeric flag matches only as written, and
-    // an empty answer never matches. Wrong answers and solved
-    // challenges go back with "Wrong answer" or "Already
-    // solved". The points are added in SQL, so solves two tabs
-    // book at the same moment all count; the same right answer
-    // sent twice at once — a double click — passes both
-    // "already solved" checks, and the second solve, which the
-    // table's unique key refuses, goes back as solved too. A
-    // hidden challenge takes no answer from a player it is
-    // hidden from, as in show.
+    // Redis (ChallengesHistory::refreshFeed); then back to the
+    // dashboard — or the group's page — with the points won.
+    // Every "VU{" and "}" is removed from the answer and from
+    // the stored flag alike before the compare, so a flag
+    // matches with or without its wrapper, however it was
+    // saved; past that the compare is exact, so a numeric flag
+    // matches only as written, and an empty answer, or one
+    // that is not text, never matches. Wrong answers and
+    // solved challenges go back with "Wrong answer" or
+    // "Already solved". The points are added in SQL, so solves
+    // two tabs book at the same moment all count; the same
+    // right answer sent twice at once — a double click —
+    // passes both "already solved" checks, and the second
+    // solve, which the table's unique key refuses, goes back
+    // as solved too. The booking holds a shared lock on the
+    // challenge's row, so a delete of the challenge either
+    // waits for the solve and takes its points back, or runs
+    // first, and the answer then goes to the dashboard as a
+    // challenge that does not exist. A hidden challenge takes
+    // no answer from a player it is hidden from, as in show.
     //
     // By design answers have no rate limit.
     //
@@ -323,7 +328,10 @@ class ChallengesController extends BaseController
         // STEP 2: the answer and the challenge's flag, both
         //         without the wrapper, and the challenge's points
         // =======================================================
-        $answer = trim(str_replace("VU{","",str_replace("}","",$request->get('answer'))));
+        // An answer that is not text — only a hand-made request
+        // sends one — counts as no answer
+        $answer = $request->get('answer');
+        $answer = is_string($answer) ? trim(str_replace("VU{","",str_replace("}","",$answer))) : '';
 
         $challenge_id = Challenges::getIdByPublicId($public_id);
 
@@ -340,51 +348,64 @@ class ChallengesController extends BaseController
         // =======================================================
         if ($solved == 0) {
             if ($answer !== '' && $challenge_answer === $answer) {
-                $submitTask = new ChallengesSubmitted();
-                $submitTask->user_id = Auth::guard('users')->id();
-                $submitTask->challenge_id = $challenge_id;
-                $submitTask->points_given = $challenge_points;
-                $submitTask->created = date('Y-m-d H:i:s');
-                $submitTask->ip = SettingsController::getUserIP();
+                $booked = DB::transaction(function () use ($challenge_id, $challenge_points) {
+                    // The challenge's row, share-locked until the
+                    // solve is booked: a delete of the challenge
+                    // waits for it, or ran first and left nothing
+                    $challenge = Challenges::whereKey($challenge_id)->sharedLock()->first();
 
-                // MySQL's duplicate-entry error: the same solve booked
-                // a moment ago by the other half of a double click
-                try {
-                    $submitTask->save();
-                } catch (QueryException $e) {
-                    if ((int) ($e->errorInfo[1] ?? 0) !== 1062) {
-                        throw $e;
+                    if ($challenge === null) {
+                        return 'gone';
                     }
 
+                    $submitTask = new ChallengesSubmitted();
+                    $submitTask->user_id = Auth::guard('users')->id();
+                    $submitTask->challenge_id = $challenge_id;
+                    $submitTask->points_given = $challenge_points;
+                    $submitTask->created = date('Y-m-d H:i:s');
+                    $submitTask->ip = SettingsController::getUserIP();
+
+                    // MySQL's duplicate-entry error: the same solve booked
+                    // a moment ago by the other half of a double click
+                    try {
+                        $submitTask->save();
+                    } catch (QueryException $e) {
+                        if ((int) ($e->errorInfo[1] ?? 0) !== 1062) {
+                            throw $e;
+                        }
+
+                        return 'solved';
+                    }
+
+                    // A missing total counts as 0, as it always has
+                    User::where(["id" => Auth::guard('users')->id()])->update(
+                        ["points" => DB::raw('IFNULL(points, 0) + ' . (int) $challenge_points)]);
+
+                    // The content line is neither fillable nor a column,
+                    // so the model drops it
+                    ChallengesHistory::create([
+                        'user_id'=>Auth::guard('users')->id(),
+                        'challenge_id'=>$challenge_id,
+                        'content' => User::find(Auth::guard('users')->id())->getUsername() . ' solved ' . $challenge->name . ' challenge',
+                        'created_time' => time(),
+                        'created' => date('Y-m-d H:i:s')
+                    ]);
+
+                    return 'booked';
+                });
+
+                if ($booked === 'gone') {
+                    return redirect(route('user_dashboard'))->withErrors(['Challenge doesn\'t exists!']);
+                }
+
+                if ($booked === 'solved') {
                     return back()->withErrors(['Already solved']);
                 }
 
-                // A missing total counts as 0, as it always has
-                User::where(["id" => Auth::guard('users')->id()])->update(
-                    ["points" => DB::raw('IFNULL(points, 0) + ' . (int) $challenge_points)]);
-
-                // The content line is neither fillable nor a column,
-                // so the model drops it
-                ChallengesHistory::create([
-                    'user_id'=>Auth::guard('users')->id(),
-                    'challenge_id'=>$challenge_id,
-                    'content' => User::find(Auth::guard('users')->id())->getUsername() . ' solved ' . Challenges::find($challenge_id)->name . ' challenge',
-                    'created_time' => time(),
-                    'created' => date('Y-m-d H:i:s')
-                ]);
-
-                // The six latest solves, with names, for the sidebar
-                Redis::set('tasks_history', json_encode(
-                    ChallengesHistory::selectRaw("cyber_challenges_history.*, cyber_users.username, cyber_challenges.name")
-                    ->leftJoin('cyber_users', 'cyber_users.id', 'cyber_challenges_history.user_id')
-                    ->leftJoin('cyber_challenges', 'cyber_challenges.id', 'cyber_challenges_history.challenge_id')
-                    ->orderBy('id', 'desc')
-                    ->take(6)
-                    ->get()
-                    ->toArray()));
+                ChallengesHistory::refreshFeed();
 
                 if($public_group_id == NULL){
-                    return redirect()->intended(route('user_dashboard'))->withSuccess("Your answer is correct! You received $challenge_points points");
+                    return redirect(route('user_dashboard'))->withSuccess("Your answer is correct! You received $challenge_points points");
                 } else {
                     return redirect('/user/group/'.$public_group_id)->withSuccess("Your answer is correct! You received $challenge_points points");
                 }
@@ -410,10 +431,12 @@ class ChallengesController extends BaseController
     // One vote per player and challenge: up or down adds one
     // to the challenge's ThumbsUp_ or ThumbsDown_ counter in
     // Redis — INCR, so votes cast at the same moment all
-    // count — and marks the player as having voted. Any other
-    // type, a challenge that does not exist and a hidden one
-    // the player may not open (hiddenFromPlayer) are a 404
-    // and count nothing. The answer is an empty page.
+    // count — once the player's mark is claimed with SETNX,
+    // which sets it only when it is unset, so a player's two
+    // votes sent at once count once. Any other type, a
+    // challenge that does not exist and a hidden one the
+    // player may not open (hiddenFromPlayer) are a 404 and
+    // count nothing. The answer is an empty page.
     //
     // Used by:
     //   - thumbs() and thumbs_list() of custom.js — the vote
@@ -426,9 +449,8 @@ class ChallengesController extends BaseController
             abort(404);
         }
 
-        $voted = Redis::get('Vote_'.$public_id.'_'.Auth::guard('users')->id()) ?? 0;
-
-        if($voted == 0){
+        // The mark is checked and set in one command
+        if(Redis::setnx('Vote_'.$public_id.'_'.Auth::guard('users')->id(), 1)){
             if($type == 'up'){
                 Redis::incr('ThumbsUp_'.$public_id);
             }
@@ -436,8 +458,6 @@ class ChallengesController extends BaseController
             if($type == 'down'){
                 Redis::incr('ThumbsDown_'.$public_id);
             }
-
-            Redis::set('Vote_'.$public_id.'_'.Auth::guard('users')->id(), 1);
         }
     }
 
@@ -476,7 +496,10 @@ class ChallengesController extends BaseController
     // POST /user/feedback
     //
     // Stores the feedback text as given, then goes back with
-    // "Thank you for your feedback!".
+    // "Thank you for your feedback!". The text may be empty;
+    // a field that is not text — only a hand-made request
+    // sends one — goes back with the error and stores
+    // nothing.
     //
     // Used by:
     //   - the form of the feedback dialog
@@ -484,6 +507,14 @@ class ChallengesController extends BaseController
 
     public function feedback_save(Request $req)
     {
+        $validator = Validator::make($req->all(), [
+            'feedback' => 'nullable|string'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         Feedback::create([
             'user_id'=>Auth::guard('users')->id(),
             'feedback'=>$req->get('feedback'),

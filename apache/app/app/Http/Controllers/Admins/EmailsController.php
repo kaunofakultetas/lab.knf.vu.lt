@@ -126,11 +126,7 @@ class EmailsController extends BaseController
             $arr = array();
         }
 
-        if (empty($request->get('page')) || ! is_numeric($request->get('page'))) {
-            $curr_page = 1;
-        } else {
-            $curr_page = $request->get('page');
-        }
+        $curr_page = $this->listPage();
 
         $perPage = 50;
 
@@ -189,8 +185,10 @@ class EmailsController extends BaseController
     // POST /control-panel/emails/store
     //
     // Adds a template, not sent yet, and goes to the list with
-    // "Created!"; a form missing the name, subject or content
-    // goes back with the errors and what was typed.
+    // "Created!"; a form missing the name, subject or content,
+    // or with a name or subject longer than the 255
+    // characters their columns hold, goes back with the
+    // errors and what was typed.
     //
     // Used by:
     //   - the template form, for a new template
@@ -199,9 +197,9 @@ class EmailsController extends BaseController
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required',
+            'name' => 'required|max:255',
             'content' => 'required',
-            'subject' => 'required'
+            'subject' => 'required|max:255'
         ]);
 
         if ($validator->fails()) {
@@ -261,9 +259,11 @@ class EmailsController extends BaseController
     // POST /control-panel/emails/update
     //
     // Changes the template with the posted uid to the name,
-    // content and subject — all three required, as in store, a
-    // form missing one going back with the errors and what was
-    // typed — then goes to the list with "Updated!".
+    // content and subject — all three required and held to
+    // the lengths of store, a refused form going back with
+    // the errors and what was typed — then goes to the list
+    // with "Updated!". A template another admin deleted in
+    // the meantime goes to the list with "No email!" instead.
     //
     // Used by:
     //   - the template form, for an existing template
@@ -272,13 +272,17 @@ class EmailsController extends BaseController
     public function update(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required',
+            'name' => 'required|max:255',
             'content' => 'required',
-            'subject' => 'required'
+            'subject' => 'required|max:255'
         ]);
 
         if ($validator->fails()) {
             return back()->withErrors($validator)->withInput();
+        }
+
+        if (Emails::whereKey($request->get('uid'))->doesntExist()) {
+            return redirect(route('admin.emails'))->withErrors(['No email!']);
         }
 
         Emails::where(['id' => $request->get('uid')])->update([
@@ -382,7 +386,7 @@ class EmailsController extends BaseController
 
         session()->flash('success', 'Test email sent!');
 
-        return redirect()->intended(route('admin.emails'));
+        return redirect(route('admin.emails'));
     }
 
 
@@ -511,7 +515,8 @@ class EmailsController extends BaseController
     // Mails the template to the address of the registered
     // players' Mailjet list, MAILJET_REGISTERED_LIST, marks it
     // sent — its Send link then disappears — and goes to the
-    // list with "Email sent!". The stack sets no
+    // list with "Email sent!". A template another admin
+    // deleted in the meantime is a 404. The stack sets no
     // MAILJET_REGISTERED_LIST, so in production the mail has
     // no address to go to.
     //
@@ -522,12 +527,14 @@ class EmailsController extends BaseController
 
     public function send(Request $request, $email_id)
     {
-        Mail::to(env('MAILJET_REGISTERED_LIST'))->send(new SendMail(Emails::find($email_id)->subject, Emails::find($email_id)->content));
+        $template = Emails::findOrFail($email_id);
+
+        Mail::to(env('MAILJET_REGISTERED_LIST'))->send(new SendMail($template->subject, $template->content));
 
         Emails::where(['id' => $email_id])->update(['sent' => 1]);
 
         session()->flash('success', 'Email sent!');
 
-        return redirect()->intended(route('admin.emails'));
+        return redirect(route('admin.emails'));
     }
 }

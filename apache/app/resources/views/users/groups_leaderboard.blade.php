@@ -52,7 +52,7 @@
                       	  <div style="display:inline-block;padding-top:5px;"> <small> 
                       	  <a href="{{ env('APP_URL') }}/user/leaderboard"> Leaderboard</a> &nbsp;&nbsp; 
                          @foreach($group_list as $k => $val)
-                            @if($val['name'] !== $group_name)
+                            @if($val['group_id'] != $group_id)
                             <a href="{{ env('APP_URL') }}/user/group/leaderboard/{{ $val['public_id'] }}"> {{ $val['name'] }} Leaderboard</a> &nbsp;&nbsp; 
                             @endif
                          @endforeach

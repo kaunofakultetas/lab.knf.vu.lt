@@ -407,4 +407,30 @@ final class DashboardTest extends TestCase
         $response->assertSee('History');
         $response->assertSee('<strong>FastSolver</strong> solved Packet Detective challenge', false);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_card_description_is_cut_by_letters
+    // -----------------------------------------------------------
+    //
+    // The hundred characters a card shows are counted in
+    // letters, not bytes, so a description whose hundredth
+    // character is a Lithuanian letter keeps it, rather than
+    // losing the whole text to a letter cut in half.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_card_description_is_cut_by_letters(): void
+    {
+        $this->makeChallenge(['descr' => str_repeat('a', 99) . 'ąčęėįšųūž']);
+        $this->signIn($this->makePlayer());
+
+        $this->get('/user/dashboard')->assertSee(str_repeat('a', 99) . 'ą...');
+    }
 }

@@ -38,6 +38,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use ReCaptcha\ReCaptcha;
+use Illuminate\Support\Facades\DB;
 
 
 
@@ -162,7 +163,8 @@ class RegisterController extends Controller
     //
     // Activates the account holding the token's hash and
     // empties it, so the link works once, then goes to the
-    // login page with "User verified! Now you can login.". The
+    // login page with "User verified! Now you can login.",
+    // whatever page an earlier visit left asked for. The
     // validate.verify middleware has refused unknown and
     // expired tokens already; anything that still gets through
     // ends on the front page.
@@ -180,7 +182,7 @@ class RegisterController extends Controller
 
                 session()->flash('success', 'User verified! Now you can login.');
 
-                return redirect()->intended(route('login_users'));
+                return redirect(route('login_users'));
             }
         } else {
             return redirect('/');
@@ -264,7 +266,10 @@ class RegisterController extends Controller
     // dash, by the Unix time it is mailed, and stores the
     // token's SHA-256 hash in remember_token — never the
     // token, so the users table alone resets no password.
-    // ValidateReset reads the time back to refuse a link
+    // The hash goes to that local account alone: a VU account
+    // created later with the same e-mail is left out, as the
+    // link must name exactly one account. ValidateReset reads
+    // the time back to refuse a link
     // older than an hour; as the hash covers the time too, it
     // cannot be moved on. The answer is the same whether or
     // not the account exists, so the form tells no one which
@@ -283,12 +288,14 @@ class RegisterController extends Controller
             'g-recaptcha-response' => ['required', 'recaptchav3:forgotpass,0.6']
         ]);
 
-        if (User::where(['email' => $request->input('email')])->where(function ($query) { $query->where('vu_id', '')->orWhereNull('vu_id'); })->count() == 1) {
+        $local = User::where(['email' => $request->input('email')])->where(function ($query) { $query->where('vu_id', '')->orWhereNull('vu_id'); });
+
+        if ($local->count() == 1) {
             $uid = Str::random(50) . '-' . now()->getTimestamp();
 
             Mail::to($request->input('email'))->send(new SendRemindLink(['uid'=>$uid]));
 
-            User::where(['email'=>$request->input('email')])->update(['remember_token'=>hash('sha256', $uid)]);
+            $local->update(['remember_token'=>hash('sha256', $uid)]);
         }
 
         session()->flash('success', 'If email exists in our database, you will receive reset link.');
@@ -338,7 +345,11 @@ class RegisterController extends Controller
     // 12-character password, mails it, stores its hash and
     // empties the token, then goes to the login page. The
     // validate.reset middleware has refused unknown and
-    // expired tokens already.
+    // expired tokens already. The token is emptied and the
+    // password set in one statement before the mail goes out,
+    // so of two presses at once only the one that empties it
+    // mails a password, the one stored; the transaction
+    // around them puts both back should the mail fail.
     //
     // Used by:
     //   - the button of users/reset-password.blade.php
@@ -350,12 +361,16 @@ class RegisterController extends Controller
 
         $user_email = User::select('email')->where('remember_token', '=', hash('sha256', $reset_token))->get()->pluck('email')->first();
 
-        Mail::to($user_email)->send(new SendNewPass(['email'=>$user_email, 'new_pass'=>$new_pass]));
+        DB::transaction(function () use ($reset_token, $user_email, $new_pass) {
+            $claimed = User::where('remember_token', '=', hash('sha256', $reset_token))->update(['password'=>Hash::make($new_pass), 'remember_token'=>'']);
 
-        User::where('remember_token', '=', hash('sha256', $reset_token))->update(['password'=>Hash::make($new_pass), 'remember_token'=>'']);
+            if ($claimed === 1) {
+                Mail::to($user_email)->send(new SendNewPass(['email'=>$user_email, 'new_pass'=>$new_pass]));
+            }
+        });
 
         session()->flash('success', 'We just emailed you new password');
 
-        return redirect()->intended(route('login_users'));
+        return redirect(route('login_users'));
     }
 }

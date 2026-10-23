@@ -46,6 +46,25 @@
        </script>
    @endif 
                     
+   @if(session('danger'))
+       <script>
+       $(document).ready(function(){
+
+           $.toast({
+
+            heading: 'Warning',
+            text: '{{ session('danger') }}',
+            showHideTransition: 'slide',
+            icon: 'warning',
+            hideAfter: 10000,
+            position: 'top-right'
+
+           });
+
+        });
+       </script>
+   @endif
+
    @if($errors->any())
        <script>
 	     $(document).ready(function(){

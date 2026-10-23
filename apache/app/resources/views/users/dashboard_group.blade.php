@@ -62,7 +62,7 @@
                   </div>
                   <div class="card-body">
                     <h5 class="card-title">{{ $value['categories'] }}</h5>
-                    <p class="card-text">{{ substr($value['descr'], 0, 100) }}...</p>
+                    <p class="card-text">{{ mb_substr($value['descr'], 0, 100) }}...</p>
                     </div>
                   <div class="card-footer">
                   		@if($value['solved'] == 0)

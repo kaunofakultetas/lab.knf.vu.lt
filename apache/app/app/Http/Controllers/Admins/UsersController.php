@@ -36,6 +36,8 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use App\Models\GroupsUsers;
 use App\Models\User;
+use App\Models\ChallengesSubmitted;
+use App\Models\ChallengesHistory;
 
 
 
@@ -104,7 +106,8 @@ class UsersController extends BaseController
     // The admins.users view: the accounts, newest first, 50 to
     // a page of the list, narrowed to those whose e-mail or
     // username contains the q query parameter when one is
-    // given; the page links keep q.
+    // given — 0 included, and nothing that is not text — and
+    // the page links keep q.
     //
     // Used by:
     //   - the All users link of the panel's sidebar, and the
@@ -113,12 +116,15 @@ class UsersController extends BaseController
 
     public function index(Request $request)
     {
-        if(empty($request->query('q'))){
+        $q = $request->query('q');
+        $q = is_string($q) ? $q : '';
+
+        if($q === ''){
             $users = User::all()->toArray();
             $users_sort = User::all()->sortByDesc('id')->toArray();
         } else {
-            $users = User::where('email', 'like', '%'.$request->query('q').'%')->orWhere('username', 'like', '%'.$request->query('q').'%')->get()->toArray();
-            $users_sort = User::where('email', 'like', '%'.$request->query('q').'%')->orWhere('username', 'like', '%'.$request->query('q').'%')->get()->sortByDesc('id')->toArray();
+            $users = User::where('email', 'like', '%'.$q.'%')->orWhere('username', 'like', '%'.$q.'%')->get()->toArray();
+            $users_sort = User::where('email', 'like', '%'.$q.'%')->orWhere('username', 'like', '%'.$q.'%')->get()->sortByDesc('id')->toArray();
         }
 
         if (count($users) > 0) {
@@ -127,11 +133,7 @@ class UsersController extends BaseController
             $arr = array();
         }
 
-        if (empty($request->get('page')) || ! is_numeric($request->get('page'))) {
-            $curr_page = 1;
-        } else {
-            $curr_page = $request->get('page');
-        }
+        $curr_page = $this->listPage();
 
         $perPage = 50;
 
@@ -141,7 +143,7 @@ class UsersController extends BaseController
             'path' => url('control-panel/users')
         ]);
 
-        $paginator = $paginator->appends('q', $request->query('q'));
+        $paginator = $paginator->appends('q', $q);
 
         if (count($arr) == 0) {
             $arr = array();
@@ -197,7 +199,9 @@ class UsersController extends BaseController
     // e-mail and password as sent, unless the e-mail or the
     // username is taken; with notif set to 1, mails the
     // password to the new account (SendNewPass). Then to the
-    // accounts page with "User created!", or with the error.
+    // accounts page with "User created!", or with the error —
+    // the accounts page, whatever page an earlier visit left
+    // asked for, as for the status switch and the deletion.
     // A form missing the username, e-mail or password, or with
     // an e-mail that is no address or a password shorter than
     // the 8 characters the login form asks for, goes back with
@@ -232,12 +236,12 @@ class UsersController extends BaseController
                     Mail::to($request->get('email'))->send(new SendNewPass(['email'=>$request->get('email'), 'new_pass'=>$request->get('password')]));
                 }
 
-                return redirect()->intended(route('admin.users'))->withSuccess("User created!");
+                return redirect(route('admin.users'))->withSuccess("User created!");
             } else {
-                return redirect()->intended(route('admin.users'))->withErrors("Username already registered!");
+                return redirect(route('admin.users'))->withErrors("Username already registered!");
             }
         } else {
-            return redirect()->intended(route('admin.users'))->withErrors("Email already registered!");
+            return redirect(route('admin.users'))->withErrors("Email already registered!");
         }
     }
 
@@ -286,7 +290,9 @@ class UsersController extends BaseController
     // notif set to 1, mails it to the account (SendNewPass).
     // Then to the accounts page with "Updated!". A password
     // shorter than the 8 characters the login form asks for
-    // goes back with the error.
+    // goes back with the error, and an account another admin
+    // deleted in the meantime with "No user!", having changed
+    // and mailed nothing.
     //
     // Used by:
     //   - the account dialog, for an existing account
@@ -302,12 +308,18 @@ class UsersController extends BaseController
             return back()->withErrors($validator);
         }
 
+        $user = User::find($request->get('uid'));
+
+        if ($user === null) {
+            return back()->withErrors(['No user!']);
+        }
+
         User::where(['id' => $request->get('uid')])->update([
             'password' => Hash::make($request->get('password'))
         ]);
 
         if($request->get('notif') == 1) {
-            Mail::to(User::find($request->get('uid'))->email)->send(new SendNewPass(['new_pass'=>$request->get('password'), 'email'=>User::find($request->get('uid'))->email]));
+            Mail::to($user->email)->send(new SendNewPass(['new_pass'=>$request->get('password'), 'email'=>$user->email]));
         }
 
         session()->flash('success', 'Updated!');
@@ -359,7 +371,7 @@ class UsersController extends BaseController
 
         session()->flash('success', 'Status changed!');
 
-        return redirect()->intended(route('admin.users'));
+        return redirect(route('admin.users'));
     }
 
 
@@ -374,8 +386,10 @@ class UsersController extends BaseController
     // POST /control-panel/users/delete/{uid}
     //
     // Deletes the account and, for a VU account, its group
-    // memberships, which are kept by VU id. The solves and
-    // feedback of the account stay.
+    // memberships, which are kept by VU id, and its solves and
+    // feed rows, so no count, list or leaderboard keeps a
+    // player who no longer exists; the players' solve feed is
+    // rebuilt without them. The feedback of the account stays.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -392,8 +406,12 @@ class UsersController extends BaseController
             GroupsUsers::where(['vu_id' => $vu_id])->delete();
         }
 
+        ChallengesSubmitted::where(['user_id' => $user_id])->delete();
+        ChallengesHistory::where(['user_id' => $user_id])->delete();
+        ChallengesHistory::refreshFeed();
+
         session()->flash('success', 'User deleted!');
 
-        return redirect()->intended(route('admin.users'));
+        return redirect(route('admin.users'));
     }
 }

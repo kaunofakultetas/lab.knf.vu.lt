@@ -10,10 +10,9 @@
 //  account passwords, status and deletion, challenge
 //  visibility), which send it back where it came from with
 //  an error, and the sidebar hides those menus from it.
-//  Guests are sent to the admin login page, which offers
-//  the VU SSO only. Players signed in on the player side
-//  are sent there too, but its guest check passes them on
-//  to their dashboard.
+//  Guests, and players signed in on the player side, are
+//  sent to the admin login page, which offers the VU SSO
+//  only.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -182,8 +181,7 @@ final class AccessTest extends TestCase
     // -----------------------------------------------------------
     //
     // The pages behind the perms middleware that open without
-    // naming a record, but for the new-category dialog, which
-    // the list leaves out.
+    // naming a record.
     //
     // Used by:
     //   - test_a_main_admin_opens_the_main_only_pages,
@@ -194,14 +192,15 @@ final class AccessTest extends TestCase
     public static function mainOnlyPages(): array
     {
         return [
-            'categories'         => ['/control-panel/categories'],
-            'partners'           => ['/control-panel/partners'],
-            'new partner dialog' => ['/control-panel/dialog/partners/new'],
-            'settings'           => ['/control-panel/settings'],
-            'pages'              => ['/control-panel/pages'],
-            'new page'           => ['/control-panel/pages/create'],
-            'emails'             => ['/control-panel/emails'],
-            'new email'          => ['/control-panel/emails/create'],
+            'categories'          => ['/control-panel/categories'],
+            'new category dialog' => ['/control-panel/dialog/category/new'],
+            'partners'            => ['/control-panel/partners'],
+            'new partner dialog'  => ['/control-panel/dialog/partners/new'],
+            'settings'            => ['/control-panel/settings'],
+            'pages'               => ['/control-panel/pages'],
+            'new page'            => ['/control-panel/pages/create'],
+            'emails'              => ['/control-panel/emails'],
+            'new email'           => ['/control-panel/emails/create'],
         ];
     }
 
@@ -376,5 +375,64 @@ final class AccessTest extends TestCase
         $this->get('/control-panel/logout')->assertStatus(405);
 
         $this->assertAuthenticatedAs($admin, 'admins');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_list_takes_any_page_number
+    // -----------------------------------------------------------
+    //
+    // A page number the list's own links never make — an
+    // exponent, a fraction, a negative, a word, or a number
+    // past what an integer holds — opens the list instead of
+    // failing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    #[DataProvider('pagedLists')]
+    public function test_a_list_takes_any_page_number(string $list): void
+    {
+        $path = strtr($list, ['{challenge}' => $this->makeChallenge()->id, '{group}' => $this->makeGroup()->id]);
+        $this->signInAdmin($this->makeAdmin(true));
+
+        foreach (['1e19', '99999999999999999999', '9223372036854775807', '-3', '2.5', 'last'] as $page) {
+            $this->get("{$path}?page={$page}")->assertOk();
+        }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // pagedLists
+    // -----------------------------------------------------------
+    //
+    // The paged lists of the control panel, with a placeholder
+    // for the challenge or group a list belongs to.
+    //
+    // Used by:
+    //   - test_a_list_takes_any_page_number (above)
+    // -----------------------------------------------------------
+
+    public static function pagedLists(): array
+    {
+        return [
+            'challenges'       => ['/control-panel/challenges'],
+            'challenge files'  => ['/control-panel/challenges/files/{challenge}'],
+            'pages'            => ['/control-panel/pages'],
+            'accounts'         => ['/control-panel/users'],
+            'groups'           => ['/control-panel/users/vu-groups'],
+            'group members'    => ['/control-panel/users/vu-groups/users_list/{group}'],
+            'group challenges' => ['/control-panel/users/vu-groups/challenges_list/{group}'],
+            'mail templates'   => ['/control-panel/emails'],
+        ];
     }
 }

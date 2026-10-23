@@ -227,9 +227,11 @@ class GroupsController extends BaseController
     // The group's members, by the VU ids given, with a solve
     // of one of the given challenges, ranked by the points
     // those solves gave — the group's points, as the group
-    // page counts them — and, among equal points, by the
-    // latest of those solves, earliest first, which is also
-    // the last challenge shown.
+    // page counts them — and, among equal points, by whose
+    // latest of those solves was booked first. The booking
+    // order is the solve's id, not its time, which repeats
+    // an hour when the clocks go back in October; the time
+    // of the latest is the last challenge shown.
     //
     // Used by:
     //   - group_leaderboard (above)
@@ -243,8 +245,8 @@ class GroupsController extends BaseController
             ->whereIn('cyber_users.vu_id', $members)
             ->groupBy('cyber_users.id')
             ->orderByRaw('SUM(`cyber_challenges_submitted`.`points_given`) DESC')
-            ->orderBy('last_challenge')
-            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`created`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
+            ->orderByRaw('MAX(`cyber_challenges_submitted`.`id`)')
+            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`id`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
             ->get()->toArray();
 
         return $data;

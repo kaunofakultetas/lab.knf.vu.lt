@@ -23,9 +23,11 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Http\Controllers\Users\RegisterController;
 use App\Mail\SendNewPass;
 use App\Mail\SendRemindLink;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -682,5 +684,103 @@ final class PasswordResetTest extends TestCase
 
         $this->get("/reset/{$link}")->assertOk();
         $this->assertSame(hash('sha256', $link), $player->refresh()->remember_token);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_double_clicked_reset_mails_one_working_password
+    // -----------------------------------------------------------
+    //
+    // The reset button pressed twice at once: the first press
+    // claims the link and mails a new password, the second finds
+    // the link used and mails nothing, so the one password mailed
+    // is the one that works. The second press runs in full right
+    // after the first one's first read of the link, where mailing
+    // before claiming sent two passwords and kept only one.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_double_clicked_reset_mails_one_working_password(): void
+    {
+        $player = $this->makePlayer();
+        $link = $this->mailedLink($player);
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($link, &$interleaved) {
+            if (!$interleaved && str_contains($query->sql, '`remember_token`') && !str_contains($query->sql, 'count(*)')) {
+                $interleaved = true;
+                app(RegisterController::class)->reset_pass($link);
+            }
+        });
+
+        $this->post("/reset/{$link}")->assertRedirect('/');
+
+        $this->assertTrue($interleaved);
+        Mail::assertSent(SendNewPass::class, 1);
+        $password = Mail::sent(SendNewPass::class)->first()->data['new_pass'];
+        $this->assertTrue(Hash::check($password, $player->refresh()->password));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_local_account_sharing_its_email_with_a_vu_account_can_reset
+    // -----------------------------------------------------------
+    //
+    // A player who registered locally and later signed in with
+    // VU SSO under the same e-mail has two accounts with it.
+    // The reminder's link belongs to the local account alone,
+    // so it opens, resets that account's password, and leaves
+    // the VU account as it was.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_local_account_sharing_its_email_with_a_vu_account_can_reset(): void
+    {
+        $player = $this->makePlayer(['email' => 'ona@stud.vu.lt']);
+        $vu = $this->makeSsoPlayer(['email' => 'ona@stud.vu.lt']);
+        $link = $this->mailedLink($player);
+
+        $this->get("/reset/{$link}")->assertOk();
+        $this->post("/reset/{$link}")->assertRedirect('/');
+
+        $password = Mail::sent(SendNewPass::class)->first()->data['new_pass'];
+        $this->assertTrue(Hash::check($password, $player->refresh()->password));
+        $this->assertSame($vu->password, $vu->fresh()->password);
+        $this->assertEmpty($vu->fresh()->remember_token);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_reset_ends_on_the_login_page
+    // -----------------------------------------------------------
+    //
+    // After the reset the player lands on the login page,
+    // whatever page an earlier visit left asked for in the
+    // session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_reset_ends_on_the_login_page(): void
+    {
+        $link = $this->mailedLink($this->makePlayer());
+
+        $this->withSession(['url.intended' => 'https://lab.knf.vu.lt/user/leaderboard'])->post("/reset/{$link}")->assertRedirect('/');
     }
 }

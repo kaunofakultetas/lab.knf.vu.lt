@@ -425,4 +425,71 @@ final class ChallengeFilesTest extends TestCase
         $this->get("/control-panel/dialog/challenge_file/bogus/{$challenge->id}")->assertNotFound();
         $this->get('/control-panel/dialog/challenge_file/edit/987654321')->assertNotFound();
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_saving_a_deleted_link_says_so
+    // -----------------------------------------------------------
+    //
+    // A link another admin deleted in the meantime is not
+    // reported as updated: the dialog's form goes back with
+    // "No file!", and no link comes back.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_saving_a_deleted_link_says_so(): void
+    {
+        $challenge = $this->makeChallenge();
+        $file = ChallengesFiles::create(['challenge_id' => $challenge->id, 'name' => 'capture.pcap', 'file_url' => 'https://files.test/capture.pcap']);
+        $file->delete();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from("/control-panel/challenges/files/{$challenge->id}")
+            ->post('/control-panel/challenges_file/update', ['uid' => $file->id, 'name' => 'renamed.pcap', 'file_url' => 'https://files.test/renamed.pcap']);
+
+        $response->assertRedirect("/control-panel/challenges/files/{$challenge->id}");
+        $this->assertErrorFlashed('No file!');
+        $response->assertSessionMissing('success');
+        $this->assertSame(0, ChallengesFiles::count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_link_in_the_address_never_replaces_the_checked_one
+    // -----------------------------------------------------------
+    //
+    // The link stored is the one the http/https rules checked:
+    // a second file_url put into the form's address, where the
+    // rules never look, changes nothing, for a new link and an
+    // edited one alike, so a lab admin cannot slip a
+    // javascript: link onto the players' challenge page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_link_in_the_address_never_replaces_the_checked_one(): void
+    {
+        $admin = $this->makeAdmin();
+        $challenge = $this->makeChallenge(['created_by' => $admin->id]);
+        $sneaked = '?file_url=' . urlencode('javascript:alert(1)');
+        $this->signInAdmin($admin)->from("/control-panel/challenges/files/{$challenge->id}");
+
+        $this->post('/control-panel/challenges_file/store' . $sneaked, ['uid' => $challenge->id, 'name' => 'capture.pcap', 'file_url' => 'https://files.test/capture.pcap']);
+        $file = ChallengesFiles::where('challenge_id', $challenge->id)->firstOrFail();
+        $this->assertSame('https://files.test/capture.pcap', $file->file_url);
+
+        $this->post('/control-panel/challenges_file/update' . $sneaked, ['uid' => $file->id, 'name' => 'capture.pcap', 'file_url' => 'https://files.test/v2.pcap']);
+        $this->assertSame('https://files.test/v2.pcap', $file->refresh()->file_url);
+    }
 }

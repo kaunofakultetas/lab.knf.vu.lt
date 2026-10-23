@@ -4,8 +4,9 @@
 //  [*] UpdateRankingTable — refreshes the cached leaderboard
 //
 //  Before every request, copies the cyber_users_ranks view —
-//  every player with a solve, ranked by points — into Redis
-//  as ranking_table, keyed by user id. The player sidebar
+//  every player with a solve, ranked by points, ties going
+//  to whose last solve was booked first — into Redis as
+//  ranking_table, keyed by user id. The player sidebar
 //  and both leaderboards read that copy, so it is never
 //  older than the request reading it; the price is one
 //  ranking query on every request Laravel serves, a guest's

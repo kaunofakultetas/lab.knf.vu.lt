@@ -124,4 +124,34 @@ final class FeedbackTest extends TestCase
 
         $this->assertSame(['First thought.', 'Second thought.'], Feedback::where('user_id', $player->id)->orderBy('id')->pluck('feedback')->all());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_feedback_sent_as_a_list_is_refused
+    // -----------------------------------------------------------
+    //
+    // Feedback posted as a list, which only a hand-made request
+    // sends, goes back with the field's error rather than a
+    // server error, and nothing is stored.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_feedback_sent_as_a_list_is_refused(): void
+    {
+        $player = $this->makePlayer();
+
+        $response = $this->signIn($player)
+            ->from('/user/leaderboard')
+            ->post('/user/feedback', ['feedback' => ['first', 'second']]);
+
+        $response->assertRedirect('/user/leaderboard');
+        $response->assertSessionHasErrors('feedback');
+        $this->assertSame(0, Feedback::where('user_id', $player->id)->count());
+    }
 }

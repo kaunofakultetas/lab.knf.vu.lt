@@ -159,7 +159,13 @@ class SettingsController extends BaseController
     //
     // Copies the cyber_users_ranks view into Redis as
     // ranking_table: JSON of every ranked player, keyed by
-    // user id.
+    // user id, best first. The view numbers players with
+    // equal points in no set order, so the rows are ordered
+    // here and their user_rank numbered anew: by points, then
+    // by whose last solve was booked first — the solve's id,
+    // as the clock repeats an hour when it goes back in
+    // October. Every ranked player has a solve, so the join
+    // keeps them all.
     //
     // Used by:
     //   - UpdateRankingTable::handle (Http/Middleware/) —
@@ -168,9 +174,23 @@ class SettingsController extends BaseController
 
     public static function update_rank_table()
     {
-        $arr = DB::table('cyber_users_ranks')->get()->keyBy('user_id')->toArray();
+        $last_solve = DB::table('cyber_challenges_submitted')
+            ->selectRaw('`user_id`, MAX(`id`) AS `last_solve`')
+            ->groupBy('user_id');
 
-        Redis::set('ranking_table', json_encode($arr));
+        $ranked = DB::table('cyber_users_ranks')
+            ->joinSub($last_solve, 'last_solve', 'last_solve.user_id', '=', 'cyber_users_ranks.user_id')
+            ->orderByDesc('cyber_users_ranks.points')
+            ->orderBy('last_solve.last_solve')
+            ->select('cyber_users_ranks.*')
+            ->get();
+
+        $rank = 0;
+        foreach ($ranked as $row) {
+            $row->user_rank = ++$rank;
+        }
+
+        Redis::set('ranking_table', json_encode($ranked->keyBy('user_id')->toArray()));
     }
 
 

@@ -20,10 +20,13 @@
 namespace Tests\Feature\Admin;
 
 use App\Mail\SendNewPass;
+use App\Models\ChallengesHistory;
+use App\Models\ChallengesSubmitted;
 use App\Models\GroupsUsers;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -114,8 +117,9 @@ final class UsersTest extends TestCase
     // test_lab_admins_get_the_list_without_edit_actions
     // -----------------------------------------------------------
     //
-    // A lab admin sees the accounts but no edit or delete
-    // actions.
+    // A lab admin sees the accounts and their status, but no
+    // edit or delete actions and no status switch, which would
+    // all refuse it.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -128,8 +132,10 @@ final class UsersTest extends TestCase
         $response = $this->signInAdmin($this->makeAdmin())->get('/control-panel/users');
 
         $response->assertSee('<td>SomePlayer</td>', false);
+        $response->assertSee('Active');
         $response->assertDontSee("users_form('edit', {$player->id})", false);
         $response->assertDontSee("/control-panel/users/delete/{$player->id}", false);
+        $response->assertDontSee("/control-panel/users/status/{$player->id}/", false);
     }
 
 
@@ -605,5 +611,122 @@ final class UsersTest extends TestCase
         $this->app['auth']->guard('admins')->logout();
         $this->get("/verify/{$token}")->assertNotFound();
         $this->assertSame(0, $player->refresh()->status);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_deleting_an_account_takes_its_solves_along
+    // -----------------------------------------------------------
+    //
+    // The account's solves and its history rows go with it, and
+    // the shared history in the players' sidebar is rebuilt
+    // without them.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_deleting_an_account_takes_its_solves_along(): void
+    {
+        $player = $this->makePlayer(['username' => 'Departed']);
+        $challenge = $this->makeChallenge();
+        $this->signIn($player)->post("/user/challenge/{$challenge->public_id}", ['answer' => $challenge->answer]);
+        $this->assertStringContainsString('Departed', (string) Redis::get('tasks_history'));
+
+        $this->signInAdmin($this->makeAdmin(true))->post("/control-panel/users/delete/{$player->id}");
+
+        $this->assertSame(0, ChallengesSubmitted::where('user_id', $player->id)->count());
+        $this->assertSame(0, ChallengesHistory::where('user_id', $player->id)->count());
+        $this->assertStringNotContainsString('Departed', (string) Redis::get('tasks_history'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_search_for_0_is_a_search
+    // -----------------------------------------------------------
+    //
+    // The search term 0 narrows the accounts like any other
+    // term, rather than counting as no search at all.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_search_for_0_is_a_search(): void
+    {
+        $this->makePlayer(['username' => 'agent007', 'email' => 'bond@players.test']);
+        $this->makePlayer(['username' => 'Alice', 'email' => 'alice@players.test']);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/users?q=0');
+
+        $response->assertSee('<td>agent007</td>', false);
+        $response->assertDontSee('<td>Alice</td>', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_password_for_a_deleted_account_says_so
+    // -----------------------------------------------------------
+    //
+    // A password saved for an account another admin deleted in
+    // the meantime goes back with "No user!", mails nothing and
+    // does not claim the update worked.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_password_for_a_deleted_account_says_so(): void
+    {
+        $player = $this->makePlayer();
+        $player->delete();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/users')
+            ->post('/control-panel/dialog/users/update', ['uid' => $player->id, 'password' => 'brand-new-pass', 'notif' => 1]);
+
+        $response->assertRedirect('/control-panel/users');
+        $this->assertErrorFlashed('No user!');
+        $response->assertSessionMissing('success');
+        Mail::assertNothingSent();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_account_actions_end_on_the_accounts_page
+    // -----------------------------------------------------------
+    //
+    // The status switch and the deletion lead back to the
+    // accounts page, whatever page an earlier visit left asked
+    // for in the session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_account_actions_end_on_the_accounts_page(): void
+    {
+        $player = $this->makePlayer();
+        $stale = ['url.intended' => 'https://lab.knf.vu.lt/control-panel/users/vu-groups'];
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->withSession($stale)->post("/control-panel/users/status/{$player->id}/1")->assertRedirect('/control-panel/users');
+        $this->withSession($stale)->post("/control-panel/users/delete/{$player->id}")->assertRedirect('/control-panel/users');
     }
 }

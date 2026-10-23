@@ -270,9 +270,8 @@ final class LoginTest extends TestCase
     // test_a_signed_in_player_skips_the_guest_pages
     // -----------------------------------------------------------
     //
-    // The login, registration and reminder pages — and the
-    // admin login — send a signed-in player straight to the
-    // player dashboard.
+    // The login, registration and reminder pages send a
+    // signed-in player straight to the player dashboard.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -319,8 +318,8 @@ final class LoginTest extends TestCase
     // guestPages
     // -----------------------------------------------------------
     //
-    // The pages behind the guest middleware that need no
-    // token to open.
+    // The player side's pages behind the guest middleware
+    // that need no token to open.
     //
     // Used by:
     //   - test_a_signed_in_player_skips_the_guest_pages,
@@ -333,7 +332,6 @@ final class LoginTest extends TestCase
             'login'        => ['/'],
             'registration' => ['/register'],
             'reminder'     => ['/forgot-password'],
-            'admin login'  => ['/control-panel'],
         ];
     }
 
@@ -546,5 +544,128 @@ final class LoginTest extends TestCase
         $this->get('/user/logout_saml')->assertStatus(405);
 
         $this->assertAuthenticatedAs($player, 'users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_admin_login_turns_away_only_a_signed_in_admin
+    // -----------------------------------------------------------
+    //
+    // The control panel's login page sends a signed-in admin on
+    // to the admin dashboard, but shows a signed-in player its
+    // VU SSO button: a lab teacher trying the challenges as a
+    // player still reaches the panel's login.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_admin_login_turns_away_only_a_signed_in_admin(): void
+    {
+        $this->signIn($this->makePlayer());
+        $this->get('/control-panel')->assertOk()->assertSee('Login with VU SSO');
+
+        $this->signInAdmin($this->makeAdmin());
+        $this->get('/control-panel')->assertRedirect('/control-panel/dashboard');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_login_form_resumes_only_a_player_page
+    // -----------------------------------------------------------
+    //
+    // The login form goes on to the page asked for before it
+    // only when that page is one of the player side's: a page of
+    // another site — a refused POST keeps the address it came
+    // from — or of the control panel leads to the dashboard,
+    // and either way the page is taken out of the session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_login_form_resumes_only_a_player_page(): void
+    {
+        $player = $this->makePlayer();
+        $form = ['email' => $player->email, 'password' => self::PASSWORD];
+
+        $this->withSession(['url.intended' => 'https://elsewhere.example/user/login'])
+            ->post('/login', $form)
+            ->assertRedirect('/user/dashboard');
+        $this->assertNull(session('url.intended'));
+
+        $this->post('/user/logout');
+        $this->withSession(['url.intended' => 'https://lab.knf.vu.lt/control-panel/users'])
+            ->post('/login', $form)
+            ->assertRedirect('/user/dashboard');
+        $this->assertNull(session('url.intended'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_signing_out_forgets_the_page_asked_for
+    // -----------------------------------------------------------
+    //
+    // Signing out takes the page asked for before a login out of
+    // the session, so the next person to sign in on a shared
+    // computer is not sent to it.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_signing_out_forgets_the_page_asked_for(): void
+    {
+        $this->signIn($this->makePlayer())
+            ->withSession(['url.intended' => 'https://lab.knf.vu.lt/user/leaderboard'])
+            ->post('/user/logout')
+            ->assertRedirect('/');
+
+        $this->assertNull(session('url.intended'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_account_switched_off_is_signed_out_at_its_next_request
+    // -----------------------------------------------------------
+    //
+    // A player signed in when an admin switches the account off
+    // is signed out at the next request, sent to the login page
+    // with the message the login form gives an inactive account,
+    // and the page is not served.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_account_switched_off_is_signed_out_at_its_next_request(): void
+    {
+        $player = $this->makePlayer();
+        $this->signIn($player)->get('/user/leaderboard')->assertOk();
+
+        $this->signInAdmin($this->makeAdmin(true))->post("/control-panel/users/status/{$player->id}/1");
+        // The guard keeps the instance it was given, while a real
+        // request loads the account anew
+        $player->refresh();
+
+        $this->get('/user/leaderboard')->assertRedirect('/');
+        $this->assertErrorFlashed('Your account is not active');
+        $this->assertGuest('users');
     }
 }

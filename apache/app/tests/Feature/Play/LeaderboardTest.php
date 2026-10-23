@@ -361,4 +361,39 @@ final class LeaderboardTest extends TestCase
         $response->assertDontSee('5 days ago');
         $response->assertDontSee('1 week ago');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_tie_goes_to_who_got_there_first
+    // -----------------------------------------------------------
+    //
+    // Players with equal points are ranked by who reached the
+    // score first, whose last solve was booked first, on the
+    // page and in the places the sidebar shows. The booking
+    // order decides, not the clock, which repeats an hour when
+    // the clocks go back in October: here the solve booked first
+    // carries the later time, as it does in that hour.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_tie_goes_to_who_got_there_first(): void
+    {
+        $late = $this->makePlayer(['username' => 'Late']);
+        $early = $this->makePlayer(['username' => 'Early']);
+        $this->recordSolve($early, $this->makeChallenge(['points' => 10]), '2026-10-25 03:50:00');
+        $this->recordSolve($late, $this->makeChallenge(['points' => 10]), '2026-10-25 03:20:00');
+
+        $response = $this->signIn($this->makePlayer())->get('/user/leaderboard');
+
+        $response->assertSeeInOrder(['1st place', 'Early', '2nd place', 'Late']);
+        $ranking = json_decode(Redis::get('ranking_table'), true);
+        $this->assertSame(1, $ranking[$early->id]['user_rank']);
+        $this->assertSame(2, $ranking[$late->id]['user_rank']);
+    }
 }

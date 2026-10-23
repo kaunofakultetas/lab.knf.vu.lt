@@ -6,7 +6,8 @@
 //  The control panel is entered through the VU single
 //  sign-on only: its login page offers the SSO button, the
 //  saml_auth_admin middleware signs the admin in through
-//  check_admin, and the sign-out ends the SSO session too.
+//  check_admin, and the sign-out ends the SSO session too,
+//  through the sso_logout page.
 //  The password login is still here but no route reaches
 //  it.
 //
@@ -48,7 +49,8 @@ use Illuminate\Http\Request;
 //   index       — the login page
 //   login       — dead: the password login
 //   logout      — sign-out, from the SSO too
-//   cp_login    — on to the dashboard after the SSO login
+//   cp_login    — on to the page asked for, or the
+//                 dashboard, after the SSO login
 //   check_admin — the admin account of a VU user
 //
 // Used by:
@@ -73,8 +75,11 @@ class AdminAuthController extends Controller
     // GET /control-panel
     //
     // The admins.login view, whose only control is the
-    // "Login with VU SSO" button. Signed-in visitors never see
-    // it — the guest middleware sends them to a dashboard.
+    // "Login with VU SSO" button. A signed-in admin never sees
+    // it — the guest middleware, counting admin sessions only
+    // here, sends it to the admin dashboard — while a player
+    // signed in on the player side does, so a lab teacher
+    // trying the challenges can still reach the panel.
     //
     // Used by:
     //   - every redirect to login_admins, a refused control-
@@ -130,15 +135,17 @@ class AdminAuthController extends Controller
     //
     // POST /control-panel/logout
     //
-    // Signs the admin out of the panel, then sends the browser
-    // to the SSO's logout, which returns to the control-panel
-    // login page. The session — and its main flag — stays.
+    // Signs the admin out of the panel, forgets the page asked
+    // for before a login, then hands the browser to the SSO's
+    // logout, which returns to the control-panel login page.
+    // The hand-over is the sso_logout page, which moves on by
+    // itself, as the site's CSP would stop a redirect of the
+    // sign-out form on its way to the identity provider. The
+    // session — and its main flag — stays.
     //
     // Used by:
     //   - Post_Link() of custom_admin.js — the sign-out link of
     //     the panel's top bar (admins/partials/topnav.blade.php)
-    //   - Post_Link() of custom.js — the same link on a group's
-    //     leaderboard, whose page loads the player layout
     // -----------------------------------------------------------
 
     public function logout()
@@ -146,9 +153,10 @@ class AdminAuthController extends Controller
         // The plain sign-out, back to the login page without
         // leaving the SSO, is switched off
         Auth::guard('admins')->logout();
+        session()->forget('url.intended');
         $as = new \SimpleSAML\Auth\Simple('default-sp');
 
-        return redirect($as->getLogoutURL(env('APP_URL').'/control-panel'));
+        return view('sso_logout', ['logout_url' => $as->getLogoutURL(env('APP_URL').'/control-panel')]);
     }
 
 
@@ -163,8 +171,10 @@ class AdminAuthController extends Controller
     // GET /control-panel/login
     //
     // The end of the SSO login: the saml_auth_admin middleware
-    // has signed the admin in by now, so this only goes on to
-    // the dashboard, whose auth.admin check sends a VU user
+    // has signed the admin in by now, so this only goes on, to
+    // the control-panel page asked for before the login or the
+    // dashboard, taking that page out of the session
+    // (intendedWithin). Its auth.admin check sends a VU user
     // without an admin account back to the login page.
     //
     // Used by:
@@ -174,7 +184,7 @@ class AdminAuthController extends Controller
 
     public function cp_login(Request $request)
     {
-        return redirect('/control-panel/dashboard');
+        return $this->intendedWithin('/control-panel', route('admin_dashboard'));
     }
 
 

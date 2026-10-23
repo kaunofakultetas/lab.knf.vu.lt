@@ -19,9 +19,13 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Http\Controllers\Admins\UsersGroupsController;
 use App\Models\Groups;
 use App\Models\GroupsChallenges;
 use App\Models\GroupsUsers;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 
@@ -819,5 +823,173 @@ final class GroupsTest extends TestCase
         $response->assertSee('2 hours ago');
         $response->assertDontSee('5 days ago');
         $response->assertDontSee('1 week ago');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_second_add_never_doubles_a_member
+    // -----------------------------------------------------------
+    //
+    // A member added twice at the same moment, by a double click
+    // on the dialog, is stored once: the add locks the group's
+    // row before it checks for the member. The second add runs
+    // in full right after the first one's first step on the
+    // group, where a check followed by a separate insert stored
+    // the member twice.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_second_add_never_doubles_a_member(): void
+    {
+        $admin = $this->makeAdmin();
+        $group = $this->makeGroup($admin);
+        $form = ['uid' => $group->id, 'vu_id' => 's1234567'];
+        $this->signInAdmin($admin)->from("/control-panel/users/vu-groups/users_list/{$group->id}");
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($form, &$interleaved) {
+            $sql = strtolower($query->sql);
+            if (!$interleaved && (str_contains($sql, 'for update') || str_contains($sql, '`cyber_users_groups`'))) {
+                $interleaved = true;
+                app(UsersGroupsController::class)->users_store(Request::create('/', 'POST', $form));
+            }
+        });
+
+        $this->post('/control-panel/dialog/users/vu-groups/users_store', $form);
+
+        $this->assertTrue($interleaved);
+        $this->assertSame(1, GroupsUsers::where(['group_id' => $group->id, 'vu_id' => 's1234567'])->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_second_add_never_doubles_a_challenge
+    // -----------------------------------------------------------
+    //
+    // The same for a challenge added to the group twice at the
+    // same moment: it is stored once.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_second_add_never_doubles_a_challenge(): void
+    {
+        $admin = $this->makeAdmin();
+        $group = $this->makeGroup($admin);
+        $form = ['uid' => $group->id, 'challenge_id' => $this->makeChallenge()->id];
+        $this->signInAdmin($admin)->from("/control-panel/users/vu-groups/challenges_list/{$group->id}");
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($form, &$interleaved) {
+            $sql = strtolower($query->sql);
+            if (!$interleaved && (str_contains($sql, 'for update') || str_contains($sql, '`cyber_groups_challenges`'))) {
+                $interleaved = true;
+                app(UsersGroupsController::class)->challenges_store(Request::create('/', 'POST', $form));
+            }
+        });
+
+        $this->post('/control-panel/dialog/users/vu-groups/challenges_store', $form);
+
+        $this->assertTrue($interleaved);
+        $this->assertSame(1, GroupsChallenges::where(['group_id' => $group->id, 'challenge_id' => $form['challenge_id']])->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_add_shows_its_warning
+    // -----------------------------------------------------------
+    //
+    // Adding a member or a challenge the group already has
+    // brings the admin back to the list with the warning on
+    // screen, not just in the session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_add_shows_its_warning(): void
+    {
+        $admin = $this->makeAdmin();
+        $group = $this->makeGroup($admin);
+        $challenge = $this->makeChallenge();
+        GroupsUsers::create(['group_id' => $group->id, 'vu_id' => 's1234567']);
+        $this->assignToGroup($group, $challenge);
+        $this->signInAdmin($admin);
+
+        $this->from("/control-panel/users/vu-groups/users_list/{$group->id}")->followingRedirects()
+            ->post('/control-panel/dialog/users/vu-groups/users_store', ['uid' => $group->id, 'vu_id' => 's1234567'])
+            ->assertSee('User already added!');
+        $this->from("/control-panel/users/vu-groups/challenges_list/{$group->id}")->followingRedirects()
+            ->post('/control-panel/dialog/users/vu-groups/challenges_store', ['uid' => $group->id, 'challenge_id' => $challenge->id])
+            ->assertSee('Challenge already added!');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_member_list_is_newest_first
+    // -----------------------------------------------------------
+    //
+    // The members page lists the latest addition first, like
+    // every other list of the control panel.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_member_list_is_newest_first(): void
+    {
+        $group = $this->makeGroup();
+        foreach (['s0000001', 's0000002', 's0000003'] as $vu_id) {
+            GroupsUsers::create(['group_id' => $group->id, 'vu_id' => $vu_id]);
+        }
+
+        $this->signInAdmin($this->makeAdmin(true))
+            ->get("/control-panel/users/vu-groups/users_list/{$group->id}")
+            ->assertSeeInOrder(['s0000003', 's0000002', 's0000001']);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_group_leaderboard_uses_the_panel_layout
+    // -----------------------------------------------------------
+    //
+    // The panel's view of a group leaderboard is a control-panel
+    // page: the panel's layout and script bundle, not the
+    // player side's.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_group_leaderboard_uses_the_panel_layout(): void
+    {
+        $group = $this->makeGroup();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/vu-groups/leaderboard/{$group->id}");
+
+        $response->assertOk();
+        $response->assertSee('/assets/js/app_admin.min.js', false);
+        $response->assertDontSee('/assets/js/app.min.js', false);
     }
 }

@@ -7,7 +7,7 @@
 //  it for the data the panel's layout needs: the signed-in
 //  admin's VU id and main flag, read fresh from the account
 //  before each action — the menu and lists show main-only
-//  parts by it.
+//  parts by it — and the page number of its paged lists.
 //
 //  Used by:
 //    - CategoriesController, ChallengesController,
@@ -30,6 +30,7 @@ use App\Models\Settings;
 use App\Models\ChallengesHistory;
 use App\Models\Admin;
 use View;
+use Illuminate\Pagination\Paginator;
 
 
 
@@ -42,8 +43,9 @@ use View;
 // BaseController
 // -----------------------------------------------------------
 //
-// One method, the constructor, which registers the sharing
-// as a middleware of the controller.
+//   __construct — registers the sharing as a middleware of
+//                 the controller
+//   listPage    — the page a paged list opens at
 //
 // Used by:
 //   - the control-panel controllers of this folder
@@ -84,5 +86,33 @@ class BaseController extends Controller
 
             return $next($request);
         });
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // listPage
+    // -----------------------------------------------------------
+    //
+    // The page of a paged list the address asks for, as
+    // Laravel's paginator reads its page parameter: a whole
+    // number from 1 up, and the first page for anything else —
+    // an exponent, a fraction, a negative, a word, or a number
+    // past what an integer holds, which would break the slice
+    // of the list. It is capped at a million pages, far beyond
+    // any list here, so the slice's offset stays an integer.
+    //
+    // Used by:
+    //   - the paged lists of ChallengesController,
+    //     EmailsController, PagesController, UsersController
+    //     and UsersGroupsController
+    // -----------------------------------------------------------
+
+    protected function listPage(): int
+    {
+        return min(Paginator::resolveCurrentPage(), 1000000);
     }
 }

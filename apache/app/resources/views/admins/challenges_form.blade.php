@@ -52,7 +52,7 @@
                       {{ Form::open(['url' => $url]) }}
                         <div class="mb-3">
                           <label class="form-label">Name</label>
-                          {{ Form::text('name', $name, ['class' => 'form-control', 'required'=>'required']) }} 
+                          {{ Form::text('name', $name, ['class' => 'form-control', 'required'=>'required', 'maxlength'=>255]) }} 
                         </div>
                         
                         <div class="mb-3">
@@ -72,7 +72,7 @@
                          
                         <div class="mb-3">
                           <label class="form-label">Answer</label>
-                          {{ Form::text('answer', $answer, ['class' => 'form-control', 'required'=>'required']) }} 
+                          {{ Form::text('answer', $answer, ['class' => 'form-control', 'required'=>'required', 'maxlength'=>255]) }} 
                         </div>
                         
                         <div class="mb-3">

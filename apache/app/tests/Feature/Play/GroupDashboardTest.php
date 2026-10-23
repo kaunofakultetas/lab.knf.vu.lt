@@ -212,4 +212,28 @@ final class GroupDashboardTest extends TestCase
 
         $response->assertSee("href=\"/user/group/leaderboard/{$this->group->public_id}\"", false);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_card_description_is_cut_by_letters
+    // -----------------------------------------------------------
+    //
+    // As on the main dashboard, a card's hundred characters are
+    // counted in letters, so a Lithuanian letter at the cut
+    // stays whole and the description with it.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_card_description_is_cut_by_letters(): void
+    {
+        $this->assignToGroup($this->group, $this->makeChallenge(['descr' => str_repeat('a', 99) . 'ąčęėįšųūž']));
+
+        $this->get("/user/group/{$this->group->public_id}")->assertSee(str_repeat('a', 99) . 'ą...');
+    }
 }

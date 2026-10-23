@@ -106,11 +106,7 @@ class PagesController extends BaseController
             $arr = array();
         }
 
-        if (empty($request->get('page')) || ! is_numeric($request->get('page'))) {
-            $curr_page = 1;
-        } else {
-            $curr_page = $request->get('page');
-        }
+        $curr_page = $this->listPage();
 
         $perPage = 50;
 
@@ -170,9 +166,11 @@ class PagesController extends BaseController
     // POST /control-panel/pages/store
     //
     // Adds a page with a name, content and an alias no other
-    // page has, then goes to the list with "Created!". A
-    // refused form goes back with the errors and what was
-    // typed.
+    // page has, then goes to the list with "Created!". The
+    // name holds up to 255 characters and the alias up to the
+    // 50 of its column, as the database would cut a longer
+    // one short. A refused form goes back with the errors and
+    // what was typed.
     //
     // Used by:
     //   - the page form, for a new page
@@ -181,9 +179,9 @@ class PagesController extends BaseController
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => ['required'],
+            'name' => ['required', 'max:255'],
             'content' => ['required'],
-            'alias' => ['required', 'unique:cyber_pages']
+            'alias' => ['required', 'max:50', 'unique:cyber_pages']
         ]);
 
         if ($validator->fails()) {
@@ -242,10 +240,12 @@ class PagesController extends BaseController
     // POST /control-panel/pages/update
     //
     // Changes the page with the posted uid to the name,
-    // content and alias — all three required, the alias free
-    // but for the page's own, a refused form going back with
-    // the errors and what was typed — then goes to the list
-    // with "Updated!".
+    // content and alias — all three required and held to the
+    // lengths of store, the alias free but for the page's
+    // own, a refused form going back with the errors and what
+    // was typed — then goes to the list with "Updated!". A
+    // page another admin deleted in the meantime goes to the
+    // list with "No page!" instead.
     //
     // Used by:
     //   - the page form, for an existing page
@@ -255,13 +255,17 @@ class PagesController extends BaseController
     {
         // The uid is cast, as it goes into the rule's text
         $validator = Validator::make($request->all(), [
-            'name' => ['required'],
+            'name' => ['required', 'max:255'],
             'content' => ['required'],
-            'alias' => ['required', 'unique:cyber_pages,alias,' . (int) $request->get('uid')]
+            'alias' => ['required', 'max:50', 'unique:cyber_pages,alias,' . (int) $request->get('uid')]
         ]);
 
         if ($validator->fails()) {
             return back()->withErrors($validator)->withInput();
+        }
+
+        if (Pages::whereKey($request->get('uid'))->doesntExist()) {
+            return redirect(route('admin.pages'))->withErrors(['No page!']);
         }
 
         Pages::where(['id' => $request->get('uid')])->update([

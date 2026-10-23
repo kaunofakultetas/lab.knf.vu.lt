@@ -145,11 +145,7 @@ class UsersGroupsController extends BaseController
             $arr = array();
         }
 
-        if (empty($request->get('page')) || ! is_numeric($request->get('page'))) {
-            $curr_page = 1;
-        } else {
-            $curr_page = $request->get('page');
-        }
+        $curr_page = $this->listPage();
 
         $perPage = 50;
 
@@ -336,9 +332,9 @@ class UsersGroupsController extends BaseController
     // GET /control-panel/users/vu-groups/users_list/{uid}
     //
     // The admins.users-groups-userlist view: the group's
-    // members by VU id, 50 to a page of the list, under the
-    // group's name. The sort names a column the rows do not
-    // carry, so the list keeps the table's order.
+    // members by VU id, the latest added first like every
+    // list of the panel, 50 to a page of the list, under the
+    // group's name.
     //
     // Used by:
     //   - the members buttons of the groups list
@@ -348,16 +344,12 @@ class UsersGroupsController extends BaseController
     {
         if (count(GroupsUsers::where(['group_id'=>$uid])->get()->toArray()) > 0) {
             $arr = GroupsUsers::where(['cyber_users_groups.group_id'=>$uid])
-                ->get()->sortByDesc('cyber_users_groups.id')->toArray();
+                ->orderByDesc('id')->get()->toArray();
         } else {
             $arr = array();
         }
 
-        if (empty($request->get('page')) || ! is_numeric($request->get('page'))) {
-            $curr_page = 1;
-        } else {
-            $curr_page = $request->get('page');
-        }
+        $curr_page = $this->listPage();
 
         $perPage = 50;
 
@@ -424,6 +416,10 @@ class UsersGroupsController extends BaseController
     // "User already added!". The id need not belong to an
     // account yet: it becomes one at the student's first VU
     // login. A form without a VU id goes back with the error.
+    // The check and the insert run in a transaction that
+    // first locks the group's row, so an add sent twice at
+    // once — a double click — waits, then finds the member
+    // there, and stores it once.
     //
     // Used by:
     //   - the member dialog's form
@@ -439,14 +435,18 @@ class UsersGroupsController extends BaseController
             return back()->withErrors($validator);
         }
 
-        $num = GroupsUsers::where(['vu_id' => $request->get('vu_id'), 'group_id' => $request->get('uid')])->get()->count();
+        DB::transaction(function () use ($request) {
+            Groups::whereKey($request->get('uid'))->lockForUpdate()->first();
 
-        if($num == 0){
-            GroupsUsers::create(['vu_id' => $request->get('vu_id'), 'group_id' => $request->get('uid')]);
-            session()->flash('success', 'Added!');
-        } else {
-            session()->flash('danger', 'User already added!');
-        }
+            $num = GroupsUsers::where(['vu_id' => $request->get('vu_id'), 'group_id' => $request->get('uid')])->get()->count();
+
+            if($num == 0){
+                GroupsUsers::create(['vu_id' => $request->get('vu_id'), 'group_id' => $request->get('uid')]);
+                session()->flash('success', 'Added!');
+            } else {
+                session()->flash('danger', 'User already added!');
+            }
+        });
 
         return back();
     }
@@ -513,11 +513,7 @@ class UsersGroupsController extends BaseController
             $arr = array();
         }
 
-        if (empty($request->get('page')) || ! is_numeric($request->get('page'))) {
-            $curr_page = 1;
-        } else {
-            $curr_page = $request->get('page');
-        }
+        $curr_page = $this->listPage();
 
         $perPage = 50;
 
@@ -620,7 +616,9 @@ class UsersGroupsController extends BaseController
     // unless it is there already, then goes back with "Added!"
     // or "Challenge already added!". A form without a
     // challenge, or naming one that does not exist, goes back
-    // with the error.
+    // with the error. As in users_store, the group's row is
+    // locked around the check and the insert, so a double
+    // click stores the challenge once.
     //
     // Used by:
     //   - the challenge dialog's form
@@ -636,14 +634,18 @@ class UsersGroupsController extends BaseController
             return back()->withErrors($validator);
         }
 
-        $num = GroupsChallenges::where(['group_id' => $request->get('uid'), 'challenge_id' => $request->get('challenge_id')])->get()->count();
+        DB::transaction(function () use ($request) {
+            Groups::whereKey($request->get('uid'))->lockForUpdate()->first();
 
-        if($num == 0){
-            GroupsChallenges::create(['challenge_id' => $request->get('challenge_id'), 'group_id' => $request->get('uid')]);
-            session()->flash('success', 'Added!');
-        } else {
-            session()->flash('danger', 'Challenge already added!');
-        }
+            $num = GroupsChallenges::where(['group_id' => $request->get('uid'), 'challenge_id' => $request->get('challenge_id')])->get()->count();
+
+            if($num == 0){
+                GroupsChallenges::create(['challenge_id' => $request->get('challenge_id'), 'group_id' => $request->get('uid')]);
+                session()->flash('success', 'Added!');
+            } else {
+                session()->flash('danger', 'Challenge already added!');
+            }
+        });
 
         return back();
     }
@@ -706,7 +708,9 @@ class UsersGroupsController extends BaseController
     //
     // A copy of Users\GroupsController::get_group_leaderboard:
     // the group's members ranked by the points the group's
-    // challenges gave them, with their latest solve of those.
+    // challenges gave them, ties going to whose latest of
+    // those solves was booked first, with the time of that
+    // solve.
     //
     // Used by:
     //   - group_leaderboard (above)
@@ -720,8 +724,8 @@ class UsersGroupsController extends BaseController
             ->whereIn('cyber_users.vu_id', $members)
             ->groupBy('cyber_users.id')
             ->orderByRaw('SUM(`cyber_challenges_submitted`.`points_given`) DESC')
-            ->orderBy('last_challenge')
-            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`created`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
+            ->orderByRaw('MAX(`cyber_challenges_submitted`.`id`)')
+            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`id`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
             ->get()->toArray();
 
         return $data;

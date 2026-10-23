@@ -6,7 +6,8 @@
 //  Laravel's auth middleware with the app's login page: a
 //  guest who opens a page behind auth:users is sent to the
 //  player login form, or gets a 401 when the request asks
-//  for JSON.
+//  for JSON. A player whose account was switched off after
+//  signing in is signed out at the next request.
 //
 //  Used by:
 //    - app/Http/Kernel.php — the auth alias
@@ -18,7 +19,9 @@
 
 namespace App\Http\Middleware;
 
+use Closure;
 use Illuminate\Auth\Middleware\Authenticate as Middleware;
+use Illuminate\Support\Facades\Auth;
 
 
 
@@ -32,7 +35,11 @@ use Illuminate\Auth\Middleware\Authenticate as Middleware;
 // -----------------------------------------------------------
 //
 // Laravel checks the guards the route names; this class
-// only says where a refused guest goes.
+// adds the status check of the users guard and says where a
+// refused guest goes.
+//
+//   handle     — the sign-in check, and the account's status
+//   redirectTo — where a refused guest goes
 //
 // Used by:
 //   - app/Http/Kernel.php — the auth alias
@@ -41,6 +48,44 @@ use Illuminate\Auth\Middleware\Authenticate as Middleware;
 
 class Authenticate extends Middleware
 {
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // handle
+    // -----------------------------------------------------------
+    //
+    // Laravel's check that the visitor is signed in on one of
+    // the route's guards, and one more on the users guard: an
+    // account whose status is no longer 1 — switched off in
+    // the control panel after the player signed in — is
+    // signed out there and then and sent to the login page
+    // with "Your account is not active", the login form's own
+    // message, so the switch takes effect at once rather than
+    // when the session runs out.
+    //
+    // Used by:
+    //   - the auth alias — auth:users on the player pages,
+    //     auth:sanctum on /api/user
+    // -----------------------------------------------------------
+
+    public function handle($request, Closure $next, ...$guards)
+    {
+        $this->authenticate($request, $guards);
+
+        $player = in_array('users', $guards, true) ? Auth::guard('users')->user() : null;
+
+        if ($player !== null && (int) $player->status !== 1) {
+            Auth::guard('users')->logout();
+
+            return redirect()->route('login_users')->withErrors(['Your account is not active']);
+        }
+
+        return $next($request);
+    }
 
 
 

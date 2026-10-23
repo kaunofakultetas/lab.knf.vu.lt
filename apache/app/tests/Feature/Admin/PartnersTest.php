@@ -551,7 +551,10 @@ final class PartnersTest extends TestCase
     // -----------------------------------------------------------
     //
     // Every partner route sends a lab admin back with the
-    // permissions error, and nothing changes.
+    // permissions error, checked after each request, and
+    // nothing changes. Each form is one the route would accept
+    // from a main admin, so a refusal can only come from the
+    // permissions check.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -563,13 +566,16 @@ final class PartnersTest extends TestCase
         $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
 
         $this->get("/control-panel/dialog/partners/edit/{$partner->id}")->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed("You don't have permissions to do this!");
         $this->post('/control-panel/dialog/partners/store', ['name' => 'X', 'picture' => $this->upload('logo.png', self::png())])
             ->assertRedirect('/control-panel/dashboard');
-        $this->post('/control-panel/dialog/partners/update', ['uid' => $partner->id, 'name' => 'X'])
-            ->assertRedirect('/control-panel/dashboard');
-        $this->post("/control-panel/partners/delete/{$partner->id}")->assertRedirect('/control-panel/dashboard');
-
         $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->post('/control-panel/dialog/partners/update', ['uid' => $partner->id, 'name' => 'X', 'picture' => $this->upload('logo.png', self::png())])
+            ->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->post("/control-panel/partners/delete/{$partner->id}")->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+
         $this->assertSame(1, Partners::count());
         $this->assertSame('CERT-LT', $partner->refresh()->name);
     }

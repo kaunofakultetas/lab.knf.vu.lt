@@ -107,10 +107,10 @@
                                   </td>
                                   <td>{{ $value['email'] }}</td> 
                                   <td>{{ $value['last_login'] }}</td>
-                                  <td><a href="#" onClick="Post_Link('/control-panel/users/status/{{ $value['id'] }}/{{ $value['status'] }}');">@if($value['status'] == 1) 
+                                  <td>@if($main == 1)<a href="#" onClick="Post_Link('/control-panel/users/status/{{ $value['id'] }}/{{ $value['status'] }}');">@endif @if($value['status'] == 1) 
                                   	 <span class="badge bg-success">Active</span>  
                                   	  @else <span class="badge bg-danger">Not active</span>  
-                                  	  @endif </a></td> 
+                                  	  @endif @if($main == 1)</a>@endif</td> 
                                   	  
                                   @if($main == 1)
                                   <td class="text-center"> <a href="#" onClick="users_form('edit', {{ $value['id'] }});"><i class="fas fa-edit"></i></a> </td>

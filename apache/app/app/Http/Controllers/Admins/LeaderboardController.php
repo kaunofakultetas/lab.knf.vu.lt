@@ -89,9 +89,13 @@ class LeaderboardController extends BaseController
     // rows of ranking_table with ordinal ranks and how long
     // ago each last solve was, and the fifteen latest solves
     // with player, challenge and the challenge's points as
-    // they stand now. The view never shows the count of team
-    // accounts it is handed, and a standings list of every
-    // ranked player is built too, and thrown away.
+    // they stand now. The players with a solve and the latest
+    // solves count only accounts and challenges that still
+    // exist, so solves left behind by an account deleted
+    // before its solves went with it count for no one. The
+    // view never shows the count of team accounts it is
+    // handed, and a standings list of every ranked player is
+    // built too, and thrown away.
     //
     // Used by:
     //   - the Home link of the panel's sidebar, the end of the
@@ -103,8 +107,8 @@ class LeaderboardController extends BaseController
         // The ranking is refreshed by UpdateRankingTable on every
         // request, so this action no longer refreshes it itself
         $th = ChallengesHistory::selectRaw("cyber_challenges_history.*, cyber_users.username, cyber_challenges.name, cyber_challenges.points")
-            ->leftJoin('cyber_users', 'cyber_users.id', 'cyber_challenges_history.user_id')
-            ->leftJoin('cyber_challenges', 'cyber_challenges.id', 'cyber_challenges_history.challenge_id')
+            ->join('cyber_users', 'cyber_users.id', 'cyber_challenges_history.user_id')
+            ->join('cyber_challenges', 'cyber_challenges.id', 'cyber_challenges_history.challenge_id')
             ->orderBy('id', 'desc')
             ->take(15)
             ->get()
@@ -141,7 +145,7 @@ class LeaderboardController extends BaseController
             'registered_users'=>User::all()->count(),
             'registered_teams'=>User::where(['user_type'=>2])->count(),
             'loggedin_users'=>User::whereNotNull('last_login')->count(),
-            'solvedone_users'=>ChallengesSubmitted::distinct()->count('user_id'),
+            'solvedone_users'=>ChallengesSubmitted::join('cyber_users', 'cyber_users.id', 'cyber_challenges_submitted.user_id')->distinct()->count('cyber_challenges_submitted.user_id'),
             'total_groups'=>Groups::all()->count(),
             'ranking_table'=>$ordinalUsers,
             'latest_solved'=>$th
@@ -232,9 +236,10 @@ class LeaderboardController extends BaseController
     // update_rank_table
     // -----------------------------------------------------------
     //
-    // Dead code: a copy of Users\SettingsController::
+    // Dead code: an old copy of Users\SettingsController::
     // update_rank_table, which UpdateRankingTable runs on
-    // every request instead.
+    // every request instead. It copies the view as it comes,
+    // without that one's order and numbering of tied players.
     //
     // Used by:
     //   - nothing at the moment

@@ -137,7 +137,9 @@ final class RouteTableTest extends TestCase
     ];
 
     // The routes only a guest may use, behind the guest
-    // middleware
+    // middleware; the control panel's login page counts only
+    // admin sessions (guest:admins), so a signed-in player
+    // still reaches it
     private const GUEST_ONLY = [
         'GET /',
         'GET control-panel',
@@ -334,8 +336,8 @@ final class RouteTableTest extends TestCase
     // test_the_guest_only_routes_are_the_reviewed_ones
     // -----------------------------------------------------------
     //
-    // The routes behind the guest middleware are exactly the
-    // GUEST_ONLY list.
+    // The routes behind the guest middleware, whatever guards
+    // they name, are exactly the GUEST_ONLY list.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -343,7 +345,7 @@ final class RouteTableTest extends TestCase
 
     public function test_the_guest_only_routes_are_the_reviewed_ones(): void
     {
-        $actual = array_keys(array_filter($this->routes(), fn (array $middleware) => in_array('guest', $middleware, true)));
+        $actual = array_keys(array_filter($this->routes(), fn (array $middleware) => (bool) preg_grep('/^guest(:|$)/', $middleware)));
 
         $this->assertEqualsCanonicalizing(self::GUEST_ONLY, $actual);
     }
@@ -366,7 +368,7 @@ final class RouteTableTest extends TestCase
 
     public function test_no_route_is_left_open_by_accident(): void
     {
-        $guards = ['auth.admin:admins', 'auth:users', 'guest', 'auth:sanctum', 'saml_auth', 'saml_auth_admin'];
+        $guards = ['auth.admin:admins', 'auth:users', 'guest', 'guest:admins', 'auth:sanctum', 'saml_auth', 'saml_auth_admin'];
 
         $open = array_keys(array_filter($this->routes(), fn (array $middleware) => !array_intersect($guards, $middleware)));
 

@@ -53,7 +53,7 @@
                     {{ Form::open() }}
                     
                      <div class="input-group"> 
-                          {{ Form::text('answer', '', ['class' => 'form-control', 'required'=>'required', 'placeholder'=>'VU{...}', 'maxlength'=>100]) }} 
+                          {{ Form::text('answer', '', ['class' => 'form-control', 'required'=>'required', 'placeholder'=>'VU{...}', 'maxlength'=>260]) }} 
                           {{ Form::submit('Submit', ['class'=>'btn btn-primary', 'login'=>'login']) }} 
                      </div>
                      

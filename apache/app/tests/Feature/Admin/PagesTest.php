@@ -358,4 +358,70 @@ final class PagesTest extends TestCase
     {
         $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/pages/edit/987654321')->assertNotFound();
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_name_or_alias_longer_than_its_column_is_refused
+    // -----------------------------------------------------------
+    //
+    // An alias holds up to the 50 characters of its column and a
+    // name up to 255. A longer one is refused with the error,
+    // rather than stored cut short, which would leave the page
+    // under an address nobody typed.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_name_or_alias_longer_than_its_column_is_refused(): void
+    {
+        $page = Pages::create(['name' => 'Kept Name', 'content' => '<p>x</p>', 'alias' => 'kept']);
+        $pages = Pages::count();
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/pages/create');
+
+        $this->post('/control-panel/pages/store', ['name' => 'Rules', 'content' => '<p>x</p>', 'alias' => str_repeat('a', 51)])->assertSessionHasErrors('alias');
+        $this->post('/control-panel/pages/store', ['name' => str_repeat('n', 256), 'content' => '<p>x</p>', 'alias' => 'rules'])->assertSessionHasErrors('name');
+        $this->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'Kept Name', 'content' => '<p>x</p>', 'alias' => str_repeat('a', 51)])->assertSessionHasErrors('alias');
+        $this->assertSame($pages, Pages::count());
+        $this->assertSame('kept', $page->refresh()->alias);
+
+        $this->post('/control-panel/pages/store', ['name' => 'Rules', 'content' => '<p>x</p>', 'alias' => str_repeat('a', 50)])->assertSessionHasNoErrors();
+        $this->assertSame($pages + 1, Pages::count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_saving_a_deleted_page_says_so
+    // -----------------------------------------------------------
+    //
+    // A page another admin deleted in the meantime is not
+    // reported as updated: the form goes back to the pages
+    // list with "No page!".
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_saving_a_deleted_page_says_so(): void
+    {
+        $page = Pages::create(['name' => 'Doomed', 'content' => '<p>x</p>', 'alias' => 'doomed']);
+        $page->delete();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))
+            ->from("/control-panel/pages/edit/{$page->id}")
+            ->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'Saved', 'content' => '<p>y</p>', 'alias' => 'saved']);
+
+        $response->assertRedirect('/control-panel/pages');
+        $this->assertErrorFlashed('No page!');
+        $response->assertSessionMissing('success');
+        $this->assertSame(0, Pages::where('alias', 'saved')->count());
+    }
 }

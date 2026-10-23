@@ -1,4 +1,4 @@
-@extends('users.layouts.app')
+@extends('admins.layouts.app')
 @section('content')
 <div class="page">
       <!-- Main Navbar-->
@@ -109,7 +109,7 @@
             </div>
           </section>
          
-           @include("users.partials.footer")
+           @include("admins.partials.footer")
            
         </div>
       </div>

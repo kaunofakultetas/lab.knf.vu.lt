@@ -10,6 +10,7 @@
 //  provider returns is matched to a player account —
 //  created on the first visit — which is signed in on the
 //  users guard; the route behind, /cp, then opens the
+//  player page asked for before the login, or the
 //  dashboard. An account switched inactive in the control
 //  panel is turned back to the login page instead.
 //

@@ -930,4 +930,158 @@ final class ChallengeTest extends TestCase
 
         $this->assertSame(0, $this->player->refresh()->points);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_hidden_challenges_solve_stays_out_of_the_shared_history
+    // -----------------------------------------------------------
+    //
+    // A group member's solve of a hidden challenge is booked as
+    // any other, but the shared history every player's sidebar
+    // shows leaves it out, so the hidden challenge's name never
+    // reaches players outside its groups.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_hidden_challenges_solve_stays_out_of_the_shared_history(): void
+    {
+        $challenge = $this->makeChallenge(['name' => 'Secret Lab Task', 'hidden' => 1]);
+        $group = $this->makeGroup();
+        $this->assignToGroup($group, $challenge);
+        $member = $this->makeSsoPlayer();
+        $this->joinGroup($group, $member);
+        $this->signIn($member);
+
+        $this->answer($challenge, $challenge->answer, $group->public_id)->assertSessionHas('success');
+
+        $this->assertSame(1, ChallengesSubmitted::where('user_id', $member->id)->count());
+        $this->assertStringNotContainsString('Secret Lab Task', (string) Redis::get('tasks_history'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_answer_sent_as_a_list_is_just_wrong
+    // -----------------------------------------------------------
+    //
+    // An answer posted as a list, which only a hand-made request
+    // sends, is a wrong answer like any other rather than a
+    // server error, and books nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_answer_sent_as_a_list_is_just_wrong(): void
+    {
+        $challenge = $this->makeChallenge();
+        $page = "/user/challenge/{$challenge->public_id}";
+
+        $response = $this->from($page)->post($page, ['answer' => [$challenge->answer]]);
+
+        $response->assertRedirect($page);
+        $this->assertErrorFlashed('Wrong answer');
+        $this->assertSame(0, ChallengesSubmitted::where('user_id', $this->player->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_challenge_deleted_mid_answer_books_nothing
+    // -----------------------------------------------------------
+    //
+    // A right answer racing an admin's delete of the challenge:
+    // the answer lands either before the delete, which then
+    // takes its points back, or after it, as an answer to a
+    // challenge that no longer exists. Here the delete lands
+    // between the answer's checks and its booking, so nothing
+    // is booked and the player's points stay.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_challenge_deleted_mid_answer_books_nothing(): void
+    {
+        $challenge = $this->makeChallenge(['points' => 30]);
+        $checks = 0;
+        DB::listen(function (QueryExecuted $query) use (&$checks, $challenge) {
+            if (str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_challenges_submitted`') && ++$checks === 2) {
+                DB::table('cyber_challenges')->where('id', $challenge->id)->delete();
+            }
+        });
+
+        $response = $this->answer($challenge, $challenge->answer);
+
+        $response->assertRedirect('/user/dashboard');
+        $this->assertErrorFlashed("Challenge doesn't exists!");
+        $this->assertSame(0, ChallengesSubmitted::where('user_id', $this->player->id)->count());
+        $this->assertSame(0, (int) $this->player->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_answer_field_takes_the_longest_flag
+    // -----------------------------------------------------------
+    //
+    // A flag may run to the 255 characters its column holds, and
+    // players may type the VU{...} wrapper around it, so the
+    // answer field takes 260 characters.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_answer_field_takes_the_longest_flag(): void
+    {
+        $challenge = $this->makeChallenge();
+
+        $this->get("/user/challenge/{$challenge->public_id}")->assertSee('maxlength="260"', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_right_answer_goes_to_the_dashboard_whatever_was_asked_for
+    // -----------------------------------------------------------
+    //
+    // A right answer leads to the dashboard with the points won,
+    // even when an earlier visit left a page asked for in the
+    // session. Going to that page would lose the message, and
+    // turn it into "You already solved this challenge!" when
+    // the page is the challenge just solved.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_right_answer_goes_to_the_dashboard_whatever_was_asked_for(): void
+    {
+        $challenge = $this->makeChallenge(['points' => 25]);
+
+        $response = $this->withSession(['url.intended' => "https://lab.knf.vu.lt/user/challenge/{$challenge->public_id}"])
+            ->answer($challenge, $challenge->answer);
+
+        $response->assertRedirect('/user/dashboard');
+        $response->assertSessionHas('success', 'Your answer is correct! You received 25 points');
+    }
 }

@@ -20,6 +20,7 @@
 
 namespace Tests\Feature\Play;
 
+use App\Http\Controllers\Users\ChallengesController;
 use App\Models\Challenges;
 use App\Models\User;
 use Illuminate\Redis\Events\CommandExecuted;
@@ -440,5 +441,46 @@ final class VotingTest extends TestCase
         $page = $this->signIn($this->makePlayer())->get("/user/challenge/{$challenge->public_id}");
 
         $page->assertSee('<meta name="csrf-token" content="' . csrf_token() . '">', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_simultaneous_votes_of_one_player_count_once
+    // -----------------------------------------------------------
+    //
+    // A player's vote sent twice at the same moment, by a double
+    // click or a script, counts once: the vote claims the
+    // player's mark and raises the counter only when the claim
+    // is new. The second vote runs in full right after the
+    // first one's first step on the mark, where a check followed
+    // by a separate write would let both through.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_simultaneous_votes_of_one_player_count_once(): void
+    {
+        $challenge = $this->makeChallenge();
+        $player = $this->makePlayer();
+        $mark = "Vote_{$challenge->public_id}_{$player->id}";
+        $interleaved = false;
+        Redis::enableEvents();
+        Redis::purge();
+        Event::listen(CommandExecuted::class, function (CommandExecuted $event) use ($mark, $challenge, &$interleaved) {
+            if (!$interleaved && ($event->parameters[0] ?? null) === $mark) {
+                $interleaved = true;
+                app(ChallengesController::class)->vote(request(), 'up', $challenge->public_id);
+            }
+        });
+
+        $this->vote($player, 'up', $challenge);
+
+        $this->assertTrue($interleaved);
+        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
     }
 }

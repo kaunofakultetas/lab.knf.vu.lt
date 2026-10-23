@@ -16,6 +16,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Models\User;
 use Tests\TestCase;
 
 
@@ -192,5 +193,37 @@ final class DashboardTest extends TestCase
         $response->assertOk();
         $response->assertSeeInOrder(array_fill(0, 4, '<strong class="text-lg">0</strong>'), false);
         $response->assertDontSee('Latest solved challenges');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_deleted_accounts_leave_the_figures
+    // -----------------------------------------------------------
+    //
+    // Solves left behind by an account that no longer exists,
+    // from before deleting an account took its solves along,
+    // count for no one: not among the players with a solve, and
+    // not in the latest solves.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_deleted_accounts_leave_the_figures(): void
+    {
+        $this->recordSolve($this->makePlayer(), $this->makeChallenge(['name' => 'Real Task']));
+        $ghost = $this->makePlayer();
+        $this->recordSolve($ghost, $this->makeChallenge(['name' => 'Ghost Task']));
+        User::where('id', $ghost->id)->delete();
+
+        $response = $this->signInAdmin($this->makeAdmin())->get('/control-panel/dashboard');
+
+        $response->assertSeeInOrder(['Solved at least<br>one challenge', '<strong class="text-lg">1</strong>', 'Total<br>groups'], false);
+        $response->assertSee('<td>Real Task</td>', false);
+        $response->assertDontSee('<td>Ghost Task</td>', false);
     }
 }

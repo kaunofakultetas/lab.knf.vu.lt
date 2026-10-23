@@ -3,9 +3,11 @@
 // -----------------------------------------------------------
 //  [*] SsoLoginTest — the VU SSO routes, end to end
 //
-//  /cp signs a player in, /control-panel/login an admin, and
-//  the two logout routes sign them out and hand over to the
-//  identity provider's own logout. All four build a
+//  /cp signs a player in, /control-panel/login an admin —
+//  each going on to the page of its side asked for before
+//  the login — and the two logout routes sign them out and
+//  hand over to the identity provider's own logout through a
+//  page that moves on by itself. All four build a
 //  SimpleSAMLphp client for the "default-sp" service
 //  provider, which needs the SSO configuration and the VU
 //  identity provider — neither exists in the tests
@@ -148,9 +150,14 @@ final class SsoLoginTest extends TestCase
     // test_sso_logout_hands_over_to_the_identity_provider
     // -----------------------------------------------------------
     //
-    // The SSO logout ends the lab session and redirects to the
-    // identity provider's logout, which returns to the front
-    // page of the lab.
+    // The SSO logout ends the lab session and hands over to the
+    // identity provider's logout through a page that moves on
+    // by itself, a meta refresh, never through a redirect of
+    // the sign-out form: the site's CSP lets forms reach the
+    // site only, and browsers hold every redirect of a form's
+    // navigation to that, so a redirect to the identity
+    // provider is blocked. The provider's logout returns to
+    // the front page of the lab.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -164,8 +171,11 @@ final class SsoLoginTest extends TestCase
             ->andReturn('https://idp.sso.test/logout?ReturnTo=lab');
         $this->signIn($this->makeSsoPlayer());
 
-        $this->post('/user/logout_saml')->assertRedirect('https://idp.sso.test/logout?ReturnTo=lab');
+        $response = $this->post('/user/logout_saml');
 
+        $response->assertOk();
+        $response->assertSee('<meta http-equiv="refresh" content="0;url=https://idp.sso.test/logout?ReturnTo=lab">', false);
+        $response->assertSee('href="https://idp.sso.test/logout?ReturnTo=lab"', false);
         $this->assertGuest('users');
     }
 
@@ -235,9 +245,11 @@ final class SsoLoginTest extends TestCase
     // test_admin_logout_hands_over_to_the_identity_provider
     // -----------------------------------------------------------
     //
-    // The admin logout ends the admin session and redirects to
-    // the identity provider's logout, which returns to the
-    // admin login page.
+    // The admin logout ends the admin session and hands over
+    // to the identity provider's logout the same way, through
+    // a page that moves on by itself, as a redirect of the
+    // sign-out form would be blocked; the provider returns to
+    // the admin login page.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -251,8 +263,10 @@ final class SsoLoginTest extends TestCase
             ->andReturn('https://idp.sso.test/logout?ReturnTo=cp');
         $this->signInAdmin($this->makeAdmin());
 
-        $this->post('/control-panel/logout')->assertRedirect('https://idp.sso.test/logout?ReturnTo=cp');
+        $response = $this->post('/control-panel/logout');
 
+        $response->assertOk();
+        $response->assertSee('<meta http-equiv="refresh" content="0;url=https://idp.sso.test/logout?ReturnTo=cp">', false);
         $this->assertGuest('admins');
     }
 
@@ -315,5 +329,91 @@ final class SsoLoginTest extends TestCase
         $this->assertErrorFlashed('Your account is not active');
         $this->assertGuest('users');
         $this->assertNull($player->refresh()->last_login);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_login_resumes_the_player_page_asked_for
+    // -----------------------------------------------------------
+    //
+    // A guest sent to the login from a player page — a challenge
+    // link a teacher shared, say — lands on that page after the
+    // VU login, and the page is taken out of the session, so no
+    // later redirect finds it again.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_login_resumes_the_player_page_asked_for(): void
+    {
+        $this->fakeIdentityProvider('s1234567', 'ona@stud.vu.lt');
+
+        $this->withSession(['url.intended' => 'https://lab.knf.vu.lt/user/leaderboard'])
+            ->get('/cp')
+            ->assertRedirect('https://lab.knf.vu.lt/user/leaderboard');
+
+        $this->assertNull(session('url.intended'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_login_resumes_no_page_of_the_panel
+    // -----------------------------------------------------------
+    //
+    // A page of the control panel asked for earlier is no page
+    // for a player: the VU login goes to the dashboard instead,
+    // and the page is taken out of the session all the same.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_login_resumes_no_page_of_the_panel(): void
+    {
+        $this->fakeIdentityProvider('s1234567', 'ona@stud.vu.lt');
+
+        $this->withSession(['url.intended' => 'https://lab.knf.vu.lt/control-panel/users'])
+            ->get('/cp')
+            ->assertRedirect('/user/dashboard');
+
+        $this->assertNull(session('url.intended'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_admin_login_resumes_the_panel_page_asked_for
+    // -----------------------------------------------------------
+    //
+    // The admin's VU login goes on to the control-panel page
+    // asked for before it, and takes the page out of the
+    // session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_admin_login_resumes_the_panel_page_asked_for(): void
+    {
+        $admin = $this->makeAdmin(true);
+        $this->fakeIdentityProvider($admin->vu_id, $admin->email);
+
+        $this->withSession(['url.intended' => 'https://lab.knf.vu.lt/control-panel/users/vu-groups'])
+            ->get('/control-panel/login')
+            ->assertRedirect('https://lab.knf.vu.lt/control-panel/users/vu-groups');
+
+        $this->assertNull(session('url.intended'));
     }
 }

@@ -286,4 +286,72 @@ final class GroupTest extends TestCase
         $response->assertDontSee('5 days ago');
         $response->assertDontSee('1 week ago');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_group_tie_goes_to_who_got_there_first
+    // -----------------------------------------------------------
+    //
+    // Members with equal group points are ranked by whose last
+    // group solve was booked first, whatever the clock said:
+    // the hour the clocks go back in October repeats, so the
+    // solve booked first may carry the later time.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_group_tie_goes_to_who_got_there_first(): void
+    {
+        $group = $this->makeGroup();
+        $first = $this->makeChallenge(['points' => 10]);
+        $second = $this->makeChallenge(['points' => 10]);
+        $this->assignToGroup($group, $first);
+        $this->assignToGroup($group, $second);
+        $late = $this->makeSsoPlayer(['username' => 'Late']);
+        $early = $this->makeSsoPlayer(['username' => 'Early']);
+        $this->joinGroup($group, $late);
+        $this->joinGroup($group, $early);
+        $this->recordSolve($early, $first, '2026-10-25 03:50:00');
+        $this->recordSolve($late, $second, '2026-10-25 03:20:00');
+
+        $response = $this->signIn($early)->get("/user/group/leaderboard/{$group->public_id}");
+
+        $response->assertSeeInOrder(['1st place', 'Early', '2nd place', 'Late']);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_same_named_group_still_gets_its_link
+    // -----------------------------------------------------------
+    //
+    // The member's other groups are told apart by id above the
+    // list, so a second group with the same name still gets its
+    // link, and only the group on screen is left out.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_same_named_group_still_gets_its_link(): void
+    {
+        $player = $this->makeSsoPlayer();
+        $mine = $this->makeGroup(null, ['name' => 'Networks Lab']);
+        $twin = $this->makeGroup(null, ['name' => 'Networks Lab']);
+        $this->joinGroup($mine, $player);
+        $this->joinGroup($twin, $player);
+
+        $response = $this->signIn($player)->get("/user/group/leaderboard/{$mine->public_id}");
+
+        $response->assertSee("href=\"https://lab.knf.vu.lt/user/group/leaderboard/{$twin->public_id}\"", false);
+        $response->assertDontSee("href=\"https://lab.knf.vu.lt/user/group/leaderboard/{$mine->public_id}\"", false);
+    }
 }

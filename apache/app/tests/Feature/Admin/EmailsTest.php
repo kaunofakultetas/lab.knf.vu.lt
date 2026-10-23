@@ -379,7 +379,10 @@ final class EmailsTest extends TestCase
     // -----------------------------------------------------------
     //
     // Every mail route sends a lab admin back with the
-    // permissions error; nothing is mailed or changed.
+    // permissions error, checked after each request; nothing
+    // is mailed or changed. The forms are ones the routes
+    // would accept from a main admin, so a refusal can only
+    // come from the permissions check.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -395,21 +398,25 @@ final class EmailsTest extends TestCase
             "/control-panel/dialog/emails/send_test/{$template->id}",
         ] as $page) {
             $this->get($page)->assertRedirect('/control-panel/dashboard');
+            $this->assertErrorFlashed("You don't have permissions to do this!");
         }
         foreach ([
-            "/control-panel/emails/send/{$template->id}",
-            "/control-panel/emails/delete/{$template->id}",
-            '/control-panel/emails/sync/registered',
-        ] as $action) {
-            $this->post($action)->assertRedirect('/control-panel/dashboard');
+            "/control-panel/emails/send/{$template->id}"         => [],
+            "/control-panel/emails/delete/{$template->id}"       => [],
+            '/control-panel/emails/sync/registered'              => [],
+            '/control-panel/emails/store'                        => ['name' => 'x', 'subject' => 'x', 'content' => 'x'],
+            '/control-panel/emails/update'                       => ['uid' => $template->id, 'name' => 'x', 'subject' => 'x', 'content' => 'x'],
+            "/control-panel/emails/sending_test/{$template->id}" => ['email' => 'me@admins.test'],
+        ] as $action => $form) {
+            $this->post($action, $form)->assertRedirect('/control-panel/dashboard');
+            $this->assertErrorFlashed("You don't have permissions to do this!");
         }
-        $this->post('/control-panel/emails/store', ['name' => 'x', 'subject' => 'x', 'content' => 'x'])->assertRedirect('/control-panel/dashboard');
-        $this->post("/control-panel/emails/sending_test/{$template->id}", ['email' => 'me@admins.test'])->assertRedirect('/control-panel/dashboard');
 
-        $this->assertErrorFlashed("You don't have permissions to do this!");
         Mail::assertNothingSent();
         $this->assertSame(1, Emails::count());
-        $this->assertSame(0, (int) $template->refresh()->sent);
+        $template->refresh();
+        $this->assertSame(0, (int) $template->sent);
+        $this->assertSame('Spring reminder', $template->name);
     }
 
 
@@ -547,5 +554,97 @@ final class EmailsTest extends TestCase
     public function test_an_unknown_list_sync_is_404(): void
     {
         $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/emails/sync/everyone')->assertNotFound();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_name_or_subject_longer_than_its_column_is_refused
+    // -----------------------------------------------------------
+    //
+    // A template's name and subject hold up to the 255
+    // characters of their columns; a longer one is refused with
+    // the error rather than stored cut short.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_name_or_subject_longer_than_its_column_is_refused(): void
+    {
+        $template = $this->makeTemplate();
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/emails/create');
+
+        $this->post('/control-panel/emails/store', ['name' => str_repeat('n', 256), 'subject' => 'x', 'content' => 'x'])->assertSessionHasErrors('name');
+        $this->post('/control-panel/emails/store', ['name' => 'x', 'subject' => str_repeat('s', 256), 'content' => 'x'])->assertSessionHasErrors('subject');
+        $this->post('/control-panel/emails/update', ['uid' => $template->id, 'name' => 'x', 'subject' => str_repeat('s', 256), 'content' => 'x'])->assertSessionHasErrors('subject');
+
+        $this->assertSame(1, Emails::count());
+        $this->assertSame('The spring challenges are open', $template->refresh()->subject);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_deleted_template_is_neither_saved_nor_sent
+    // -----------------------------------------------------------
+    //
+    // A template another admin deleted in the meantime is not
+    // reported as updated, the form going back to the templates
+    // with "No email!", and sending it answers 404 instead of a
+    // server error.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_deleted_template_is_neither_saved_nor_sent(): void
+    {
+        $template = $this->makeTemplate();
+        $template->delete();
+        $this->signInAdmin($this->makeAdmin(true))->from("/control-panel/emails/edit/{$template->id}");
+
+        $response = $this->post('/control-panel/emails/update', ['uid' => $template->id, 'name' => 'x', 'subject' => 'x', 'content' => 'x']);
+        $response->assertRedirect('/control-panel/emails');
+        $this->assertErrorFlashed('No email!');
+        $response->assertSessionMissing('success');
+
+        $this->post("/control-panel/emails/send/{$template->id}")->assertNotFound();
+        Mail::assertNothingSent();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_mail_actions_end_on_the_templates_page
+    // -----------------------------------------------------------
+    //
+    // The test mail and the send lead back to the templates,
+    // whatever page an earlier visit left asked for in the
+    // session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_mail_actions_end_on_the_templates_page(): void
+    {
+        $template = $this->makeTemplate();
+        $stale = ['url.intended' => 'https://lab.knf.vu.lt/control-panel/users'];
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->withSession($stale)->post("/control-panel/emails/sending_test/{$template->id}", ['email' => 'me@admins.test'])
+            ->assertRedirect('/control-panel/emails');
+        $this->withSession($stale)->post("/control-panel/emails/send/{$template->id}")
+            ->assertRedirect('/control-panel/emails');
     }
 }

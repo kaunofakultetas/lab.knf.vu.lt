@@ -95,8 +95,8 @@
                                 
                                 <tr> 
                                   <td>{{ $value['name'] }}</td> 
-                                  <td class="text-center"> <a href="#" onClick="challenge_categories({{ $value['id'] }});">Categories</a> </td>
-                                  <td class="text-center"> <a href="/control-panel/challenges/files/{{ $value['id'] }}">Files</a> </td> 
+                                  <td class="text-center"> @if($main == 1 || $user_id == $value['created_by'])<a href="#" onClick="challenge_categories({{ $value['id'] }});">Categories</a>@endif </td>
+                                  <td class="text-center"> @if($main == 1 || $user_id == $value['created_by'])<a href="/control-panel/challenges/files/{{ $value['id'] }}">Files</a>@endif </td> 
                                   
                                   @if($main == 1)
                                       <td class="text-center"> 

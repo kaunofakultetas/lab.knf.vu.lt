@@ -8,8 +8,9 @@
 //  the VU user id is matched to an admin account by
 //  AdminAuthController::check_admin, which also copies the
 //  admin's main flag into the session. A VU user without an
-//  admin account is signed in as nobody, and the dashboard
-//  redirect behind the route ends on the control-panel
+//  admin account is signed in as nobody, and the redirect
+//  behind the route — to the panel page asked for before
+//  the login, or the dashboard — ends on the control-panel
 //  login page again.
 //
 //  Used by:
