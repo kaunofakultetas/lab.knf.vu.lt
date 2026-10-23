@@ -45,7 +45,6 @@ use Illuminate\Http\Response;
 //   index        — the login page
 //   login        — the login form
 //   logout       — sign-out
-//   dashboard    — dead: no route reaches it
 //   cp           — on to the page asked for, or the
 //                  dashboard, after the SSO login
 //   check_member — the player account of a VU user
@@ -57,10 +56,6 @@ use Illuminate\Http\Response;
 
 class UserAuthController extends BaseController
 {
-
-    // Laravel's landing page after a login; nothing reads it,
-    // as login names the dashboard itself
-    protected $redirectTo = '/user/dashboard';
 
 
 
@@ -181,27 +176,6 @@ class UserAuthController extends BaseController
         session()->forget('url.intended');
 
         return redirect('/');
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // dashboard
-    // -----------------------------------------------------------
-    //
-    // Dead code: the users.dashboard view without its data. The
-    // dashboard route goes to ChallengesController::index.
-    //
-    // Used by:
-    //   - nothing at the moment
-    // -----------------------------------------------------------
-
-    public function dashboard(Request $request)
-    {
-        return view('users.dashboard');
     }
 
 

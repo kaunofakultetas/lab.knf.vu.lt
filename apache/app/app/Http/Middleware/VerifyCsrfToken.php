@@ -31,8 +31,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Middleware;
 // VerifyCsrfToken
 // -----------------------------------------------------------
 //
-// Laravel's middleware with one exception, which spares no
-// request that could change anything.
+// Laravel's middleware with an empty except list.
 //
 // Used by:
 //   - app/Http/Kernel.php — the web group
@@ -41,12 +40,8 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Middleware;
 class VerifyCsrfToken extends Middleware
 {
 
-    // The addresses spared the check. The one entry is the
-    // vote route's address without its type and challenge,
-    // so a vote is still checked; a POST to the bare path
-    // reaches only the answer route, with "vote" as a public
-    // id no challenge has, and books nothing
+    // The addresses spared the check — none, as every POST of
+    // the lab carries its page's token
     protected $except = [
-        '/user/challenge/vote'
     ];
 }

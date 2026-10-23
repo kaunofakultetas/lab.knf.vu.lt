@@ -166,9 +166,8 @@ Route::prefix('user')->group(function(){
 Route::prefix('control-panel')->group(function(){
     // The login page, for anyone not signed in as an admin —
     // a player signed in on the player side included — and
-    // the end of the SSO login (saml_auth_admin). The password
-    // login's POST is switched off: admins sign in through the
-    // SSO only.
+    // the end of the SSO login (saml_auth_admin): admins sign
+    // in through the SSO only.
     Route::get('/', [App\Http\Controllers\Admins\AdminAuthController::class, 'index'])->name('login_admins')->middleware(['guest:admins']);
 
     Route::get('/login', [App\Http\Controllers\Admins\AdminAuthController::class, 'cp_login'])->name('cp_login')->middleware(['saml_auth_admin']);

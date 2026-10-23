@@ -8,8 +8,6 @@
 //  saml_auth_admin middleware signs the admin in through
 //  check_admin, and the sign-out ends the SSO session too,
 //  through the sso_logout page.
-//  The password login is still here but no route reaches
-//  it.
 //
 //    GET  /control-panel        — the login page
 //    GET  /control-panel/login  — the end of the SSO login
@@ -47,7 +45,6 @@ use Illuminate\Http\Request;
 // none of the panel's layout data.
 //
 //   index       — the login page
-//   login       — dead: the password login
 //   logout      — sign-out, from the SSO too
 //   cp_login    — on to the page asked for, or the
 //                 dashboard, after the SSO login
@@ -59,9 +56,6 @@ use Illuminate\Http\Request;
 
 class AdminAuthController extends Controller
 {
-
-    // Laravel's landing page after a login; nothing reads it
-    protected $redirectTo = '/control-panel/dashboard';
 
 
 
@@ -89,39 +83,6 @@ class AdminAuthController extends Controller
     public function index()
     {
         return view('admins.login');
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // login
-    // -----------------------------------------------------------
-    //
-    // Dead code: the password login of the admins guard, by
-    // e-mail and a password of 6 or more. Its route and its
-    // form are switched off.
-    //
-    // Used by:
-    //   - nothing at the moment
-    // -----------------------------------------------------------
-
-    public function login(Request $request)
-    {
-        $this->validate($request, [
-            'email'   => 'required|email',
-            'password' => 'required|min:6'
-        ]);
-
-        $credentials = $request->only('email', 'password');
-
-        if (Auth::guard('admins')->attempt($credentials)) {
-            return redirect()->intended('/control-panel/dashboard');
-        } else {
-            return back();
-        }
     }
 
 

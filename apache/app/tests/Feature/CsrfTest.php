@@ -281,4 +281,30 @@ final class CsrfTest extends TestCase
 
         $this->assertSame('1', Redis::get("ThumbsUp_{$challenge->public_id}"));
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_no_address_is_spared_the_token_check
+    // -----------------------------------------------------------
+    //
+    // The token check spares no address of the lab, not even the
+    // vote's bare address, which no route of its own answers: a
+    // POST to it without the token ends on the 419 page for a
+    // guest and a player alike, before any route can run.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_no_address_is_spared_the_token_check(): void
+    {
+        $this->post('/user/challenge/vote')->assertStatus(419);
+
+        $this->signIn($this->makePlayer());
+        $this->post('/user/challenge/vote')->assertStatus(419);
+    }
 }

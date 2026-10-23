@@ -19,25 +19,6 @@
                 
                 <a href="{{ env('APP_URL') }}/control-panel/login" class="btn btn-primary d-block w-100">Login with VU SSO</a>
                 
-                  {{-- <form method="POST" action="{{ route('login_admin') }}" class="login-form py-5 w-100">
-                	@csrf	
-                    <div class="input-material-group mb-3"> 
-                      <input type="email" id="login-username" class="input-material" name="email" autocomplete="off" required autofocus>
-                      <label class="label-material" for="login-username">Email</label>
-                      @if ($errors->has('email'))
-                             <span class="text-danger">{{ $errors->first('email') }}</span>
-                      @endif
-                    </div>
-                    <div class="input-material-group mb-4">
-                      <input class="input-material" id="login-password" type="password" name="password" required>
-                      <label class="label-material" for="login-password">Password</label>
-                       @if ($errors->has('password'))
-                       		<span class="text-danger">{{ $errors->first('password') }}</span>
-                       @endif
-                    </div>
-                    <button class="btn btn-primary mb-3" id="login" type="submit">Login</button><br> 
-                  
-                  </form> --}}
                 </div> 
                 
                 

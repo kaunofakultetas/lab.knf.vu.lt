@@ -5,8 +5,9 @@
 //
 //  One cyber_admins row per admin. The VU single sign-on is
 //  the only way in, so an admin is found by vu_id, the VU
-//  user id; email and password belong to a password login
-//  whose route is switched off. main is 1 for a main admin,
+//  user id; the email and password columns are left over
+//  from a password login the panel no longer has. main is
+//  1 for a main admin,
 //  who may use every part of the control panel, and 0 for a
 //  lab admin, who may only manage the groups and challenges
 //  they created.

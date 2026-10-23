@@ -27,7 +27,6 @@ use App\Models\User;
 use App\Models\Groups;
 use App\Models\ChallengesSubmitted;
 use App\Models\ChallengesHistory;
-use Illuminate\Support\Facades\DB;
 
 
 
@@ -44,7 +43,6 @@ use Illuminate\Support\Facades\DB;
 //   dashboard           — the dashboard
 //   ordinal             — a rank with its suffix
 //   time_elapsed_string — a date as how long ago it was
-//   update_rank_table   — dead: a copy of the ranking refresh
 //
 // Used by:
 //   - routes/web.php
@@ -225,30 +223,5 @@ class LeaderboardController extends BaseController
         if (! $full)
             $string = array_slice($string, 0, 1);
         return $string ? implode(', ', $string) . ' ago' : 'just now';
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // update_rank_table
-    // -----------------------------------------------------------
-    //
-    // Dead code: an old copy of Users\SettingsController::
-    // update_rank_table, which UpdateRankingTable runs on
-    // every request instead. It copies the view as it comes,
-    // without that one's order and numbering of tied players.
-    //
-    // Used by:
-    //   - nothing at the moment
-    // -----------------------------------------------------------
-
-    public static function update_rank_table()
-    {
-        $arr = DB::table('cyber_users_ranks')->get()->keyBy('user_id')->toArray();
-
-        Redis::set('ranking_table', json_encode($arr));
     }
 }
