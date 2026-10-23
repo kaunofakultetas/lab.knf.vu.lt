@@ -11,8 +11,8 @@
 //  Used by:
 //    - Users\BaseController and Admins\BaseController — the
 //      bases of the player and control-panel controllers
-//    - Users\RegisterController, Admins\AdminAuthController
-//      and ApiController — directly
+//    - Users\RegisterController and Admins\AdminAuthController
+//      — directly
 // -----------------------------------------------------------
 
 
@@ -39,8 +39,7 @@ use Illuminate\Routing\Controller as BaseController;
 //
 // Used by:
 //   - Users\BaseController and Admins\BaseController
-//   - Users\RegisterController, Admins\AdminAuthController,
-//     HomeController and ApiController
+//   - Users\RegisterController and Admins\AdminAuthController
 // -----------------------------------------------------------
 
 class Controller extends BaseController

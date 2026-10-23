@@ -13,8 +13,10 @@
 //  pages that name the challenge in the address and on the
 //  forms that post its id. Deleting a challenge deletes the
 //  files, categories, history, submissions and group places
-//  hanging off it. The challenge files have a test class of
-//  their own, ChallengeFilesTest.
+//  hanging off it and takes the points it gave off its
+//  solvers' totals, while changing its points leaves earlier
+//  solves as they were. The challenge files have a test
+//  class of their own, ChallengeFilesTest.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -395,6 +397,44 @@ final class ChallengesTest extends TestCase
 
 
     // -----------------------------------------------------------
+    // test_changing_a_challenges_points_keeps_what_solvers_earned
+    // -----------------------------------------------------------
+    //
+    // A solve keeps the points it gave when the challenge's
+    // points change, in the solve and in the player's total;
+    // only the players who solve it afterwards get the new
+    // value.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_changing_a_challenges_points_keeps_what_solvers_earned(): void
+    {
+        $admin = $this->makeAdmin(true);
+        $challenge = $this->makeChallenge(['created_by' => $admin->id, 'points' => 10]);
+        $early = $this->makePlayer();
+        $this->recordSolve($early, $challenge);
+
+        $this->signInAdmin($admin)
+            ->post('/control-panel/challenges/update', $this->challengeForm(['uid' => $challenge->id, 'points' => 40]))
+            ->assertSessionHas('success', 'Updated!');
+        $late = $this->makePlayer();
+        $this->signIn($late)
+            ->post("/user/challenge/{$challenge->public_id}", ['answer' => 'packet_wizard'])
+            ->assertSessionHas('success', 'Your answer is correct! You received 40 points');
+
+        $this->assertSame(10, ChallengesSubmitted::where(['user_id' => $early->id, 'challenge_id' => $challenge->id])->value('points_given'));
+        $this->assertSame(10, $early->refresh()->points);
+        $this->assertSame(40, $late->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
     // test_a_lab_admin_manages_its_own_challenge
     // -----------------------------------------------------------
     //
@@ -491,8 +531,9 @@ final class ChallengesTest extends TestCase
     // -----------------------------------------------------------
     //
     // The challenge goes with its files, categories, history,
-    // submissions and group places; another challenge's rows
-    // stay, and so do the points players already earned.
+    // submissions and group places, and the points it gave
+    // come off its solvers' totals; another challenge's rows
+    // stay, and so do the points it gave.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -510,6 +551,8 @@ final class ChallengesTest extends TestCase
             $this->assignToGroup($group, $challenge);
             $this->recordSolve($player, $challenge);
         }
+        $other = $this->makePlayer();
+        $this->recordSolve($other, $doomed);
 
         $response = $this->signInAdmin($this->makeAdmin(true))
             ->from('/control-panel/challenges')
@@ -522,7 +565,8 @@ final class ChallengesTest extends TestCase
             $this->assertSame(0, $table::where('challenge_id', $doomed->id)->count(), $table);
             $this->assertSame(1, $table::where('challenge_id', $kept->id)->count(), $table);
         }
-        $this->assertSame(50, $player->refresh()->points);
+        $this->assertSame(10, $player->refresh()->points);
+        $this->assertSame(0, $other->refresh()->points);
     }
 
 

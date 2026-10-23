@@ -8,9 +8,9 @@
 //  runs inside a database transaction that is rolled back
 //  when it ends, and starts from an empty Redis — so every
 //  test sees the database exactly as mysql/init.sql leaves
-//  it: the two settings rows (event time range, registration
-//  open), the seeded main admin with id 1, the seven
-//  categories, and nothing else.
+//  it: the two settings rows (the old event range,
+//  registration open), the seeded main admin with id 1, the
+//  seven categories, and nothing else.
 //
 //  On top of that it carries the builders the tests share —
 //  accounts, content, groups, solves — and the sign-in,
@@ -59,9 +59,7 @@ use Lunaweb\RecaptchaV3\Facades\RecaptchaV3;
 // test to test, as MySQL never hands an auto-increment value
 // out twice. Redis is flushed instead, as it has no
 // transactions. Players and admins sign in through the
-// guards the routes use — users and admins — and an admin's
-// session carries the "main" flag the SSO login stores,
-// which the perms and r_exists middleware read.
+// guards the routes use — users and admins.
 //
 //   makePlayer, makeSsoPlayer, makeAdmin — accounts
 //   makePartner, makeCategory, makeChallenge — content
@@ -465,9 +463,10 @@ abstract class TestCase extends BaseTestCase
     // -----------------------------------------------------------
     //
     // Signs the admin in on the admins guard and stores its
-    // main flag in the session, as the SSO login does —
-    // the perms and r_exists middleware read the flag from
-    // the session, never from the account.
+    // main flag in the session, as the SSO login does. The
+    // copy in the session is not what counts: the perms and
+    // r_exists middleware and the controllers read the flag
+    // from the signed-in account.
     //
     // Used by:
     //   - the admin Feature tests
@@ -535,8 +534,9 @@ abstract class TestCase extends BaseTestCase
     // setEventRange
     // -----------------------------------------------------------
     //
-    // Writes settings row 1, the event time range every player
-    // page reads in its sidebar middleware.
+    // Writes settings row 1, the time range of the event the
+    // lab grew out of. Nothing reads it any more, which the
+    // settings tests check by setting a range long past.
     //
     // Used by:
     //   - the settings tests

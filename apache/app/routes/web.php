@@ -14,9 +14,9 @@
 //  to main admins, and r_exists keeps a lab admin to the
 //  groups and challenges they created. The dialog routes
 //  return the forms the panel's pages open in a modal.
-//  event.status is switched off and lets every request
-//  through. By design no route has a rate limit, the login
-//  and answer forms included.
+//  The lab is open at any time, with no event window, and
+//  by design no route has a rate limit, the login and
+//  answer forms included.
 //  Every change the panel makes from its lists — a deletion,
 //  a removal, a switch, a mail sent to the list, a list
 //  sync — is a POST, which the panel's script sends with the
@@ -95,7 +95,7 @@ use Illuminate\Support\Facades\Route;
 // reCAPTCHA, by design.
 Route::get('', [App\Http\Controllers\Users\UserAuthController::class, 'index'])->name('login_users')->middleware(['guest']);
 
-Route::post('login', [App\Http\Controllers\Users\UserAuthController::class, 'login'])->name('login')->middleware(['event.status', 'guest']);
+Route::post('login', [App\Http\Controllers\Users\UserAuthController::class, 'login'])->name('login')->middleware(['guest']);
 
 // Registration — the form, and its POST, which the reg.status
 // switch closes — and the links the mails carry: the
@@ -131,29 +131,29 @@ Route::prefix('user')->group(function(){
     // dashboard.
     //
     // The answer route has no rate limit, by design.
-    Route::get('/dashboard', [App\Http\Controllers\Users\ChallengesController::class, 'index'])->middleware(['event.status', 'auth:users'])->name('user_dashboard');
+    Route::get('/dashboard', [App\Http\Controllers\Users\ChallengesController::class, 'index'])->middleware(['auth:users'])->name('user_dashboard');
 
-    Route::get('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'show'])->middleware(['event.status', 'auth:users', 'validate.ifsolved']);
+    Route::get('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'show'])->middleware(['auth:users', 'validate.ifsolved']);
 
-    Route::post('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'submit_answer'])->middleware(['event.status', 'auth:users', 'validate.ifsolved']);
+    Route::post('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'submit_answer'])->middleware(['auth:users', 'validate.ifsolved']);
 
     // A vote, which the dashboard and the challenge page post by
     // script with the page's CSRF token
     Route::post('/challenge/vote/{type}/{public_id}', [App\Http\Controllers\Users\ChallengesController::class, 'vote'])->middleware(['auth:users']);
 
     // Signing out, and the leaderboard
-    Route::post('/logout', [App\Http\Controllers\Users\UserAuthController::class, 'logout'])->middleware(['event.status', 'auth:users'])->name('user_logout');
+    Route::post('/logout', [App\Http\Controllers\Users\UserAuthController::class, 'logout'])->middleware(['auth:users'])->name('user_logout');
 
-    Route::get('/leaderboard', [App\Http\Controllers\Users\LeaderboardController::class, 'index'])->middleware(['event.status', 'auth:users'])->name('user_leaderboard');
+    Route::get('/leaderboard', [App\Http\Controllers\Users\LeaderboardController::class, 'index'])->middleware(['auth:users'])->name('user_leaderboard');
 
     // Signing out of the SSO too; open to anyone
     Route::post('/logout_saml', [App\Http\Controllers\Users\UserAuthController::class, 'logout_saml']);
 
     // A group's page and leaderboard, for its members
     // (group.exists)
-    Route::get('/group/{public_id}', [App\Http\Controllers\Users\GroupsController::class, 'index'])->middleware(['event.status', 'auth:users', 'group.exists']);
+    Route::get('/group/{public_id}', [App\Http\Controllers\Users\GroupsController::class, 'index'])->middleware(['auth:users', 'group.exists']);
 
-    Route::get('/group/leaderboard/{public_id}', [App\Http\Controllers\Users\GroupsController::class, 'group_leaderboard'])->middleware(['event.status', 'auth:users', 'group.exists']);
+    Route::get('/group/leaderboard/{public_id}', [App\Http\Controllers\Users\GroupsController::class, 'group_leaderboard'])->middleware(['auth:users', 'group.exists']);
 
     // The feedback dialog and its POST
     Route::get('/dialog/feedback', [App\Http\Controllers\Users\ChallengesController::class, 'dialog_feedback'])->middleware(['auth:users']);
@@ -174,14 +174,12 @@ Route::prefix('control-panel')->group(function(){
     Route::get('/dashboard', [App\Http\Controllers\Admins\LeaderboardController::class, 'dashboard'])->middleware(['auth.admin:admins'])->name('admin_dashboard');
 
     // The categories, partners and settings pages, and the
-    // settings' two forms — main-only
+    // settings' registration switch — main-only
     Route::get('/categories', [App\Http\Controllers\Admins\CategoriesController::class, 'index'])->middleware(['auth.admin:admins', 'perms'])->name('admin_categories');
 
     Route::get('/partners', [App\Http\Controllers\Admins\PartnersController::class, 'index'])->middleware(['auth.admin:admins', 'perms'])->name('admin_partners');
 
     Route::get('/settings', [App\Http\Controllers\Admins\SettingsController::class, 'index'])->middleware(['auth.admin:admins', 'perms'])->name('admin_settings');
-
-    Route::post('/settings/event_data', [App\Http\Controllers\Admins\SettingsController::class, 'event_data'])->middleware(['auth.admin:admins', 'perms'])->name('settings.event_data');
 
     Route::post('/settings/reg_open', [App\Http\Controllers\Admins\SettingsController::class, 'reg_open'])->middleware(['perms', 'auth.admin:admins'])->name('settings.reg_open');
 

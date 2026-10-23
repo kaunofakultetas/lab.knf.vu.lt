@@ -42,6 +42,7 @@ use Session;
 use App\Http\Controllers\Admins\BaseController;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
@@ -322,7 +323,9 @@ class ChallengesController extends BaseController
     // typed — with the content through clean_content, then
     // goes to the list with "Updated!". The hidden switch and
     // the author stay as they were, so a lab admin keeps a
-    // challenge a main admin corrected.
+    // challenge a main admin corrected. New points count for
+    // later solves only: a solve keeps the points it gave,
+    // kept with it as points_given.
     //
     // Used by:
     //   - the challenge form, for an existing challenge
@@ -370,7 +373,9 @@ class ChallengesController extends BaseController
     //
     // Deletes the challenge with its feed rows, file links,
     // solves, categories and group places, then goes back with
-    // "Deleted!". The players keep the points its solves gave.
+    // "Deleted!". The points its solves gave come off the
+    // solvers' totals first, as a total is the sum of the
+    // player's solves.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -379,6 +384,18 @@ class ChallengesController extends BaseController
 
     public function destroy($uid)
     {
+        // Summed per player: a database set up before init.sql
+        // gained the user_challenge_unique key may hold a solve
+        // twice, and a joined update changes each player once
+        $solves = DB::table('cyber_challenges_submitted')
+            ->where('challenge_id', $uid)
+            ->groupBy('user_id')
+            ->selectRaw('`user_id`, SUM(`points_given`) AS `given`');
+
+        DB::table('cyber_users')
+            ->joinSub($solves, 'solves', 'solves.user_id', '=', 'cyber_users.id')
+            ->update(['cyber_users.points' => DB::raw('GREATEST(IFNULL(`cyber_users`.`points`, 0) - `solves`.`given`, 0)')]);
+
         Challenges::destroy($uid);
         ChallengesHistory::where(['challenge_id'=>$uid])->delete();
         ChallengesFiles::where(['challenge_id'=>$uid])->delete();

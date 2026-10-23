@@ -86,9 +86,9 @@ class Kernel extends HttpKernel
     // list middlewareAliases and still reads this old name.
     // auth, auth.admin, guest and signed are the app's
     // versions of Laravel's; reg.status, validate.ifsolved,
-    // event.status, validate.verify, validate.reset,
-    // saml_auth, saml_auth_admin, group.exists, r_exists and
-    // perms are the app's own checks; the rest are Laravel's.
+    // validate.verify, validate.reset, saml_auth,
+    // saml_auth_admin, group.exists, r_exists and perms are
+    // the app's own checks; the rest are Laravel's.
     // routes/web.php uses every app alias but signed, the api
     // group uses throttle, and auth.session, cache.headers,
     // can, password.confirm and verified are named by nothing.
@@ -97,7 +97,6 @@ class Kernel extends HttpKernel
         'auth.admin' => \App\Http\Middleware\AuthenticateAdmin::class,
         'reg.status' => \App\Http\Middleware\RegStatus::class,
         'validate.ifsolved' => \App\Http\Middleware\ValidateChallengeSolved::class,
-        'event.status' => \App\Http\Middleware\EventStatus::class,
         'auth.session' => \Illuminate\Session\Middleware\AuthenticateSession::class,
         'cache.headers' => \Illuminate\Http\Middleware\SetCacheHeaders::class,
         'can' => \Illuminate\Auth\Middleware\Authorize::class,

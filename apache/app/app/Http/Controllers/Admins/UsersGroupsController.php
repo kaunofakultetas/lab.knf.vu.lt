@@ -582,7 +582,10 @@ class UsersGroupsController extends BaseController
     //
     // The admins.dialogs.users_challengestogroups_form view
     // with every challenge of the lab not in the group yet —
-    // other admins' included.
+    // other admins' included, hidden ones too. That is the
+    // design: the admins share one catalogue of challenges,
+    // as the challenges list shows each admin every one,
+    // while each lab admin keeps its own groups.
     //
     // Used by:
     //   - users_groupschallenges_form() of dialogs.js — the
@@ -671,7 +674,9 @@ class UsersGroupsController extends BaseController
 
         $challenges = GroupsChallenges::select("challenge_id")->where(["group_id"=>$group_id])->get()->pluck("challenge_id")->toArray();
 
-        $ranking_table = json_decode(json_encode(UsersGroupsController::get_group_leaderboard($challenges)), 1);
+        $members = GroupsUsers::select("vu_id")->where(["group_id"=>$group_id])->get()->pluck("vu_id")->toArray();
+
+        $ranking_table = json_decode(json_encode(UsersGroupsController::get_group_leaderboard($challenges, $members)), 1);
 
         $ordinalUsers = collect($ranking_table)->map(function($user) {
             $user['position'] = SettingsController::ordinal($user['position']);
@@ -700,23 +705,23 @@ class UsersGroupsController extends BaseController
     // -----------------------------------------------------------
     //
     // A copy of Users\GroupsController::get_group_leaderboard:
-    // every player with a solve of one of the challenges —
-    // members or not — ranked by lab-wide points, with the
-    // player's latest solve of them.
+    // the group's members ranked by the points the group's
+    // challenges gave them, with their latest solve of those.
     //
     // Used by:
     //   - group_leaderboard (above)
     // -----------------------------------------------------------
 
-    public static function get_group_leaderboard($challenges)
+    public static function get_group_leaderboard($challenges, $members)
     {
         $data = DB::table('cyber_users')
             ->leftJoin('cyber_challenges_submitted', 'cyber_challenges_submitted.user_id', '=', 'cyber_users.id')
             ->whereIn('cyber_challenges_submitted.challenge_id', $challenges)
+            ->whereIn('cyber_users.vu_id', $members)
             ->groupBy('cyber_users.id')
-            ->orderByDesc('cyber_users.points')
+            ->orderByRaw('SUM(`cyber_challenges_submitted`.`points_given`) DESC')
             ->orderBy('last_challenge')
-            ->selectRaw('row_number() OVER (ORDER BY `cyber_users`.`points` DESC) AS `position`, `cyber_users`.`id` AS `id`, `cyber_users`.`points` AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
+            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`created`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
             ->get()->toArray();
 
         return $data;

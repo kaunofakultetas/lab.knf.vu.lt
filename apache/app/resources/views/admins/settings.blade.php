@@ -41,30 +41,6 @@
             <div class="container-fluid">
            
            <div class="row">
-				<div class="col-lg-6">
-                  <div class="card">
-                    <div class="card-header">
-                    
-                      <h3 class="h4 mb-0">Event date</h3>
-                    </div>
-                    <div class="card-body">
-                     
-                      {{ Form::open(['url' => route('settings.event_data')]) }}
-                        <div class="mb-3">
-                          <label class="form-label" for="eventstart">Event time range</label>
-                          {{ Form::text('event_timerange', $event_timerange, ['class' => 'form-control', 'id'=>'eventstart', 'required'=>'required']) }} 
-                        </div>
-                        
-                        {{ Form::submit('Submit', ['class'=>'btn btn-primary', 'login'=>'login']) }}
-                           
-                      {{ Form::close() }}
-                      
-                      
-                    </div>
-                  </div>
-                </div>
-                
-                
                 <div class="col-lg-6">
                   <div class="card">
                     <div class="card-header">

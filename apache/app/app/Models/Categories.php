@@ -14,7 +14,6 @@
 //      categories dialog of a challenge
 //    - Users\ChallengesController::index — the dashboard's
 //      category filter
-//    - ApiController::get_categories, which no route reaches
 // -----------------------------------------------------------
 
 
@@ -36,8 +35,8 @@ use Illuminate\Database\Eloquent\Model;
 // Columns: id and name.
 //
 // Used by:
-//   - Admins\CategoriesController, Admins\ChallengesController,
-//     Users\ChallengesController and ApiController
+//   - Admins\CategoriesController, Admins\ChallengesController
+//     and Users\ChallengesController
 // -----------------------------------------------------------
 
 class Categories extends Model

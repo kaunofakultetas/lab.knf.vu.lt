@@ -16,7 +16,6 @@
 //    - GroupExists (Http/Middleware/) and
 //      Users\BaseController — who may open a group, and the
 //      groups of the sidebar
-//    - ApiController, which no route reaches
 // -----------------------------------------------------------
 
 
@@ -39,7 +38,7 @@ use Illuminate\Database\Eloquent\Model;
 //
 // Used by:
 //   - Admins\UsersGroupsController, Admins\UsersController,
-//     GroupExists, Users\BaseController and ApiController
+//     GroupExists and Users\BaseController
 // -----------------------------------------------------------
 
 class GroupsUsers extends Model

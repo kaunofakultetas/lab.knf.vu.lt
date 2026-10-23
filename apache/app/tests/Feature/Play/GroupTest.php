@@ -7,10 +7,10 @@
 //  SSO accounts can belong to one. The group.exists
 //  middleware answers 404 to anyone else — non-members,
 //  local accounts, unknown groups — before the group's pages
-//  run. The group leaderboard ranks everyone who solved at
-//  least one of the group's challenges; positions and points
-//  are the players' totals across the whole lab, not their
-//  group points.
+//  run. The group leaderboard ranks the group's members by
+//  the points the group's challenges gave them — the points
+//  the group page counts, not their totals across the lab —
+//  and leaves out everyone else.
 //
 //  The group dashboard itself is GroupDashboardTest's — like
 //  the player dashboard, it may only be rendered once per
@@ -157,35 +157,40 @@ final class GroupTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_the_group_leaderboard_ranks_whoever_solved_its_challenges
+    // test_the_group_leaderboard_ranks_its_members_by_group_points
     // -----------------------------------------------------------
     //
-    // Everyone who solved one of the group's challenges is
-    // listed, ordered by total points with ordinal positions;
-    // a player who solved only challenges outside the group is
-    // not.
+    // The members are listed with ordinal positions, ranked
+    // by what the group's challenges gave them: points earned
+    // outside the group lift no one, and a player who solved
+    // a group challenge without being a member is not listed.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_the_group_leaderboard_ranks_whoever_solved_its_challenges(): void
+    public function test_the_group_leaderboard_ranks_its_members_by_group_points(): void
     {
         $group = $this->makeGroup();
-        $inGroup = $this->makeChallenge(['points' => 10]);
+        $first = $this->makeChallenge(['points' => 10]);
+        $second = $this->makeChallenge(['points' => 20]);
         $outside = $this->makeChallenge(['points' => 100]);
-        $this->assignToGroup($group, $inGroup);
+        $this->assignToGroup($group, $first);
+        $this->assignToGroup($group, $second);
         $steady = $this->makeSsoPlayer(['username' => 'Steady']);
-        $this->recordSolve($steady, $inGroup);
+        $this->recordSolve($steady, $first);
+        $this->recordSolve($steady, $second);
         $strong = $this->makeSsoPlayer(['username' => 'Strong']);
-        $this->recordSolve($strong, $inGroup);
+        $this->recordSolve($strong, $first);
         $this->recordSolve($strong, $outside);
-        $this->recordSolve($this->makeSsoPlayer(['username' => 'Elsewhere']), $outside);
+        $this->recordSolve($this->makeSsoPlayer(['username' => 'Elsewhere']), $first);
         $this->joinGroup($group, $steady);
+        $this->joinGroup($group, $strong);
 
         $response = $this->signIn($steady)->get("/user/group/leaderboard/{$group->public_id}");
 
-        $response->assertSeeInOrder(['1st place', 'Strong', '<b>110</b> points', '2nd place', 'Steady', '<b>10</b> points'], false);
+        $response->assertSeeInOrder(['1st place', 'Steady', '<b>30</b> points', '2nd place', 'Strong', '<b>10</b> points'], false);
+        $response->assertDontSee('<b>110</b>', false);
         $response->assertDontSee('Elsewhere');
     }
 

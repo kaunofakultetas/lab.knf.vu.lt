@@ -1,15 +1,14 @@
 <?php
 
 // -----------------------------------------------------------
-//  [*] SettingsTest — the event time range and registration
+//  [*] SettingsTest — the registration switch
 //
-//  Two settings rows drive the player side: row 1 holds the
-//  event's time range as "start - end", which every player
-//  page reads for its countdown, and row 2 holds whether
-//  registration is open ('1') or not. Main admins edit both
-//  on the settings page; the registration switch is a
-//  checkbox, so an unticked box posts nothing and closes
-//  registration.
+//  Settings row 2 holds whether registration is open ('1')
+//  or not, and main admins switch it on the settings page.
+//  The switch is a checkbox, so an unticked box posts
+//  nothing and closes registration. Row 1 still holds the
+//  time range of the event the lab grew out of, but nothing
+//  reads it any more: the lab is open at any time.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -32,9 +31,8 @@ use Tests\TestCase;
 // SettingsTest
 // -----------------------------------------------------------
 //
-// The settings start as init.sql seeds them: the range
-// 2023-02-25 09:00:00 - 2029-02-25 21:00:00, registration
-// open.
+// The settings start as init.sql seeds them, with
+// registration open.
 //
 // Used by:
 //   - PHPUnit — the Feature suite (runTests.sh)
@@ -52,9 +50,9 @@ final class SettingsTest extends TestCase
     // test_the_page_shows_the_current_settings
     // -----------------------------------------------------------
     //
-    // The range sits in its text field, and the registration
-    // box is ticked while registration is open and unticked
-    // once it is closed.
+    // The registration box is ticked while registration is
+    // open and unticked once it is closed, and the event
+    // range has no field any more.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -66,37 +64,11 @@ final class SettingsTest extends TestCase
 
         $this->get('/control-panel/settings')
             ->assertOk()
-            ->assertSee('value="2023-02-25 09:00:00 - 2029-02-25 21:00:00"', false)
-            ->assertSee('name="reg_open" value="1" checked', false);
+            ->assertSee('name="reg_open" value="1" checked', false)
+            ->assertDontSee('event_timerange');
 
         $this->setRegistrationOpen(false);
         $this->get('/control-panel/settings')->assertSee('name="reg_open" value="1" >', false);
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_the_event_range_is_saved
-    // -----------------------------------------------------------
-    //
-    // The posted range replaces the stored one as written.
-    //
-    // Used by:
-    //   - PHPUnit — the Feature suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    public function test_the_event_range_is_saved(): void
-    {
-        $response = $this->signInAdmin($this->makeAdmin(true))
-            ->from('/control-panel/settings')
-            ->post('/control-panel/settings/event_data', ['event_timerange' => '2027-03-01 10:00:00 - 2027-03-02 18:00:00']);
-
-        $response->assertRedirect('/control-panel/settings');
-        $response->assertSessionHas('success', 'Updated!');
-        $this->assertSame('2027-03-01 10:00:00 - 2027-03-02 18:00:00', Settings::find(1)->val1);
     }
 
 
@@ -140,8 +112,8 @@ final class SettingsTest extends TestCase
     // test_lab_admins_cannot_change_settings
     // -----------------------------------------------------------
     //
-    // The page and both forms send a lab admin back with the
-    // permissions error, and the settings stay.
+    // The page and its form send a lab admin back with the
+    // permissions error, and registration stays open.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -152,11 +124,9 @@ final class SettingsTest extends TestCase
         $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
 
         $this->get('/control-panel/settings')->assertRedirect('/control-panel/dashboard');
-        $this->post('/control-panel/settings/event_data', ['event_timerange' => 'x - y'])->assertRedirect('/control-panel/dashboard');
         $this->post('/control-panel/settings/reg_open', [])->assertRedirect('/control-panel/dashboard');
 
         $this->assertErrorFlashed("You don't have permissions to do this!");
-        $this->assertSame('2023-02-25 09:00:00 - 2029-02-25 21:00:00', Settings::find(1)->val1);
         $this->assertSame('1', Settings::find(2)->val1);
     }
 
@@ -166,22 +136,24 @@ final class SettingsTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_a_malformed_event_range_takes_no_page_down
+    // test_an_old_event_range_closes_nothing
     // -----------------------------------------------------------
     //
-    // The form takes any text, so the event range can lack its
-    // " - " separator; the login page and the player pages still
-    // answer, the start standing for the end too.
+    // A row 1 range that ended long ago keeps no one out: the
+    // login page answers without a countdown, a player signs
+    // in and the player pages open.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_a_malformed_event_range_takes_no_page_down(): void
+    public function test_an_old_event_range_closes_nothing(): void
     {
-        $this->setEventRange('2027-03-01 10:00:00');
+        $this->setEventRange('2020-01-01 09:00:00 - 2020-01-02 21:00:00');
+        $player = $this->makePlayer();
 
-        $this->get('/')->assertOk();
-        $this->signIn($this->makePlayer())->get('/user/leaderboard')->assertOk();
+        $this->get('/')->assertOk()->assertDontSee('Event is starting in');
+        $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD])->assertRedirect('/user/dashboard');
+        $this->get('/user/leaderboard')->assertOk();
     }
 }

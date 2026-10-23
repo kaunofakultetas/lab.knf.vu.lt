@@ -17,7 +17,6 @@
 //    - Admins\LeaderboardController::dashboard — the latest
 //      solves of the control panel
 //    - Admins\ChallengesController::destroy
-//    - ApiController, which no route reaches
 // -----------------------------------------------------------
 
 
@@ -40,8 +39,8 @@ use Illuminate\Database\Eloquent\Model;
 //
 // Used by:
 //   - Users\ChallengesController::submit_answer
-//   - Admins\LeaderboardController, Admins\ChallengesController
-//     and ApiController
+//   - Admins\LeaderboardController and
+//     Admins\ChallengesController
 // -----------------------------------------------------------
 
 class ChallengesHistory extends Model

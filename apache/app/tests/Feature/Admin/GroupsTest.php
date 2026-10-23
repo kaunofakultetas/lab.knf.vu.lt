@@ -534,6 +534,41 @@ final class GroupsTest extends TestCase
 
 
     // -----------------------------------------------------------
+    // test_a_lab_admin_builds_its_group_from_the_shared_catalogue
+    // -----------------------------------------------------------
+    //
+    // The admins share one catalogue of challenges, so a lab
+    // admin's dialog offers another lab admin's challenge,
+    // hidden or not, and adds it to the lab admin's own group;
+    // the challenge itself stays hidden from the lab-wide
+    // dashboard.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_lab_admin_builds_its_group_from_the_shared_catalogue(): void
+    {
+        $owner = $this->makeAdmin();
+        $group = $this->makeGroup($owner);
+        $theirs = $this->makeChallenge(['name' => 'Their Draft', 'hidden' => 1, 'created_by' => $this->makeAdmin()->id]);
+        $this->signInAdmin($owner)->from("/control-panel/users/vu-groups/challenges_list/{$group->id}");
+
+        $this->get("/control-panel/dialog/users/vu-groups/challenge_add_new/{$group->id}")
+            ->assertSee("<option value=\"{$theirs->id}\">Their Draft</option>", false);
+        $this->post('/control-panel/dialog/users/vu-groups/challenges_store', ['uid' => $group->id, 'challenge_id' => $theirs->id])
+            ->assertSessionHas('success', 'Added!');
+
+        $this->assertSame(1, GroupsChallenges::where(['group_id' => $group->id, 'challenge_id' => $theirs->id])->count());
+        $this->assertSame(1, $theirs->fresh()->hidden);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
     // test_a_challenge_is_taken_off_the_group
     // -----------------------------------------------------------
     //
@@ -565,31 +600,40 @@ final class GroupsTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_the_group_leaderboard_ranks_the_solvers
+    // test_the_group_leaderboard_ranks_the_members
     // -----------------------------------------------------------
     //
-    // The admin's view of a group's leaderboard ranks everyone
-    // who solved one of its challenges, by total points.
+    // The admin's view of a group's leaderboard ranks the
+    // group's members by the points its challenges gave them,
+    // as the players' own view does; a solver who is not a
+    // member is left out.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_the_group_leaderboard_ranks_the_solvers(): void
+    public function test_the_group_leaderboard_ranks_the_members(): void
     {
         $group = $this->makeGroup(null, ['name' => 'Networks Lab 1']);
-        $challenge = $this->makeChallenge(['points' => 20]);
-        $this->assignToGroup($group, $challenge);
-        $this->recordSolve($this->makePlayer(['username' => 'Second']), $challenge);
-        $first = $this->makePlayer(['username' => 'First']);
-        $this->recordSolve($first, $challenge);
-        $this->recordSolve($first, $this->makeChallenge(['points' => 30]));
+        $small = $this->makeChallenge(['points' => 20]);
+        $big = $this->makeChallenge(['points' => 30]);
+        $this->assignToGroup($group, $small);
+        $this->assignToGroup($group, $big);
+        $second = $this->makeSsoPlayer(['username' => 'Second']);
+        $this->recordSolve($second, $small);
+        $first = $this->makeSsoPlayer(['username' => 'First']);
+        $this->recordSolve($first, $small);
+        $this->recordSolve($first, $big);
+        $this->recordSolve($this->makeSsoPlayer(['username' => 'Outsider']), $big);
+        $this->joinGroup($group, $first);
+        $this->joinGroup($group, $second);
 
         $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/vu-groups/leaderboard/{$group->id}");
 
         $response->assertOk();
         $response->assertSee('Networks Lab 1 Leaderboard');
         $response->assertSeeInOrder(['1st place', 'First', '<b>50</b> points', '2nd place', 'Second', '<b>20</b> points'], false);
+        $response->assertDontSee('Outsider');
     }
 
 
@@ -751,7 +795,7 @@ final class GroupsTest extends TestCase
     // test_the_group_leaderboard_shows_the_latest_group_solve
     // -----------------------------------------------------------
     //
-    // The panel's group leaderboard gives each solver's latest
+    // The panel's group leaderboard gives each member's latest
     // solve of the group's challenges, wherever it sits among
     // the rows.
     //
@@ -762,7 +806,8 @@ final class GroupsTest extends TestCase
     public function test_the_group_leaderboard_shows_the_latest_group_solve(): void
     {
         $group = $this->makeGroup();
-        $player = $this->makePlayer();
+        $player = $this->makeSsoPlayer();
+        $this->joinGroup($group, $player);
         foreach (['-5 days', '-2 hours', '-10 days'] as $when) {
             $challenge = $this->makeChallenge();
             $this->assignToGroup($group, $challenge);

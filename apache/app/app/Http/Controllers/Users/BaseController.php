@@ -7,9 +7,9 @@
 //  data of the player layout's sidebar and top bar, shared
 //  with the views before each action runs — the player's
 //  rank, points and username from the cached leaderboard,
-//  the player's groups, the feed of recent solves and the
-//  event's start time. Guests go through it too: the login
-//  page and the content pages extend it.
+//  the player's groups and the feed of recent solves.
+//  Guests go through it too: the login page and the content
+//  pages extend it.
 //
 //  Used by:
 //    - UserAuthController, ChallengesController,
@@ -26,7 +26,6 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
-use App\Models\Settings;
 use App\Models\ChallengesHistory;
 use App\Models\User;
 use App\Models\Pages;
@@ -72,13 +71,6 @@ class BaseController extends Controller
     // neither, and then no username either. The groups are the
     // player's memberships by VU id, the feed is tasks_history
     // — the six latest solves — with how long ago each was.
-    // The event range comes from the event_date setting: the
-    // layouts read event_start_time; event_end_time, and
-    // event_start and event_end — shifted two hours back — are
-    // shared but read by no view. The settings form takes any
-    // text, so a range saved without its " - " separator is
-    // read as a start that is also the end, rather than taking
-    // every player page and the login page down.
     //
     // Used by:
     //   - Laravel, when it builds a player controller for a
@@ -134,15 +126,8 @@ class BaseController extends Controller
             }
 
 
-            // STEP 4: the event range, then everything shared
-            // ===============================================
-            $dates = explode(" - ",Settings::find(1)->val1);
-            $dates[1] = $dates[1] ?? $dates[0];
-
-            View::share('event_end', date("Y-m-d H:i:s", strtotime($dates[1])-7200));
-            View::share('event_start', date("Y-m-d H:i:s", strtotime($dates[0])-7200));
-            View::share('event_end_time', strtotime($dates[1]));
-            View::share('event_start_time', strtotime($dates[0]));
+            // STEP 4: everything shared
+            // =========================
             View::share('my_position', $my_position);
             View::share('history_list', $task_history);
             View::share('group_list', $group_list);

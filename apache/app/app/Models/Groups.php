@@ -16,7 +16,6 @@
 //      — the group pages and their challenges
 //    - GroupExists and R_Exists (Http/Middleware/)
 //    - Admins\LeaderboardController::dashboard
-//    - ApiController, which no route reaches
 // -----------------------------------------------------------
 
 

@@ -95,7 +95,6 @@ final class RouteTableTest extends TestCase
         'GET control-panel/partners',
         'POST control-panel/partners/delete/{uid}',
         'GET control-panel/settings',
-        'POST control-panel/settings/event_data',
         'POST control-panel/settings/reg_open',
         'POST control-panel/users/delete/{uid}',
         'POST control-panel/users/status/{user_id}/{status_id}',

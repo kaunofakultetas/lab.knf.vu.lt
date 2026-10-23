@@ -3,15 +3,14 @@
 // -----------------------------------------------------------
 //  [*] SettingsController — the lab's settings page
 //
-//  The main admins' settings page with its two forms: the
-//  event's time range and the registration switch, the two
-//  cyber_settings rows the player side reads. It also holds
-//  the control panel's copies of two helpers of
-//  Users\SettingsController, for the group leaderboard.
+//  The main admins' settings page with its one form, the
+//  registration switch — the cyber_settings row the
+//  registration reads. It also holds the control panel's
+//  copies of two helpers of Users\SettingsController, for
+//  the group leaderboard.
 //
-//    GET  /control-panel/settings            — the page
-//    POST /control-panel/settings/event_data — the time range
-//    POST /control-panel/settings/reg_open   — the switch
+//    GET  /control-panel/settings          — the page
+//    POST /control-panel/settings/reg_open — the switch
 //
 //  Used by:
 //    - routes/web.php — the routes above, all main-only
@@ -43,7 +42,6 @@ use Illuminate\Http\Request;
 //
 //   __construct         — the base's layout data
 //   index               — the settings page
-//   event_data          — stores the time range
 //   reg_open            — stores the switch
 //   ordinal             — a rank with its suffix
 //   time_elapsed_string — a date as how long ago it was
@@ -87,8 +85,7 @@ class SettingsController extends BaseController
     //
     // GET /control-panel/settings
     //
-    // The admins.settings view with the stored time range and
-    // registration switch.
+    // The admins.settings view with the registration switch.
     //
     // Used by:
     //   - the Settings link of the panel's sidebar
@@ -97,38 +94,8 @@ class SettingsController extends BaseController
     public function index()
     {
         return view('admins.settings', [
-            'event_timerange' => Settings::find(1)->val1,
             'reg_open' => Settings::find(2)->val1
         ]);
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // event_data
-    // -----------------------------------------------------------
-    //
-    // POST /control-panel/settings/event_data
-    //
-    // Stores the event's time range exactly as typed, then
-    // goes back with "Updated!". Nothing checks the text;
-    // Users\BaseController reads a range without its " - "
-    // separator as a start that is also the end.
-    //
-    // Used by:
-    //   - the time range form of admins/settings.blade.php
-    // -----------------------------------------------------------
-
-    public function event_data(Request $req)
-    {
-        Settings::where(['id' => 1])->update(['val1'=>$req->get('event_timerange')]);
-
-        session()->flash('success', 'Updated!');
-
-        return back();
     }
 
 

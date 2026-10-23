@@ -15,7 +15,6 @@
 //    - Users\GroupsController — the group page and its
 //      leaderboard
 //    - Groups::groupPointsPercent (this folder)
-//    - ApiController, which no route reaches
 // -----------------------------------------------------------
 
 
@@ -38,7 +37,7 @@ use Illuminate\Database\Eloquent\Model;
 //
 // Used by:
 //   - Admins\UsersGroupsController, Admins\ChallengesController,
-//     Users\GroupsController, Groups and ApiController
+//     Users\GroupsController and Groups
 // -----------------------------------------------------------
 
 class GroupsChallenges extends Model

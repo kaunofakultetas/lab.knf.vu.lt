@@ -23,7 +23,6 @@
                               {{ session('info') }}
                           </div>
                       @endif
-                  <p class="text-center ddtr">Event is starting in: <span style="font-weight:bold" id="countdown"></span></p>
                    
                     <div class="input-material-group mb-3"> 
                       {{ Form::email('email', '', ['class' => 'input-material', 'id'=>'login-username', 'required'=>'required', 'autofocus'=>'autofocus', 'maxlength'=>255]) }}

@@ -3,17 +3,16 @@
 // -----------------------------------------------------------
 //  [*] Settings — the lab's settings rows
 //
-//  Two cyber_settings rows the code reads by id: 1,
-//  event_date, holds the event's time range as "start -
-//  end" in val1; 2, reg_open, holds '1' while registration
-//  is open and '0' when it is closed. The control panel's
-//  settings page writes both; val2 is never used.
+//  The cyber_settings rows, read by id: 2, reg_open, holds
+//  '1' while registration is open and '0' when it is
+//  closed, and the control panel's settings page writes it.
+//  Row 1, event_date, is the time range of the one-off
+//  event the lab grew out of; nothing reads it since the
+//  event window was retired. val2 is never used.
 //
 //  Used by:
 //    - Admins\SettingsController — the settings page and its
-//      two forms
-//    - Users\BaseController — the event time range of the
-//      player pages
+//      registration switch
 //    - RegStatus (Http/Middleware/) and
 //      Users\RegisterController::create — the registration
 //      switch

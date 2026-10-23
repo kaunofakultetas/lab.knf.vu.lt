@@ -21,7 +21,6 @@
 //      (Http/Middleware/)
 //    - Admins\UsersGroupsController, Users\GroupsController
 //      and Groups (this folder) — the group challenges
-//    - ApiController, which no route reaches
 // -----------------------------------------------------------
 
 

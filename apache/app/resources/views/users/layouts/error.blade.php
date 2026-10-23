@@ -73,16 +73,6 @@
  
  	 
 	
-   @else
-   
-   
-   @if(request()->routeIs('login_users'))
-        @if(time() <= $event_start_time)
-       
-         
-              
-        @endif
-     @endif
    @endif
   
 

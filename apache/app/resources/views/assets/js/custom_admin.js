@@ -10,14 +10,6 @@ $(document).ready(function(){
 });
 
 $(function() {
-      $('#eventstart').daterangepicker({
-        timePicker24Hour: true,
-        timePicker: true, 
-        locale: {
-          format: 'YYYY-MM-DD HH:mm:ss'
-        }
-      });
-      
       $('#summernote').summernote({
 			'height': 600
 	   });
