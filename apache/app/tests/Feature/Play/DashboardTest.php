@@ -433,4 +433,56 @@ final class DashboardTest extends TestCase
 
         $this->get('/user/dashboard')->assertSee(str_repeat('a', 99) . 'ą...');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_points_filter_starts_at_the_pages_prices
+    // -----------------------------------------------------------
+    //
+    // The points filter's boxes start at the cheapest and the
+    // dearest challenge on the page, so a challenge of any
+    // price shows until the player sets a bound.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_points_filter_starts_at_the_pages_prices(): void
+    {
+        $this->makeChallenge(['points' => 500]);
+        $this->makeChallenge(['points' => 3]);
+
+        $response = $this->signIn($this->makePlayer())->get('/user/dashboard');
+
+        $response->assertSee('id="min" name="min" min="0" value="3"', false);
+        $response->assertSee('id="max" name="max" min="0" value="500"', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_points_filter_starts_empty_without_challenges
+    // -----------------------------------------------------------
+    //
+    // With no challenge on the page the boxes start empty,
+    // which the filter reads as no bound.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_points_filter_starts_empty_without_challenges(): void
+    {
+        $response = $this->signIn($this->makePlayer())->get('/user/dashboard');
+
+        $response->assertSee('id="min" name="min" min="0" value=""', false);
+        $response->assertSee('id="max" name="max" min="0" value=""', false);
+    }
 }

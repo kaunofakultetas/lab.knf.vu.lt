@@ -17,7 +17,7 @@
               <div class="col-lg-6 bg-white">
                    
                 <div class="d-flex align-items-center px-4 px-lg-5 h-100"> 
-                  {{ Form::open(['url' => route('forgot-password'), 'class'=>'login-form py-5 w-100']) }}
+                  {{ Form::open(['url' => route('forgot-password'), 'class'=>'login-form py-5 w-100', 'data-recaptcha-action'=>'forgotpass', 'data-recaptcha-key'=>RecaptchaV3::sitekey()]) }}
                    
                     <div class="input-material-group mb-3"> 
                       {{ Form::email('email', '', ['class' => 'input-material', 'id'=>'login-username', 'required'=>'required', 'autofocus'=>'autofocus', 'maxlength'=>255]) }}
@@ -31,7 +31,7 @@
                     
                       {{-- <div class="g-recaptcha" data-sitekey="{{ env('NOCAPTCHA_SITEKEY') }}"></div> --}}
                       
-                       {!! RecaptchaV3::field('forgotpass') !!} 
+                       {{-- Filled as the form is sent (custom.js) --}}<input type="hidden" name="g-recaptcha-response"> 
                         @if($errors->has('g-recaptcha-response')) 
                             <span class="help-block"> 
                                  <strong>{{ $errors->first('g-recaptcha-response') }}</strong> 

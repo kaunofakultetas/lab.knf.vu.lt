@@ -309,13 +309,10 @@ class UserAuthController extends BaseController
     // moves on by itself: a redirect of the sign-out form to
     // the identity provider would be stopped by the site's
     // CSP, which lets a form's navigation reach the site only.
-    //
-    // Known bug LAB-42 (low): like the other sign-outs this
-    // POST goes through the CSRF check first, so a page whose
-    // lab session has ended gets "Page Expired" and the VU
-    // single sign-on stays open. Fix: answer such a sign-out
-    // with a page that offers it again under a fresh token, or
-    // carries on.
+    // Sent from a page whose lab session has ended, the
+    // sign-out's token is refused, and the signout_retry page
+    // (VerifyCsrfToken) offers it again, so the VU single
+    // sign-on still ends.
     //
     // Used by:
     //   - Post_Link() of custom.js — the sign-out link of the

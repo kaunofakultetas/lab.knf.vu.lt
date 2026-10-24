@@ -24,6 +24,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Models\User;
+use Illuminate\Support\Facades\Auth;
 use Mockery;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
@@ -445,5 +446,96 @@ final class SsoLoginTest extends TestCase
         $this->fakeIdentityProvider($admin->vu_id, $admin->email);
 
         $this->get('/control-panel/login')->assertRedirect('/control-panel/dashboard');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_logout_from_an_expired_page_still_signs_out_of_vu
+    // -----------------------------------------------------------
+    //
+    // A sign-out sent from a page whose token no longer
+    // matches — a long-open tab, or a session lost to a stack
+    // update — is refused, and the answer offers the sign-out
+    // again under the session's current token. Pressed, it
+    // goes on to the VU logout, so the single sign-on still
+    // ends: on a shared computer the next "Login with VU SSO"
+    // would otherwise sign in as the same student.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_logout_from_an_expired_page_still_signs_out_of_vu(): void
+    {
+        // In the production environment Laravel logs PHP's
+        // deprecation notices, which loads its logger, whose code
+        // PHP 8.4 reports as deprecated while compiling it; an
+        // isolated process would print that and fail on it
+        ini_set('display_errors', '0');
+        $this->app['env'] = 'production';
+        $client = Mockery::mock('overload:SimpleSAML\Auth\Simple');
+        $client->shouldReceive('getLogoutURL')->andReturn('https://idp.sso.test/logout?ReturnTo=lab');
+        $this->signIn($this->makeSsoPlayer());
+        $this->startSession();
+        $stale = csrf_token();
+        $this->app['session']->regenerateToken();
+
+        $retry = $this->post('/user/logout_saml', ['_token' => $stale]);
+
+        $retry->assertStatus(419);
+        $retry->assertSee('action="https://lab.knf.vu.lt/user/logout_saml"', false);
+        $this->assertSame(1, preg_match('/name="_token" value="([^"]+)"/', $retry->getContent(), $token));
+        $this->post('/user/logout_saml', ['_token' => $token[1]])
+            ->assertOk()
+            ->assertSee('href="https://idp.sso.test/logout?ReturnTo=lab"', false);
+        $this->assertGuest('users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_admin_logout_from_an_expired_page_still_signs_out_of_vu
+    // -----------------------------------------------------------
+    //
+    // The control panel's sign-out works the same way, and
+    // asks for no admin session: once the admin's session has
+    // ended, the sign-out offered again still reaches the VU
+    // logout instead of the panel's login page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_admin_logout_from_an_expired_page_still_signs_out_of_vu(): void
+    {
+        // In the production environment Laravel logs PHP's
+        // deprecation notices, which loads its logger, whose code
+        // PHP 8.4 reports as deprecated while compiling it; an
+        // isolated process would print that and fail on it
+        ini_set('display_errors', '0');
+        $this->app['env'] = 'production';
+        $client = Mockery::mock('overload:SimpleSAML\Auth\Simple');
+        $client->shouldReceive('getLogoutURL')->andReturn('https://idp.sso.test/logout?ReturnTo=panel');
+        $this->signInAdmin($this->makeAdmin(true));
+        $this->startSession();
+        $stale = csrf_token();
+        Auth::guard('admins')->logout();
+        $this->app['session']->regenerateToken();
+
+        $retry = $this->post('/control-panel/logout', ['_token' => $stale]);
+
+        $retry->assertStatus(419);
+        $retry->assertSee('action="https://lab.knf.vu.lt/control-panel/logout"', false);
+        $this->assertSame(1, preg_match('/name="_token" value="([^"]+)"/', $retry->getContent(), $token));
+        $this->post('/control-panel/logout', ['_token' => $token[1]])
+            ->assertOk()
+            ->assertSee('href="https://idp.sso.test/logout?ReturnTo=panel"', false);
     }
 }

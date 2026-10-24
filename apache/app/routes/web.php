@@ -10,7 +10,9 @@
 //  the rest sits behind auth:users, which sends a guest to
 //  the login page. The control panel sits under
 //  /control-panel, behind auth.admin:admins, which sends a
-//  guest to the panel's login page; perms keeps parts of it
+//  guest to the panel's login page — all but its sign-out,
+//  which a page whose session has ended must reach too, to
+//  end the VU single sign-on; perms keeps parts of it
 //  to main admins, and r_exists keeps a lab admin to the
 //  groups and challenges they created. The dialog routes
 //  return the forms the panel's pages open in a modal.
@@ -185,8 +187,9 @@ Route::prefix('control-panel')->group(function(){
 
     Route::post('/settings/reg_open', [App\Http\Controllers\Admins\SettingsController::class, 'reg_open'])->middleware(['perms', 'auth.admin:admins'])->name('settings.reg_open');
 
-    // Signing out
-    Route::post('/logout', [App\Http\Controllers\Admins\AdminAuthController::class, 'logout'])->middleware(['auth.admin:admins'])->name('admin_logout');
+    // Signing out of the panel and the SSO; open to anyone, as
+    // the SSO's sign-out must work once the session has ended
+    Route::post('/logout', [App\Http\Controllers\Admins\AdminAuthController::class, 'logout'])->name('admin_logout');
 
     // The forms the panel's pages open in a modal, and the POSTs
     // they send

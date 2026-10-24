@@ -113,13 +113,10 @@ class RegisterController extends Controller
     // verification link (send_verification); tags are
     // stripped from the username and e-mail first. A
     // refused form comes back refilled but for both passwords,
-    // which never sit in the session.
-    //
-    // Known bug LAB-40 (low): the recaptchav3 rule has no
-    // message, so a refusal shows "validation.recaptchav3",
-    // and the form's token, fetched as the page loads, expires
-    // after two minutes. Fix: give the rule a message and
-    // fetch the token on submit.
+    // which never sit in the session. The form fetches its
+    // reCAPTCHA token as it is sent (custom.js), as a token is
+    // good for two minutes only, and a refused score says so
+    // in words (lang/en/validation.php).
     //
     // Used by:
     //   - the registration form of users/register.blade.php
@@ -282,11 +279,8 @@ class RegisterController extends Controller
     // older than an hour; as the hash covers the time too, it
     // cannot be moved on. The answer is the same whether or
     // not the account exists, so the form tells no one which
-    // addresses are registered.
-    //
-    // Known bug LAB-40 (low): the recaptchav3 refusal shows
-    // its raw key and the token expires two minutes after the
-    // page loads, as in store.
+    // addresses are registered. As in store, the form fetches
+    // its reCAPTCHA token as it is sent.
     //
     // Used by:
     //   - the form of users/forgot-password.blade.php

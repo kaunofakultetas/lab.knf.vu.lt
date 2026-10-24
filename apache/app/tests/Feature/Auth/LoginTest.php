@@ -733,4 +733,38 @@ final class LoginTest extends TestCase
 
         $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD])->assertRedirect('/user/dashboard');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_sign_out_from_an_expired_page_is_offered_again
+    // -----------------------------------------------------------
+    //
+    // The plain sign-out of a local account answers a refused
+    // token the same way: the page offers the sign-out again,
+    // and pressed, it signs the player out.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_sign_out_from_an_expired_page_is_offered_again(): void
+    {
+        $this->app['env'] = 'production';
+        $this->signIn($this->makePlayer());
+        $this->startSession();
+        $stale = csrf_token();
+        $this->app['session']->regenerateToken();
+
+        $retry = $this->post('/user/logout', ['_token' => $stale]);
+
+        $retry->assertStatus(419);
+        $retry->assertSee('action="https://lab.knf.vu.lt/user/logout"', false);
+        $this->assertSame(1, preg_match('/name="_token" value="([^"]+)"/', $retry->getContent(), $token));
+        $this->post('/user/logout', ['_token' => $token[1]])->assertRedirect('/');
+        $this->assertGuest('users');
+    }
 }

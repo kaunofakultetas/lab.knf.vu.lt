@@ -6,18 +6,19 @@
 //  Pins the route table's protection as a whole, so that a
 //  route added without a guard, or a guard dropped from a
 //  route, fails here before it ships. Every control-panel
-//  route but the two login pages needs an admin; every /user
-//  route but the SSO logout needs a player; the main-only
-//  routes, the ownership-checked routes and the guest-only
-//  routes are each compared with the reviewed list below —
-//  the lists hardened by the "Fix upload validation" commit
-//  among them. Next to the declarations, every guarded route
-//  is also requested for real by a guest and by a session of
-//  the other side — a player at the control panel, an admin
-//  at the player pages — and must turn them away; the API's
-//  one route turns an anonymous client away; and every
-//  change the control panel makes from its lists must refuse
-//  to happen by a plain link.
+//  route but the two login pages and the sign-out needs an
+//  admin; every /user route but the SSO logout needs a
+//  player; the main-only routes, the ownership-checked
+//  routes and the guest-only routes are each compared with
+//  the reviewed list below — the lists hardened by the "Fix
+//  upload validation" commit among them. Next to the
+//  declarations, every guarded route is also requested for
+//  real by a guest and by a session of the other side — a
+//  player at the control panel, an admin at the player
+//  pages — and must turn them away; the API's one route
+//  turns an anonymous client away; and every change the
+//  control panel makes from its lists must refuse to happen
+//  by a plain link.
 //
 //  The routes the dev packages bring into the tests image
 //  (_ignition/*) do not exist in production and are left
@@ -154,11 +155,13 @@ final class RouteTableTest extends TestCase
     ];
 
     // The routes with no guard at all, open to anyone on
-    // purpose: the content pages, the SSO logout and the CSRF
+    // purpose: the content pages, the two SSO logouts — which
+    // must work once the session has ended — and the CSRF
     // cookie route Sanctum registers
     private const OPEN = [
         'GET page/{alias}',
         'GET sanctum/csrf-cookie',
+        'POST control-panel/logout',
         'POST user/logout_saml',
     ];
 
@@ -230,8 +233,9 @@ final class RouteTableTest extends TestCase
     // test_every_control_panel_route_needs_an_admin
     // -----------------------------------------------------------
     //
-    // Apart from the admin login page and the SSO login, every
-    // control-panel route declares the admins guard.
+    // Apart from the admin login page, the SSO login and the
+    // sign-out, every control-panel route declares the admins
+    // guard.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -240,7 +244,7 @@ final class RouteTableTest extends TestCase
     public function test_every_control_panel_route_needs_an_admin(): void
     {
         foreach ($this->routes() as $name => $middleware) {
-            if (preg_match('#^\w+ control-panel/#', $name) && $name !== 'GET control-panel/login') {
+            if (preg_match('#^\w+ control-panel/#', $name) && !in_array($name, ['GET control-panel/login', 'POST control-panel/logout'], true)) {
                 $this->assertContains('auth.admin:admins', $middleware, $name);
             }
         }

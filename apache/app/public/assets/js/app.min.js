@@ -2111,19 +2111,19 @@ $(document).ready(function(){
 			  $grid.isotope({
 				      filter: function() {
 				        var price = $(this).data('price');
-				        return (!category || $(this).is(category)) && price >= Cookies.get('filter_points_from') && price <= Cookies.get('filter_points_to');
+				        return (!category || $(this).is(category)) && price >= pointsBound(Cookies.get('filter_points_from'), -Infinity) && price <= pointsBound(Cookies.get('filter_points_to'), Infinity);
 				      } 
 				  });
 		  } 
 		
 		  $('#filter-button').on( 'click', function() {
-		    var min = parseInt($('#min').val());
-		    var max = parseInt($('#max').val());
+		    var min = pointsBound($('#min').val(), -Infinity);
+		    var max = pointsBound($('#max').val(), Infinity);
 		    
 		    var category = $('.button-group-cats').find('.active').data('filter');
 		    Cookies.set('filter_category', category, { secure: true });
-		    Cookies.set('filter_points_from', min, { secure: true });
-		    Cookies.set('filter_points_to', max, { secure: true });
+		    Cookies.set('filter_points_from', $('#min').val(), { secure: true });
+		    Cookies.set('filter_points_to', $('#max').val(), { secure: true });
 		
 		    $grid.isotope({
 		      filter: function() {
@@ -2135,12 +2135,12 @@ $(document).ready(function(){
 		  
 		  $(".button-group").on( 'click', function() {
 			      var single_category = $(this).data('filter');
-			      var min = parseInt($('#min').val());
-		    	  var max = parseInt($('#max').val());
+			      var min = pointsBound($('#min').val(), -Infinity);
+		    	  var max = pointsBound($('#max').val(), Infinity);
 		    	  
 		    	  Cookies.set('filter_category', single_category, { secure: true });
-		    	  Cookies.set('filter_points_from', min, { secure: true });
-		          Cookies.set('filter_points_to', max, { secure: true });
+		    	  Cookies.set('filter_points_from', $('#min').val(), { secure: true });
+		          Cookies.set('filter_points_to', $('#max').val(), { secure: true });
 		    
 				  $grid.isotope({
 				      filter: function() {
@@ -2175,6 +2175,16 @@ $(document).ready(function(){
 		//  });
 	 
 }); 
+
+
+// A bound of the points filter, read from its box or from the
+// cookie that keeps the box's text: anything but a number —
+// an emptied box, or the "NaN" an emptied box once left in
+// the cookie — is no bound, given back as none
+function pointsBound(value, none){
+	var bound = parseInt(value, 10);
+	return isNaN(bound) ? none : bound;
+}
 
 
 function thumbs(type, public_id){
@@ -2258,3 +2268,30 @@ function Post_Link(URL){
 	document.body.appendChild(form);
 	form.submit();
 }  
+
+// A form behind reCAPTCHA v3 — the registration and reminder
+// forms, which carry data-recaptcha-action — fetches its token
+// as it is sent rather than as the page loads: a token is good
+// for two minutes only, so a form filled in more slowly would
+// be refused. Should the reCAPTCHA script be missing or fail,
+// the form goes without a token, and the server refuses it
+// with the reCAPTCHA message
+$(document).on('submit', 'form[data-recaptcha-action]', function(event){
+	var form = this;
+	if (typeof grecaptcha === 'undefined') {
+		return;
+	}
+	event.preventDefault();
+
+	// The form's own submit, which no submit handler sees again
+	var send = function() {
+		HTMLFormElement.prototype.submit.call(form);
+	};
+
+	grecaptcha.ready(function() {
+		grecaptcha.execute(form.getAttribute('data-recaptcha-key'), {action: form.getAttribute('data-recaptcha-action')}).then(function(token) {
+			form.querySelector('input[name="g-recaptcha-response"]').value = token;
+			send();
+		}, send);
+	});
+});

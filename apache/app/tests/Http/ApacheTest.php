@@ -180,7 +180,7 @@ final class ApacheTest extends TestCase
     public function test_pretty_addresses_reach_laravel(): void
     {
         $this->assertStringContainsString('name="password_confirmation"', $this->fetch('GET', '/register')->body());
-        $this->assertStringContainsString("{action: 'forgotpass'}", $this->fetch('GET', '/forgot-password')->body());
+        $this->assertStringContainsString('data-recaptcha-action="forgotpass"', $this->fetch('GET', '/forgot-password')->body());
         $this->assertStringContainsString('Login with VU SSO', $this->fetch('GET', '/control-panel')->body());
     }
 

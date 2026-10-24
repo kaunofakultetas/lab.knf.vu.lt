@@ -20,7 +20,7 @@
                 
                 	@if($reg_status == 1)
                  
-                  {{ Form::open(['url' => route('create_users'), 'class'=>'login-form py-5 w-100']) }}
+                  {{ Form::open(['url' => route('create_users'), 'class'=>'login-form py-5 w-100', 'data-recaptcha-action'=>'register', 'data-recaptcha-key'=>RecaptchaV3::sitekey()]) }}
                   
                  
                   	<div class="input-material-group mb-3"> 
@@ -58,7 +58,7 @@
                     
                     {{-- <div class="g-recaptcha" data-sitekey="{{ env('NOCAPTCHA_SITEKEY') }}"></div>--}}
                     
-                    {!! RecaptchaV3::field('register') !!} 
+                    {{-- Filled as the form is sent (custom.js) --}}<input type="hidden" name="g-recaptcha-response"> 
                     @if($errors->has('g-recaptcha-response')) 
                         <span class="alert-danger"> 
                              <strong>{{ $errors->first('g-recaptcha-response') }}</strong> 

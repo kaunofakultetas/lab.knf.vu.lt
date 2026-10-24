@@ -858,4 +858,58 @@ final class RegistrationTest extends TestCase
             ->assertRedirect('/')
             ->assertSessionHas('success', 'User verified! Now you can login.');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_recaptcha_says_why
+    // -----------------------------------------------------------
+    //
+    // A reCAPTCHA refusal says in words that the reCAPTCHA
+    // check failed, where it once showed the rule's raw key.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_recaptcha_says_why(): void
+    {
+        $this->fakeRecaptcha('register', 0.1);
+
+        $this->submitRegistration();
+
+        $this->assertSame('The reCAPTCHA check failed, please try again.', session('errors')?->first('g-recaptcha-response'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_form_fetches_its_recaptcha_token_as_it_is_sent
+    // -----------------------------------------------------------
+    //
+    // The form names its reCAPTCHA action and site key for the
+    // player script, which fetches the token as the form is
+    // sent, and the page fetches none as it loads: a token is
+    // good for two minutes only, so one fetched with the page
+    // would refuse a form filled in more slowly.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_form_fetches_its_recaptcha_token_as_it_is_sent(): void
+    {
+        $response = $this->get('/register');
+
+        $response->assertSee('data-recaptcha-action="register"', false);
+        $response->assertSee('data-recaptcha-key="test-sitekey"', false);
+        $response->assertSee('name="g-recaptcha-response"', false);
+        $response->assertDontSee('grecaptcha.execute', false);
+    }
 }

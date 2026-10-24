@@ -4,13 +4,14 @@
 //  [*] lang/en/validation.php — the validator's messages
 //
 //  Laravel's stock English message of every validation
-//  rule, :attribute standing for the field's name. These
-//  are the errors the forms show when the validator refuses
-//  them — the login, registration and reminder forms, and
-//  the control panel's forms of challenges and their file
-//  links, categories, partners, groups with their members
-//  and challenges, accounts, content pages, mail templates
-//  and test mails.
+//  rule, :attribute standing for the field's name, and the
+//  message of the recaptchav3 rule, which the reCAPTCHA
+//  package brings without one. These are the errors the
+//  forms show when the validator refuses them — the login,
+//  registration and reminder forms, and the control panel's
+//  forms of challenges and their file links, categories,
+//  partners, groups with their members and challenges,
+//  accounts, content pages, mail templates and test mails.
 //
 //  Used by:
 //    - Laravel's validator — every check of the app's form
@@ -129,6 +130,7 @@ return [
     'prohibited_if' => 'The :attribute field is prohibited when :other is :value.',
     'prohibited_unless' => 'The :attribute field is prohibited unless :other is in :values.',
     'prohibits' => 'The :attribute field prohibits :other from being present.',
+    'recaptchav3' => 'The reCAPTCHA check failed, please try again.',
     'regex' => 'The :attribute format is invalid.',
     'required' => 'The :attribute field is required.',
     'required_array_keys' => 'The :attribute field must contain entries for: :values.',

@@ -54,9 +54,9 @@
                       </div>
                     </td>
              		<td><label for="min">Points min:&nbsp;</label></td>
-             		<td width="100"><input type="number" id="min" name="min" min="0" value="5" class="form-control"></td>
+             		<td width="100"><input type="number" id="min" name="min" min="0" value="{{ $min_points }}" class="form-control"></td>
              		<td><label for="max">&nbsp;&nbsp;&nbsp;max:&nbsp;</label></td>
-             		<td width="100"><input type="number" id="max" name="max" min="0" value="250" class="form-control"></td>
+             		<td width="100"><input type="number" id="max" name="max" min="0" value="{{ $max_points }}" class="form-control"></td>
              		<td>&nbsp;&nbsp;&nbsp;<button id="filter-button" class="btn btn-primary">Filter</button></td>
              	</tr>
              </table>

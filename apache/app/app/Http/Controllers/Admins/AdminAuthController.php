@@ -102,12 +102,11 @@ class AdminAuthController extends Controller
     // The hand-over is the sso_logout page, which moves on by
     // itself, as the site's CSP would stop a redirect of the
     // sign-out form on its way to the identity provider. The
-    // session — and its main flag — stays.
-    //
-    // Known bug LAB-42 (low): the CSRF check runs first, so a
-    // panel page whose session has ended gets "Page Expired"
-    // and the VU single sign-on stays open, as at the player's
-    // sign-out (UserAuthController::logout_saml).
+    // session — and its main flag — stays. The route asks for
+    // no admin session, so a panel page whose session has
+    // ended still ends the VU single sign-on: its refused
+    // token gets the signout_retry page (VerifyCsrfToken),
+    // whose button posts here again.
     //
     // Used by:
     //   - Post_Link() of custom_admin.js — the sign-out link of

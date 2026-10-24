@@ -111,19 +111,15 @@ class ChallengesController extends BaseController
     // unsolved ones first and by points within each half, with
     // whether the player solved it, its category names and
     // category ids — the classes the page's category filter
-    // reads — and its votes. The sorting helper is declared
+    // reads — and its votes. The points filter's boxes start
+    // at the cheapest and the dearest challenge on the page,
+    // so no card is filtered out before the player sets a
+    // bound; with no challenge they start empty, which the
+    // filter (custom.js) reads as no bound, as it reads a box
+    // the player empties. The sorting helper is declared
     // inside the action, so the action runs once per PHP
     // process: Apache serves each request afresh, and the
     // tests render these pages in separate processes.
-    //
-    // Known bug LAB-39 (medium): the dashboard's points filter
-    // is prefilled with 5 and 250 whatever the challenges are
-    // worth, so the first filter or category click hides those
-    // worth less or more; and a bound the player clears is
-    // saved as NaN (custom.js), which hides every card, on
-    // later visits too. Fix: prefill the bounds from the
-    // prices on the page and treat a non-numeric bound as no
-    // bound.
     //
     // Used by:
     //   - the Home link of the player sidebar
@@ -200,9 +196,14 @@ class ChallengesController extends BaseController
 
         aasort($arr, "solved");
 
+        // The bounds the points filter starts from
+        $points = array_column($arr, 'points');
+
         return view('users.dashboard', [
             'recordlist' => $arr,
-            'categories' => Categories::all()->pluck('name', 'id')->toArray()
+            'categories' => Categories::all()->pluck('name', 'id')->toArray(),
+            'min_points' => $points ? min($points) : '',
+            'max_points' => $points ? max($points) : ''
         ]);
     }
 

@@ -155,7 +155,7 @@ final class PasswordResetTest extends TestCase
         $response->assertOk();
         $response->assertViewIs('users.forgot-password');
         $response->assertSee('action="https://lab.knf.vu.lt/forgot-password"', false);
-        $response->assertSee("{action: 'forgotpass'}", false);
+        $response->assertSee('data-recaptcha-action="forgotpass"', false);
     }
 
 
@@ -869,5 +869,32 @@ final class PasswordResetTest extends TestCase
 
         Mail::assertSent(SendRemindLink::class, fn (SendRemindLink $mail) => $mail->hasTo('jonas@gmail.com'));
         Mail::assertNotSent(SendRemindLink::class, fn (SendRemindLink $mail) => ! $mail->hasTo('jonas@gmail.com'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_reminder_form_fetches_its_recaptcha_token_as_it_is_sent
+    // -----------------------------------------------------------
+    //
+    // As on the registration form, the reminder form's
+    // reCAPTCHA token is fetched as the form is sent, never as
+    // the page loads.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_reminder_form_fetches_its_recaptcha_token_as_it_is_sent(): void
+    {
+        $response = $this->get('/forgot-password');
+
+        $response->assertSee('data-recaptcha-action="forgotpass"', false);
+        $response->assertSee('data-recaptcha-key="test-sitekey"', false);
+        $response->assertSee('name="g-recaptcha-response"', false);
+        $response->assertDontSee('grecaptcha.execute', false);
     }
 }
