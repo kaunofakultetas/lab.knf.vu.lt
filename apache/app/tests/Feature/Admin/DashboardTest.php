@@ -268,7 +268,8 @@ final class DashboardTest extends TestCase
     // A solve without a history row — which no answer leaves,
     // but older data may — shows how long ago it was by its
     // local time in the top ten, rather than breaking the
-    // page.
+    // page. The test runs in UTC (inUtc), as a local time read
+    // back the night the clocks go back may be an hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -276,6 +277,7 @@ final class DashboardTest extends TestCase
 
     public function test_the_top_ten_falls_back_to_the_local_time(): void
     {
+        $this->inUtc();
         $player = $this->makePlayer();
         $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', time() - 7200));
         ChallengesHistory::where(['user_id' => $player->id])->delete();

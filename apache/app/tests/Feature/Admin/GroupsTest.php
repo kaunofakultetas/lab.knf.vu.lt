@@ -812,10 +812,10 @@ final class GroupsTest extends TestCase
         $group = $this->makeGroup();
         $player = $this->makeSsoPlayer();
         $this->joinGroup($group, $player);
-        foreach (['-5 days', '-2 hours', '-10 days'] as $when) {
+        foreach ([5 * 86400, 2 * 3600, 10 * 86400] as $seconds) {
             $challenge = $this->makeChallenge();
             $this->assignToGroup($group, $challenge);
-            $this->recordSolve($player, $challenge, date('Y-m-d H:i:s', strtotime($when)));
+            $this->recordSolveSecondsAgo($player, $challenge, $seconds);
         }
 
         $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/vu-groups/leaderboard/{$group->id}");
@@ -1377,7 +1377,9 @@ final class GroupsTest extends TestCase
     // A solve without a history row — which no answer leaves,
     // but older data may — shows how long ago it was by its
     // local time on the panel's group leaderboard, rather than
-    // breaking the page.
+    // breaking the page. The test runs in UTC (inUtc), as a
+    // local time read back the night the clocks go back may be
+    // an hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -1385,6 +1387,7 @@ final class GroupsTest extends TestCase
 
     public function test_the_group_leaderboard_falls_back_to_the_local_time(): void
     {
+        $this->inUtc();
         $group = $this->makeGroup();
         $player = $this->makeSsoPlayer();
         $this->joinGroup($group, $player);

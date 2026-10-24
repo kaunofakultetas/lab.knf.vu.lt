@@ -665,6 +665,12 @@ class UsersGroupsController extends BaseController
     // click stores the challenge once, and a group deleted
     // meanwhile goes back with "No group!" and gets no row.
     //
+    // Known bug LAB-83 (low): the challenge is checked before
+    // the transaction, which locks only the group, so a
+    // challenge another admin deletes in between is placed all
+    // the same, a nameless row of the group's list. Fix: lock
+    // and check the challenge's row in the transaction.
+    //
     // Used by:
     //   - the challenge dialog's form
     // -----------------------------------------------------------

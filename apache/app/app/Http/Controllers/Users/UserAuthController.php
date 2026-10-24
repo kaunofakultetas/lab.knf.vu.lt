@@ -73,6 +73,15 @@ class UserAuthController extends BaseController
     // button. Signed-in visitors never see it — the guest
     // middleware sends them to their dashboard.
     //
+    // Known bug LAB-86 (low): front.js finds a box's floating
+    // label as the last element of its group, and this page
+    // and the reminder page
+    // (RegisterController::ForgotPasswordForm) print a field's
+    // error message after the label, so with an error showing
+    // a focused or refilled box turns the message into the
+    // label. Fix: find the label by its class, or print the
+    // message first.
+    //
     // Used by:
     //   - the site's front page, and every redirect to
     //     login_users
@@ -114,6 +123,20 @@ class UserAuthController extends BaseController
     //
     // By design the form takes any number of wrong passwords:
     // the route has no rate limit, no lockout and no reCAPTCHA.
+    //
+    // Known bug LAB-73 (medium): every sign-in to an account
+    // never verified mails another link, with nothing between
+    // two mails, so repeated logins send any number of mails
+    // to its address. Known bug LAB-74 (medium): a refused
+    // form flashes all the input but the password, so up to
+    // PHP's 8 MB a request sits in a Redis session for 36
+    // hours. Known bug LAB-78 (low): the views converted from
+    // Form:: print old() as it comes, so a field sent as a
+    // list makes the next page a 500. Known bug LAB-87 (low):
+    // wrong credentials and an inactive account go back
+    // without the e-mail typed. Fix: some minutes between two
+    // links; flash the e-mail alone, on every refusal; refill
+    // a field only from text.
     //
     // Used by:
     //   - the login form of users/login.blade.php

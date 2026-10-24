@@ -85,6 +85,11 @@ class RegisterController extends Controller
     // The users.register view, told whether registration is
     // open (the reg_open setting).
     //
+    // Known bug LAB-85 (low): the view's Confirm Password
+    // label points at the password box (for="login-password"),
+    // so a click on its words types into the password. Fix:
+    // point it at the confirmation box.
+    //
     // Used by:
     //   - the registration links of the login and reminder
     //     pages
@@ -125,6 +130,17 @@ class RegisterController extends Controller
     // the taken username it is, not as a server error. The
     // form's script also ignores a second press while it
     // fetches the token.
+    //
+    // Known bug LAB-74 (medium): a refused form flashes every
+    // field but the passwords, a made-up one of up to PHP's 8
+    // MB included, into a Redis session kept 36 hours. Known
+    // bug LAB-79 (low): the email rule lets through addresses
+    // Symfony's mailer refuses — a comment in the local part,
+    // an address literal — and the account is made before its
+    // mail fails: a 500, and an account that can never be
+    // verified. Fix: flash the username and e-mail alone;
+    // check the address as the mailer does, or with the rule's
+    // strict mode.
     //
     // Used by:
     //   - the registration form of users/register.blade.php
@@ -189,6 +205,12 @@ class RegisterController extends Controller
     // validate.verify middleware has refused unknown and
     // expired tokens already; anything that still gets through
     // ends on the front page.
+    //
+    // Known bug LAB-80 (low): a mail scanner that opens the
+    // link first uses it up, and the player's own click then
+    // ends on ValidateVerify's 404. Fix: verify with a button,
+    // as the reminder link does, or answer a used link with
+    // the login page.
     //
     // Used by:
     //   - the link of the verification mail (UserVerifyMail)
@@ -299,6 +321,10 @@ class RegisterController extends Controller
     // not the account exists, so the form tells no one which
     // addresses are registered. As in store, the form fetches
     // its reCAPTCHA token as it is sent.
+    //
+    // Known bug LAB-74 (medium): a refused form's validation
+    // flashes every field, a made-up one of up to PHP's 8 MB
+    // included, into the session. Fix: flash the e-mail alone.
     //
     // Used by:
     //   - the form of users/forgot-password.blade.php

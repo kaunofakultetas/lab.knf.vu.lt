@@ -122,7 +122,8 @@ final class LeaderboardTest extends TestCase
     // -----------------------------------------------------------
     //
     // Points alone do not rank a player: only players with at
-    // least one solve appear.
+    // least one solve appear. The solver is looked for past
+    // the sidebar, whose feed names them too.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -136,7 +137,7 @@ final class LeaderboardTest extends TestCase
 
         $response = $this->get('/user/leaderboard');
 
-        $response->assertSee('Solver');
+        $this->assertStringContainsString('Solver', $this->pageContent($response));
         $response->assertDontSee('Idler');
     }
 
@@ -355,9 +356,9 @@ final class LeaderboardTest extends TestCase
     public function test_the_leaderboard_shows_the_latest_solve(): void
     {
         $player = $this->makePlayer();
-        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-5 days')));
-        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-2 hours')));
-        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-10 days')));
+        $this->recordSolveSecondsAgo($player, $this->makeChallenge(), 5 * 86400);
+        $this->recordSolveSecondsAgo($player, $this->makeChallenge(), 2 * 3600);
+        $this->recordSolveSecondsAgo($player, $this->makeChallenge(), 10 * 86400);
 
         $response = $this->signIn($this->makePlayer())->get('/user/leaderboard');
 
@@ -526,7 +527,9 @@ final class LeaderboardTest extends TestCase
     //
     // A solve without a history row — which no answer leaves,
     // but older data may — shows how long ago it was by its
-    // local time, rather than breaking the page.
+    // local time, rather than breaking the page. The test runs
+    // in UTC (inUtc), as a local time read back the night the
+    // clocks go back may be an hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -534,6 +537,7 @@ final class LeaderboardTest extends TestCase
 
     public function test_a_solve_without_history_shows_its_local_time(): void
     {
+        $this->inUtc();
         $player = $this->makePlayer();
         $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', time() - 7200));
         ChallengesHistory::where(['user_id' => $player->id])->delete();

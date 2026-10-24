@@ -322,7 +322,11 @@ final class SamlMessagesTest extends TestCase
     // Receives the query string as the SP's logout endpoint
     // does and checks its signature against the IdP's
     // certificate (Message::checkSign); a refusal is the
-    // exception either throws.
+    // exception either throws. The endpoint itself runs that
+    // check only when the IdP's metadata asks for it with
+    // validate.logout, which the live metadata leaves unset,
+    // so the logout tests hold the check that setting would
+    // switch on.
     //
     // Used by:
     //   - the logout tests below
@@ -530,7 +534,9 @@ final class SamlMessagesTest extends TestCase
     //
     // A logout response whose signature was altered, made by
     // another key, made with its algorithm swapped afterwards
-    // or left out is refused.
+    // or left out fails the signature check — the check the
+    // SP's logout endpoint runs once the IdP's metadata sets
+    // validate.logout (receiveLogout).
     //
     // Used by:
     //   - PHPUnit — the Unit suite (runTests.sh)

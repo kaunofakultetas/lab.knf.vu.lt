@@ -69,6 +69,15 @@ class SamlAuth
     // message the login form gives an inactive account, and
     // signs in to nothing.
     //
+    // Known bug LAB-72 (medium): nothing reads SimpleSAMLphp
+    // after this, so a sign-out at sso.vu.lt, which ends
+    // SimpleSAMLphp's session, leaves the player signed in to
+    // the lab. Known bug LAB-76 (low): the inactive account's
+    // refusal signs no one out, so a player signed in before
+    // stays. Fix: remember that the sign-in came through VU
+    // and end such a session once Simple::isAuthenticated says
+    // no; sign the guard out on the refusal.
+    //
     // Used by:
     //   - the saml_auth alias — GET /cp
     // -----------------------------------------------------------

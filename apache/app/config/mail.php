@@ -29,12 +29,17 @@ return [
     // longer reads
     'default' => env('MAIL_MAILER', 'smtp'),
 
-    // The mailers. smtp is the one in use: its host, port
-    // and encryption from the .env, its login the Mailjet API
-    // key and secret the .env refers to. mailjet names no
-    // transport, so no mailer can use it — EmailsController
-    // builds its own Mailjet API client for the list sync.
-    // The rest are Laravel's stock mailers, unused
+    // The mailers. smtp is the one in use: its host and port
+    // from the .env, its login the Mailjet API key and secret
+    // the .env refers to; the .env's encryption is a setting
+    // Laravel 13 no longer reads. mailjet names no transport,
+    // so no mailer can use it — EmailsController builds its
+    // own Mailjet API client for the list sync. The rest are
+    // Laravel's stock mailers, unused. Known bug LAB-90 (low):
+    // on port 587 Symfony's mailer turns to TLS only if the
+    // server offers STARTTLS, so an attacker on the way who
+    // strips the offer reads the Mailjet login and every mail
+    // in clear. Fix: 'require_tls' => true on smtp.
     'mailers' => [
         'smtp' => [
             'transport' => 'smtp',

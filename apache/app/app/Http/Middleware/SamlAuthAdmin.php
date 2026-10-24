@@ -64,6 +64,15 @@ class SamlAuthAdmin
     // With one, the admin check_admin finds is signed in on
     // the admins guard; nobody, when it finds none.
     //
+    // Known bug LAB-72 (medium): nothing reads SimpleSAMLphp
+    // after this, so a sign-out at sso.vu.lt leaves the admin
+    // signed in to the control panel. Known bug LAB-76 (low):
+    // for a VU user who is no admin loginUsingId changes
+    // nothing, so an admin signed in before stays, and
+    // cp_login goes on to that admin's dashboard. Fix: as in
+    // SamlAuth; sign the guard out when check_admin finds
+    // nobody.
+    //
     // Used by:
     //   - the saml_auth_admin alias — GET /control-panel/login
     // -----------------------------------------------------------

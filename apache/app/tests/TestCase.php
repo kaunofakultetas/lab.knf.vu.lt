@@ -69,6 +69,8 @@ use Lunaweb\RecaptchaV3\Facades\RecaptchaV3;
 //   recordSolveInTheRepeatedHour — a solve whose local time
 //     reads earlier than it was
 //   recordSolveSecondsAgo — a solve a number of seconds ago
+//   inUtc — the rest of the test on a clock without
+//     daylight saving
 //   signIn, signInAdmin — sessions
 //   fakeRecaptcha — the reCAPTCHA verdict
 //   setRegistrationOpen, setEventRange — the settings rows
@@ -441,13 +443,18 @@ abstract class TestCase extends BaseTestCase
     //
     // Books a solve the given number of seconds ago, the Unix
     // time of its history row exact. The pages count how long
-    // ago a solve was from that Unix time, and a day of the
-    // local clock is not always 86400 seconds: a solve booked
-    // three days ago by the local clock reads "2 days ago" for
-    // three days after the clocks go forward in March.
+    // ago a solve was from that Unix time, and the local clock
+    // is no exact measure of it: a day of it is not always
+    // 86400 seconds, so a solve booked three days ago by the
+    // local clock reads "2 days ago" for three days after the
+    // clocks go forward in March, and an hour of it comes
+    // twice when they go back in October, so a solve booked
+    // two hours ago by the local clock reads "3 hours ago"
+    // for an hour that night.
     //
     // Used by:
-    //   - the Feature tests that read "3 days ago" off a page
+    //   - the Feature tests that read how long ago a solve
+    //     was off a page
     // -----------------------------------------------------------
 
     protected function recordSolveSecondsAgo(User $player, Challenges $challenge, int $seconds): void
@@ -455,6 +462,36 @@ abstract class TestCase extends BaseTestCase
         $at = time() - $seconds;
         $this->recordSolve($player, $challenge, date('Y-m-d H:i:s', $at));
         ChallengesHistory::where(['user_id' => $player->id, 'challenge_id' => $challenge->id])->update(['created_time' => $at]);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // inUtc
+    // -----------------------------------------------------------
+    //
+    // Runs the rest of the test, the requests it sends
+    // included, on UTC instead of the app's Europe/Vilnius,
+    // and puts the time zone back when the test ends. A local
+    // time the hour the clocks go back in October comes twice,
+    // and read back it is always taken as the first, so a test
+    // that books a solve by its local time alone — the
+    // fallback the pages take for a solve without a history
+    // row — reads an hour off that night; UTC has no such
+    // hour.
+    //
+    // Used by:
+    //   - the Feature tests of the pages' local-time fallback
+    // -----------------------------------------------------------
+
+    protected function inUtc(): void
+    {
+        $zone = date_default_timezone_get();
+        date_default_timezone_set('UTC');
+        $this->beforeApplicationDestroyed(fn () => date_default_timezone_set($zone));
     }
 
 

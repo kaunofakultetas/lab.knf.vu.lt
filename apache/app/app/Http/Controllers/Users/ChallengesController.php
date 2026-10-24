@@ -236,6 +236,13 @@ class ChallengesController extends BaseController
     // already. A challenge whose partner was deleted shows
     // without the partner card.
     //
+    // Known bug LAB-77 (low): an unknown group goes back(),
+    // which for a page sent from itself — an answer posted
+    // after its group was deleted — is that page again, so it
+    // redirects to itself until the browser gives up;
+    // submit_answer the same. Fix: send an unknown group to
+    // the dashboard.
+    //
     // Used by:
     //   - the challenge cards of the dashboard and of a
     //     group's page
@@ -518,6 +525,10 @@ class ChallengesController extends BaseController
     // nothing. The text is read as the rule reads it, the
     // form's body before the address, so the text stored is
     // always the one checked.
+    //
+    // Known bug LAB-75 (low): the text has no length limit, so
+    // a player may store up to PHP's 8 MB a message, again and
+    // again. Fix: a limit of a few thousand characters.
     //
     // Used by:
     //   - the form of the feedback dialog

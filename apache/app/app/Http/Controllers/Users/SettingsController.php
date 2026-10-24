@@ -172,6 +172,14 @@ class SettingsController extends BaseController
     // history: the leaderboards look up the Unix times of the
     // last solves themselves (ChallengesHistory::lastTimes).
     //
+    // Known bug LAB-84 (low): a solve worth no points counts
+    // as the last solve, so a player who solves a 0-point
+    // challenge drops behind everyone who reached the same
+    // points in between; the get_group_leaderboard of
+    // Users\GroupsController and of
+    // Admins\UsersGroupsController the same. Fix: take the
+    // latest solve that gave points.
+    //
     // Used by:
     //   - UpdateRankingTable::handle (Http/Middleware/) —
     //     every request

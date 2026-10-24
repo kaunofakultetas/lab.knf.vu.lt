@@ -138,6 +138,10 @@ class ChallengesController extends BaseController
     // links, which a lab admin gets on its own challenges
     // only.
     //
+    // Known bug LAB-82 (low): the words go into the LIKE
+    // pattern as typed, so _ and % in them match any one
+    // character and any text. Fix: escape \, % and _.
+    //
     // Used by:
     //   - the All challenges link of the panel's sidebar
     //   - the list's own search form and its Clear all link

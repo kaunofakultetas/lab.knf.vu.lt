@@ -110,6 +110,13 @@ class Controller extends BaseController
     // ended is served at the sign-out's own address, and
     // resuming it would end the next login on a 405.
     //
+    // Known bug LAB-92 (low): Symfony 7.4's Request::create
+    // throws a BadRequestException, which this does not catch,
+    // for an address with a backslash in its path, so a login
+    // whose page asked for before holds one ends on a 400.
+    // Fix: count any address Request::create refuses as one no
+    // GET opens.
+    //
     // Used by:
     //   - intendedWithin (above)
     // -----------------------------------------------------------

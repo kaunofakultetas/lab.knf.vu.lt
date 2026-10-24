@@ -59,6 +59,13 @@ class Perms
     // request, so rights taken away end at once, not at the
     // next sign-in.
     //
+    // Known bug LAB-81 (low): back() from a page the browser
+    // reached from a main-only page is that page again,
+    // refused again, so a demoted main admin who presses
+    // anything on a main-only page is redirected to it until
+    // the browser gives up. Fix: send a refused page to the
+    // dashboard.
+    //
     // Used by:
     //   - the perms alias — the main-only routes
     // -----------------------------------------------------------

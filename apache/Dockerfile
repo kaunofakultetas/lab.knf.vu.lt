@@ -11,7 +11,11 @@ RUN apt-get -y update \
 # Without a php.ini, PHP prints its notices into the page; keep the
 # deprecation notices a newer PHP raises about older library code out
 # of the pages, some of which come before Laravel's own error handler
-# takes over
+# takes over. Known bug LAB-91: display_errors stays at PHP's default,
+# on, so the pages Laravel does not handle, SimpleSAMLphp's, still
+# print PHP's warnings, the server's file paths among them; fix:
+# display_errors = Off in an ini file here, PHP still logging them to
+# Apache's error log
 RUN echo 'error_reporting = E_ALL & ~E_DEPRECATED' > "$PHP_INI_DIR/conf.d/error-reporting.ini"
 
 # Without a php.ini, PHP names its exact version in an X-Powered-By

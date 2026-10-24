@@ -112,6 +112,10 @@ class UsersController extends BaseController
     // settled here for its search box, so a q that is not
     // text shows as no search.
     //
+    // Known bug LAB-82 (low): the words go into the LIKE
+    // pattern as typed, so _ and % in them match any one
+    // character and any text. Fix: escape \, % and _.
+    //
     // Used by:
     //   - the All users link of the panel's sidebar, and the
     //     redirects of the account actions

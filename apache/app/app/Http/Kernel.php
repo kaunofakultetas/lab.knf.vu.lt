@@ -91,6 +91,12 @@ class Kernel extends HttpKernel
     // every app alias but signed, the api group uses throttle,
     // and auth.session, cache.headers, can, password.confirm
     // and verified are named by nothing.
+    // Known bug LAB-89 (low): auth.session, which signs a
+    // session out once its account's password changes, is on
+    // no route, so a new password ends no other session of the
+    // account. Fix: auth.session after auth:users on the
+    // player routes, with AuthenticateSession::redirectUsing
+    // naming the login page.
     protected $middlewareAliases = [
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.admin' => \App\Http\Middleware\AuthenticateAdmin::class,

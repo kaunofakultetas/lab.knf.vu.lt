@@ -10,12 +10,13 @@
 #  the suite inside a throwaway container shaped like the
 #  production one: no network, a read-only root filesystem
 #  with the tmpfs mounts docker-compose.yml gives the app,
-#  user 1000. A test that reaches out fails instead of
-#  passing by luck, and nothing outside the container is
-#  touched. The schema is mounted read-only from
-#  mysql/init.sql. Extra arguments go to PHPUnit — a suite,
-#  a test file, a --filter; app/tests/README.md lists the
-#  suites and the pinned defects.
+#  and one where it mounts the challenge files
+#  (public/downloads), user 1000. A test that reaches out
+#  fails instead of passing by luck, and nothing outside the
+#  container is touched. The schema is mounted read-only
+#  from mysql/init.sql. Extra arguments go to PHPUnit — a
+#  suite, a test file, a --filter; app/tests/README.md lists
+#  the suites and the pinned defects.
 # -----------------------------------------------------------
 set -e
 cd "$(dirname "$0")"
@@ -29,6 +30,7 @@ sudo docker run --rm --name vuknflab-apache-tests --network none --read-only \
   --tmpfs /var/www/html/storage/framework/sessions:uid=1000,gid=1000 \
   --tmpfs /var/www/html/storage/framework/views:uid=1000,gid=1000 \
   --tmpfs /var/www/html/storage/app/public:uid=1000,gid=1000 \
+  --tmpfs /var/www/html/public/downloads:uid=1000,gid=1000 \
   --tmpfs /var/www/html/storage/logs:uid=1000,gid=1000 \
   --tmpfs /var/www/logs:uid=1000,gid=1000 \
   --tmpfs /var/lib/mysql:uid=1000,gid=1000,size=512m \

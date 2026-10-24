@@ -53,7 +53,12 @@ return [
     // drivers that need it; Redis expires them itself
     'lottery' => [2, 100],
 
-    // The cookie's name, from SESSION_COOKIE or else APP_NAME
+    // The cookie's name, from SESSION_COOKIE or else APP_NAME.
+    // Known bug LAB-88 (low): another host under vu.lt may set
+    // a cookie of this name for the whole domain, with a
+    // longer path the browser sends first, and the victim's
+    // pages then run in the attacker's session. Fix: the
+    // __Host- prefix, which only the lab's own host can set.
     'cookie' => env(
         'SESSION_COOKIE',
         Str::slug(env('APP_NAME', 'laravel'), '_').'_session'

@@ -14,8 +14,11 @@
 //  Python suites of the other house stacks follow.
 //
 //  Used by:
-//    - nothing at the moment — the next defect pinned under
-//      tests/Defects
+//    - Defects\AccountDefectsTest
+//    - Defects\AdminDefectsTest
+//    - Defects\PlayerDefectsTest
+//    - Defects\SsoDefectsTest
+//    - Http\ApacheTest
 // -----------------------------------------------------------
 
 
@@ -43,7 +46,11 @@ use PHPUnit\Framework\AssertionFailedError;
 // turned into a failure by the test itself.
 //
 // Used by:
-//   - nothing at the moment
+//   - Defects\AccountDefectsTest
+//   - Defects\AdminDefectsTest
+//   - Defects\PlayerDefectsTest
+//   - Defects\SsoDefectsTest
+//   - Http\ApacheTest
 // -----------------------------------------------------------
 
 trait KnownDefects
@@ -64,7 +71,11 @@ trait KnownDefects
     // fixed and the test now belongs in its home file.
     //
     // Used by:
-    //   - nothing at the moment — the next defect test pinned
+    //   - Defects\AccountDefectsTest
+    //   - Defects\AdminDefectsTest
+    //   - Defects\PlayerDefectsTest
+    //   - Defects\SsoDefectsTest
+    //   - Http\ApacheTest
     // -----------------------------------------------------------
 
     protected function assertDefectStillOpen(string $defect, Closure $wanted): void

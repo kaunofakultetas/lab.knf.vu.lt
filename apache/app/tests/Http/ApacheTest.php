@@ -16,7 +16,10 @@
 //  ever runs, that a forged client address is ignored, that
 //  no answer names the server's versions, that PHP takes no
 //  arguments from a query string, and that CSRF is enforced
-//  outside PHPUnit.
+//  outside PHPUnit. Two known defects of the image are pinned
+//  here too: LAB-71, PHP running in the challenge-file
+//  folder, and LAB-91, PHP printing its diagnostics outside
+//  Laravel.
 //
 //  Used by:
 //    - PHPUnit — the Http suite (runTests.sh)
@@ -27,6 +30,7 @@ namespace Tests\Http;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Tests\Support\KnownDefects;
 use Tests\TestCase;
 
 
@@ -44,11 +48,12 @@ use Tests\TestCase;
 // it — none of phpunit.xml's testing values — and its own
 // requests write to the database outside the tests'
 // transactions, so the tests here only read, and the files
-// they put into the upload folder are removed after each
-// test.
+// they put into the upload and challenge-file folders are
+// removed after each test.
 //
 //   fetch — one request, redirects not followed
 //   plantUpload — a file in the upload folder
+//   plantDownload — a file in the challenge-file folder
 //
 // Used by:
 //   - PHPUnit — the Http suite (runTests.sh)
@@ -57,11 +62,19 @@ use Tests\TestCase;
 final class ApacheTest extends TestCase
 {
 
+    // assertDefectStillOpen, which reports a test incomplete
+    // while its defect is open
+    use KnownDefects;
+
     // The address the vhost listens on, from ports.conf
     private const SERVER = 'http://127.0.0.1:8080';
 
-    // The files the test put into the upload folder
+    // The files the test put into the upload and
+    // challenge-file folders
     private array $planted = [];
+
+    // The folders it made for them there
+    private array $plantedFolders = [];
 
 
 
@@ -72,7 +85,8 @@ final class ApacheTest extends TestCase
     // tearDown
     // -----------------------------------------------------------
     //
-    // Removes the files the test planted.
+    // Removes the files the test planted, then the folders it
+    // made for them.
     //
     // Used by:
     //   - PHPUnit, after every test
@@ -82,6 +96,9 @@ final class ApacheTest extends TestCase
     {
         foreach ($this->planted as $file) {
             @unlink($file);
+        }
+        foreach (array_reverse($this->plantedFolders) as $folder) {
+            @rmdir($folder);
         }
         parent::tearDown();
     }
@@ -132,6 +149,37 @@ final class ApacheTest extends TestCase
     private function plantUpload(string $name, string $content): void
     {
         $path = storage_path("app/public/{$name}");
+        file_put_contents($path, $content);
+        $this->planted[] = $path;
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // plantDownload
+    // -----------------------------------------------------------
+    //
+    // Writes a file into the challenge-file folder — what the
+    // live container mounts from _DATA/apache/downloads at
+    // public/downloads, and runTests.sh gives a tmpfs — the
+    // way an admin copying a challenge's files there would,
+    // with the subfolder its name holds, and notes both for
+    // removal.
+    //
+    // Used by:
+    //   - test_lab_71_php_in_the_challenge_file_folder_never_runs
+    // -----------------------------------------------------------
+
+    private function plantDownload(string $name, string $content): void
+    {
+        $path = public_path("downloads/{$name}");
+        if (! is_dir(dirname($path))) {
+            mkdir(dirname($path));
+            $this->plantedFolders[] = dirname($path);
+        }
         file_put_contents($path, $content);
         $this->planted[] = $path;
     }
@@ -435,9 +483,16 @@ final class ApacheTest extends TestCase
 
     public function test_a_forged_client_address_is_ignored(): void
     {
-        $this->fetch('GET', '/robots.txt?forged-address-check', ['X-Forwarded-For' => '203.0.113.66']);
+        $marker = 'forged-address-check-' . bin2hex(random_bytes(4));
+        $this->fetch('GET', "/robots.txt?{$marker}", ['X-Forwarded-For' => '203.0.113.66']);
 
-        $lines = preg_grep('/forged-address-check/', file('/var/www/logs/access.log') ?: []);
+        // Apache writes the line once the answer is sent, so it
+        // may land a moment after the answer does
+        $lines = [];
+        for ($try = 0; $try < 50 && ! $lines; $try++) {
+            usleep($try ? 100000 : 0);
+            $lines = preg_grep("/{$marker}/", file('/var/www/logs/access.log') ?: []);
+        }
         $this->assertNotEmpty($lines);
         $this->assertStringStartsWith('127.0.0.1 ', end($lines));
         $this->assertStringNotContainsString('203.0.113.66', end($lines));
@@ -484,11 +539,12 @@ final class ApacheTest extends TestCase
     //
     // The image's PHP settings, which Apache's PHP reads as
     // well, turn register_argc_argv off, so a web request's
-    // query string never becomes $_SERVER['argv'], which
-    // Laravel 10.6 would read to pick its environment
-    // (CVE-2024-52301). The command line keeps its arguments
-    // whatever the setting, so the settings files are read
-    // here instead.
+    // query string never becomes $_SERVER['argv'], from which
+    // Laravel before 10.48.23 took its environment
+    // (CVE-2024-52301); Laravel 13 no longer does, and the
+    // setting stays as a second guard. The command line keeps
+    // its arguments whatever the setting, so the settings
+    // files are read here instead.
     //
     // Used by:
     //   - PHPUnit — the Http suite (runTests.sh)
@@ -582,5 +638,93 @@ final class ApacheTest extends TestCase
     {
         $this->assertDirectoryExists('/var/www/simplesamlphp-sessions');
         $this->assertSame(1000, fileowner('/var/www/simplesamlphp-sessions'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_lab_71_php_in_the_challenge_file_folder_never_runs
+    // -----------------------------------------------------------
+    //
+    // Known bug LAB-71 (medium): /downloads, the challenge
+    // files the admins copy into _DATA/apache/downloads, which
+    // docker-compose.yml mounts at public/downloads, is served
+    // like the rest of public/ — the PHP engine on, .htaccess
+    // files obeyed (AllowOverride All) — while the lockdown of
+    // 000-default.conf covers the upload folder alone. A
+    // challenge whose file is a PHP script — the source of a
+    // web challenge, handed out to be read — runs when a player
+    // opens its link, as the app's user and with the app's
+    // environment, the database password and APP_KEY among
+    // it, instead of being downloaded. Here PHP scripts are put
+    // into the folder, and one beside an .htaccess that turns
+    // PHP back on. Fix: the upload folder's lockdown for
+    // public/downloads too, with AllowOverride None.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_lab_71_php_in_the_challenge_file_folder_never_runs(): void
+    {
+        $script = '<?php echo "EXECUTED-" . (6 * 7);';
+        foreach (['shell.php', 'shell.phtml', 'shell.phar'] as $name) {
+            $this->plantDownload($name, $script);
+        }
+        $this->plantDownload('switched-on/.htaccess', "php_flag engine on\n");
+        $this->plantDownload('switched-on/shell.php', $script);
+
+        $bodies = [];
+        foreach (['shell.php', 'shell.phtml', 'shell.phar', 'switched-on/shell.php'] as $name) {
+            $bodies[$name] = $this->fetch('GET', "/downloads/{$name}")->body();
+        }
+
+        $this->assertDefectStillOpen('LAB-71', function () use ($bodies) {
+            foreach ($bodies as $name => $body) {
+                $this->assertStringNotContainsString('EXECUTED-42', $body, "/downloads/{$name} was executed");
+            }
+        });
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_lab_91_php_prints_no_diagnostics_outside_laravel
+    // -----------------------------------------------------------
+    //
+    // Known bug LAB-91 (low): the image sets no display_errors,
+    // and PHP without a php.ini prints its warnings into the
+    // page. Laravel switches that off for its own pages, but
+    // SimpleSAMLphp's under /simplesaml are not Laravel's, and
+    // its error handler leaves warnings to PHP: a malformed
+    // SAML message, such as a SAMLRequest that does not
+    // inflate, prints the warning, with the server's file
+    // paths, above SimpleSAMLphp's error page. The image's PHP
+    // settings are read here, as for register_argc_argv, the
+    // later file winning as in PHP. Fix: display_errors = Off
+    // in an ini file of the Dockerfile; PHP still logs the
+    // warnings to Apache's error log.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_lab_91_php_prints_no_diagnostics_outside_laravel(): void
+    {
+        $settings = [];
+        foreach (array_filter(array_map('trim', explode(',', (string) php_ini_scanned_files()))) as $file) {
+            $settings = array_merge($settings, parse_ini_file($file));
+        }
+
+        $this->assertDefectStillOpen('LAB-91', function () use ($settings) {
+            $this->assertArrayHasKey('display_errors', $settings, "the image leaves display_errors at PHP's own default, on");
+            $this->assertContains($settings['display_errors'], ['', '0'], 'the image switches display_errors on');
+        });
     }
 }
