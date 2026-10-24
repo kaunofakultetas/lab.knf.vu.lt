@@ -82,17 +82,16 @@ class Kernel extends HttpKernel
         ],
     ];
 
-    // The names routes give middleware — Laravel 10 calls the
-    // list middlewareAliases and still reads this old name.
-    // auth, auth.admin, guest and signed are the app's
-    // versions of Laravel's; reg.status, validate.ifsolved,
-    // validate.verify, validate.reset, saml_auth,
-    // saml_auth_admin, group.exists, r_exists and perms are
-    // the app's own checks; the rest are Laravel's.
-    // routes/web.php uses every app alias but signed, the api
-    // group uses throttle, and auth.session, cache.headers,
-    // can, password.confirm and verified are named by nothing.
-    protected $routeMiddleware = [
+    // The names routes give middleware. auth, auth.admin,
+    // guest and signed are the app's versions of Laravel's;
+    // reg.status, validate.ifsolved, validate.verify,
+    // validate.reset, saml_auth, saml_auth_admin,
+    // group.exists, r_exists and perms are the app's own
+    // checks; the rest are Laravel's. routes/web.php uses
+    // every app alias but signed, the api group uses throttle,
+    // and auth.session, cache.headers, can, password.confirm
+    // and verified are named by nothing.
+    protected $middlewareAliases = [
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.admin' => \App\Http\Middleware\AuthenticateAdmin::class,
         'reg.status' => \App\Http\Middleware\RegStatus::class,

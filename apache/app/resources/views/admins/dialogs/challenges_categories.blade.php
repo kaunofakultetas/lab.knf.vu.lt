@@ -1,4 +1,4 @@
-{{ Form::open(['url' => env('APP_URL').'/control-panel/challenges/categories/store']) }}
+<form method="POST" action="{{ env('APP_URL').'/control-panel/challenges/categories/store' }}" accept-charset="UTF-8">@csrf
 
  <div class="mb-3">
  	<b>{{ $challenge_name }}</b>
@@ -18,8 +18,8 @@
     
     
 <div class="mb-3">
-	{{ Form::submit('Submit', ['class'=>'btn btn-primary', 'login'=>'login']) }}
+	<input class="btn btn-primary" login="login" type="submit" value="Submit">
 </div>  
 
-{{ Form::hidden('uid', $uid ?? 0) }}
-{{ Form::close() }}
+<input name="uid" type="hidden" value="{{ old('uid', $uid ?? 0) }}">
+</form>

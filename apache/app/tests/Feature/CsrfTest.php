@@ -3,13 +3,15 @@
 // -----------------------------------------------------------
 //  [*] CsrfTest — every form needs its session's token
 //
-//  Laravel's CSRF check stands in front of every POST route:
-//  a form must carry the token of the session it was served
-//  in, as a field or as the X-CSRF-TOKEN header scripts send,
-//  or the request ends on the 419 page before anything else
-//  runs. Laravel skips the check under PHPUnit, so these
-//  tests switch the application's environment away from
-//  "testing" first — the one thing the check looks at.
+//  Laravel's CSRF check stands in front of every POST
+//  route: a form must carry the token of the session it was
+//  served in, as a field or as the X-CSRF-TOKEN header
+//  scripts send — or come, as the browser's Sec-Fetch-Site
+//  header says, from a page of the site itself — or the
+//  request ends on the 419 page before anything else runs.
+//  Laravel skips the check under PHPUnit, so these tests
+//  switch the application's environment away from "testing"
+//  first — the one thing the check looks at.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -175,7 +177,8 @@ final class CsrfTest extends TestCase
     //
     // The session's token as a form field, or as the header
     // scripts send, lets the request through to the
-    // controller.
+    // controller. A login hands out a new token, so the page
+    // after it carries another one than the login form did.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -189,7 +192,8 @@ final class CsrfTest extends TestCase
 
         $this->post('/login', ['_token' => $token, 'email' => $player->email, 'password' => self::PASSWORD])
             ->assertRedirect('/user/dashboard');
-        $this->withHeader('X-CSRF-TOKEN', $token)
+        $this->assertNotSame($token, csrf_token());
+        $this->withHeader('X-CSRF-TOKEN', csrf_token())
             ->post('/user/feedback', ['feedback' => 'Sent by a script.'])
             ->assertRedirect();
 
@@ -306,5 +310,64 @@ final class CsrfTest extends TestCase
 
         $this->signIn($this->makePlayer());
         $this->post('/user/challenge/vote')->assertStatus(419);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_post_from_the_sites_own_page_passes_without_the_token
+    // -----------------------------------------------------------
+    //
+    // A POST the browser marks as coming from a page of the
+    // site itself (Sec-Fetch-Site: same-origin, a header no
+    // page's script can set) passes the check without the
+    // token.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_post_from_the_sites_own_page_passes_without_the_token(): void
+    {
+        $player = $this->makePlayer();
+
+        $this->signIn($player)->withHeader('Sec-Fetch-Site', 'same-origin')
+            ->post('/user/feedback', ['feedback' => 'Sent from the site.'])
+            ->assertRedirect();
+
+        $this->assertSame(1, Feedback::where('user_id', $player->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_post_from_another_site_needs_the_token
+    // -----------------------------------------------------------
+    //
+    // A POST the browser marks as coming from another site —
+    // another VU site under the same domain included
+    // (same-site) — still needs the token, and without it ends
+    // on the 419 page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_post_from_another_site_needs_the_token(): void
+    {
+        $player = $this->makePlayer();
+        $this->signIn($player);
+
+        foreach (['cross-site', 'same-site', 'none'] as $site) {
+            $this->withHeader('Sec-Fetch-Site', $site)->post('/user/feedback', ['feedback' => "Sent from {$site}."])->assertStatus(419);
+        }
+
+        $this->assertSame(0, Feedback::where('user_id', $player->id)->count());
     }
 }

@@ -720,10 +720,11 @@ class ChallengesController extends BaseController
     // Adds a link to the challenge with the posted uid — a
     // name of up to 255 characters and a web address of up to
     // 2048 — then goes back with "File created!". The url rule
-    // of Laravel 10.6 ignores its protocol list, so starts_with
-    // is what keeps ftp, smb, file and the other schemes the
-    // url rule knows out. The name and address stored are the
-    // ones the rules checked, which validate() hands back.
+    // takes http and https addresses only; starts_with says so
+    // once more, from the days of Laravel 10.6, whose url rule
+    // ignored its protocol list. The name and address stored
+    // are the ones the rules checked, which validate() hands
+    // back.
     //
     // Used by:
     //   - the link dialog, for a new link

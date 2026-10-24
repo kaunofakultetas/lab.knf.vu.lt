@@ -6,12 +6,12 @@
 //  The app's name, environment and debug switch, the URL,
 //  the time zone and languages, the encryption key, and the
 //  service providers and facade aliases every request and
-//  artisan run boots with. Laravel 10's stock file, changed
-//  in three defaults — the name, the URL and the Vilnius
-//  time zone — and in the packages it adds: laravel/ui,
-//  laravelcollective/html (the Form and Html facades the
-//  views build their forms with) and the reCAPTCHA v3 rule
-//  (josiasmontag/laravel-recaptchav3).
+//  artisan run boots with. Laravel 10's stock file, kept
+//  through the move to Laravel 13 — whose own defaults fill
+//  in the settings it leaves out — and changed in three
+//  defaults — the name, the URL and the Vilnius time zone —
+//  and in the packages it adds: laravel/ui and the
+//  reCAPTCHA v3 rule (josiasmontag/laravel-recaptchav3).
 //
 //  In production the values come from the environment the
 //  vuknflab-apache service gets in docker-compose.yml —
@@ -118,14 +118,10 @@ return [
         App\Providers\EventServiceProvider::class,
         App\Providers\RouteServiceProvider::class,
         Laravel\Ui\UiServiceProvider::class,
-        Collective\Html\HtmlServiceProvider::class,
         Lunaweb\RecaptchaV3\Providers\RecaptchaV3ServiceProvider::class,
     ],
 
-    // The facade aliases: Laravel's, plus the forms' Form and
-    // Html
-    'aliases' => Facade::defaultAliases()->merge([
-        'Form' => Collective\Html\FormFacade::class,
-        'Html' => Collective\Html\HtmlFacade::class,
-    ])->toArray(),
+    // The facade aliases: Laravel's own; the packages' come
+    // from their auto-discovery
+    'aliases' => Facade::defaultAliases()->toArray(),
 ];

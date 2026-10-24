@@ -949,7 +949,7 @@ final class RegistrationTest extends TestCase
         ];
         $interleaved = false;
         DB::listen(function (QueryExecuted $query) use ($form, &$interleaved) {
-            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_users` where `email` = ?')) {
+            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as `aggregate` from `cyber_users` where `email` = ?')) {
                 $interleaved = true;
                 app(RegisterController::class)->store(Request::create('/register', 'POST', $form));
             }

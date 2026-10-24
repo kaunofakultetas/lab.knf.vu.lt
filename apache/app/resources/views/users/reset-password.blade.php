@@ -17,11 +17,11 @@
               <div class="col-lg-6 bg-white">
                    
                 <div class="d-flex align-items-center px-4 px-lg-5 h-100"> 
-                  {{ Form::open(['url' => env('APP_URL').'/reset/'.$reset_token, 'class'=>'login-form py-5 w-100']) }}
+                  <form method="POST" action="{{ env('APP_URL').'/reset/'.$reset_token }}" accept-charset="UTF-8" class="login-form py-5 w-100">@csrf
                     <p class="mb-4">Press the button and we will email you a new password.</p>
-                    {{ Form::submit('Send new password', ['class'=>'btn btn-primary mb-3']) }}
+                    <input class="btn btn-primary mb-3" type="submit" value="Send new password">
                     <br><small class="text-gray-500">Remembered your password? </small><a class="text-sm text-paleBlue" href="{{ env('APP_URL') }}/">Login</a>
-                   {{ Form::close() }}
+                   </form>
                 </div>
               </div>
             </div>

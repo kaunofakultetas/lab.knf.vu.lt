@@ -17,10 +17,10 @@
               <div class="col-lg-6 bg-white">
                    
                 <div class="d-flex align-items-center px-4 px-lg-5 h-100"> 
-                  {{ Form::open(['url' => route('forgot-password'), 'class'=>'login-form py-5 w-100', 'data-recaptcha-action'=>'forgotpass', 'data-recaptcha-key'=>RecaptchaV3::sitekey()]) }}
+                  <form method="POST" action="{{ route('forgot-password') }}" accept-charset="UTF-8" class="login-form py-5 w-100" data-recaptcha-action="forgotpass" data-recaptcha-key="{{ RecaptchaV3::sitekey() }}">@csrf
                    
                     <div class="input-material-group mb-3"> 
-                      {{ Form::email('email', '', ['class' => 'input-material', 'id'=>'login-username', 'required'=>'required', 'autofocus'=>'autofocus', 'maxlength'=>255]) }}
+                      <input class="input-material" id="login-username" required="required" autofocus="autofocus" maxlength="255" name="email" type="email" value="{{ old('email') }}">
                       
                       <label class="label-material" for="login-username">Email</label>
                       @if ($errors->has('email'))
@@ -39,10 +39,10 @@
                         @endif
 
                     </div>
-                    {{ Form::submit('Change', ['class'=>'btn btn-primary mb-3', 'login'=>'login']) }}
+                    <input class="btn btn-primary mb-3" login="login" type="submit" value="Change">
                     <br><small class="text-gray-500">Already have an account? </small><a class="text-sm text-paleBlue" href="{{ env('APP_URL') }}/">Login</a><br>
                     <small class="text-gray-500">Do not have an account? </small><a class="text-sm text-paleBlue" href="{{ env('APP_URL') }}/register">Signup</a>
-                   {{ Form::close() }}
+                   </form>
                 </div>
               </div>
             </div>

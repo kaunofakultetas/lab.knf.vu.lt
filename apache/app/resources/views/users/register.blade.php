@@ -20,11 +20,11 @@
                 
                 	@if($reg_status == 1)
                  
-                  {{ Form::open(['url' => route('create_users'), 'class'=>'login-form py-5 w-100', 'data-recaptcha-action'=>'register', 'data-recaptcha-key'=>RecaptchaV3::sitekey()]) }}
+                  <form method="POST" action="{{ route('create_users') }}" accept-charset="UTF-8" class="login-form py-5 w-100" data-recaptcha-action="register" data-recaptcha-key="{{ RecaptchaV3::sitekey() }}">@csrf
                   
                  
                   	<div class="input-material-group mb-3"> 
-                      {{ Form::text('username', '', ['class' => 'input-material', 'id'=>'reg-username', 'required', 'autofocus'=>'autofocus', 'maxlength'=>25, 'minlength'=>4]) }}
+                      <input class="input-material" id="reg-username" required autofocus="autofocus" maxlength="25" minlength="4" name="username" type="text" value="{{ old('username') }}">
                       
                       <label class="label-material" for="reg-username" id="user-type-label">Username</label>
              
@@ -32,7 +32,7 @@
                   	
                   	
                     <div class="input-material-group mb-3"> 
-                      {{ Form::email('email', '', ['class' => 'input-material', 'id'=>'reg-email', 'required'=>'required', 'maxlength'=>255]) }}
+                      <input class="input-material" id="reg-email" required="required" maxlength="255" name="email" type="email" value="{{ old('email') }}">
                       
                       <label class="label-material" for="reg-email" id="user-type-label">Email</label>
                    
@@ -40,7 +40,7 @@
                     
                     <div class="input-material-group mb-4"> 
                     
-                      {{ Form::password('password', ['class' => 'input-material', 'required'=>'required', 'id'=>'login-password', 'maxlength'=>255]) }}
+                      <input class="input-material" required="required" id="login-password" maxlength="255" name="password" type="password" value="">
                       
                       <label class="label-material" for="login-password">Password</label>
                  
@@ -48,7 +48,7 @@
                     
                     <div class="input-material-group mb-2"> 
                     
-                      {{ Form::password('password_confirmation', ['class' => 'input-material', 'required'=>'required', 'id'=>'password_confirmation', 'maxlength'=>255]) }}
+                      <input class="input-material" required="required" id="password_confirmation" maxlength="255" name="password_confirmation" type="password" value="">
                       
                       <label class="label-material" for="login-password">Confirm Password</label>
                   
@@ -69,11 +69,11 @@
                     </div> 
                     
                     
-                    {{ Form::submit('Register', ['class'=>'btn btn-primary mb-3', 'login'=>'login']) }}
+                    <input class="btn btn-primary mb-3" login="login" type="submit" value="Register">
                     <br><small class="text-gray-500">Already have an account? </small> &nbsp; <a class="text-sm text-paleBlue" href="{{ env('APP_URL') }}/">Login</a> 
                     &nbsp;<small class="text-gray-500"> | </small>&nbsp;
                     <a class="text-sm text-paleBlue" href="{{ env('APP_URL') }}/forgot-password">Forgot password?</a>
-                   {{ Form::close() }}
+                   </form>
                    
                    @else 
                    

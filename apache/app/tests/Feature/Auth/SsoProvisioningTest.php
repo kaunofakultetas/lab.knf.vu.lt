@@ -305,7 +305,7 @@ final class SsoProvisioningTest extends TestCase
         ];
         $interleaved = false;
         DB::listen(function (QueryExecuted $query) use ($attributes, &$interleaved) {
-            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_users` where (`vu_id` = ?)')) {
+            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as `aggregate` from `cyber_users` where (`vu_id` = ?)')) {
                 $interleaved = true;
                 UserAuthController::check_member($attributes);
             }

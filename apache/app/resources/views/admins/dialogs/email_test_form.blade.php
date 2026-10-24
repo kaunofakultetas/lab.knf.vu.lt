@@ -1,12 +1,12 @@
-{{ Form::open(['url' => env('APP_URL').'/control-panel/emails/sending_test/'.$uid]) }}
+<form method="POST" action="{{ env('APP_URL').'/control-panel/emails/sending_test/'.$uid }}" accept-charset="UTF-8">@csrf
  <div class="mb-3">
  <label class="form-label" for="f1">Email</label>
-{{ Form::email('email', '', ['class' => 'form-control', 'maxlength'=>255, 'required'=>'required', 'id'=>'f1']) }}
+<input class="form-control" maxlength="255" required="required" id="f1" name="email" type="email" value="{{ old('email') }}">
 </div>
 <div class="mb-3">
-{{ Form::submit('Send', ['class'=>'btn btn-primary', 'login'=>'login']) }}
+<input class="btn btn-primary" login="login" type="submit" value="Send">
 </div>     
  
-	{{ Form::hidden('uid', $uid ?? 0) }}
+	<input name="uid" type="hidden" value="{{ old('uid', $uid ?? 0) }}">
        
-{{ Form::close() }}
+</form>

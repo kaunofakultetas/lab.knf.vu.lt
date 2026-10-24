@@ -1083,7 +1083,7 @@ final class GroupsTest extends TestCase
         $this->signInAdmin($this->makeAdmin(true))->from("/control-panel/users/vu-groups/users_list/{$group->id}");
         $interleaved = false;
         DB::listen(function (QueryExecuted $query) use ($group, &$interleaved) {
-            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_groups`')) {
+            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as `aggregate` from `cyber_groups`')) {
                 $interleaved = true;
                 app(UsersGroupsController::class)->destroy($group->id);
             }
@@ -1121,7 +1121,7 @@ final class GroupsTest extends TestCase
         $this->signInAdmin($this->makeAdmin(true))->from("/control-panel/users/vu-groups/challenges_list/{$group->id}");
         $interleaved = false;
         DB::listen(function (QueryExecuted $query) use ($group, &$interleaved) {
-            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_groups`')) {
+            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as `aggregate` from `cyber_groups`')) {
                 $interleaved = true;
                 app(UsersGroupsController::class)->destroy($group->id);
             }

@@ -49,29 +49,29 @@
                       <h3 class="h4 mb-0">Page Form</h3>
                     </div>
                     <div class="card-body"> 
-                      {{ Form::open(['url' => $url]) }}
+                      <form method="POST" action="{{ $url }}" accept-charset="UTF-8">@csrf
                         <div class="mb-3">
                           <label class="form-label">Name</label>
-                          {{ Form::text('name', $name, ['class' => 'form-control', 'required'=>'required', 'maxlength'=>255]) }} 
+                          <input class="form-control" required="required" maxlength="255" name="name" type="text" value="{{ old('name', $name) }}"> 
                         </div>
                         
                         <div class="mb-3"> 
-							{{ Form::textarea('content', $content, ['id'=>'summernote','required'=>'required']) }}  
+							<textarea id="summernote" required="required" name="content" cols="50" rows="10">{{ old('content', $content) }}</textarea>  
                         </div>
                         
                         
                         <div class="mb-3">
                           <label class="form-label">Alias</label>
-                          {{ Form::text('alias', $alias, ['class' => 'form-control', 'required'=>'required', 'maxlength'=>50]) }} 
+                          <input class="form-control" required="required" maxlength="50" name="alias" type="text" value="{{ old('alias', $alias) }}"> 
                         </div>
                         
                         <div class="mb-3 mt-3">
-                        {{ Form::submit('Submit', ['class'=>'btn btn-primary']) }}
+                        <input class="btn btn-primary" type="submit" value="Submit">
                          </div>
                          
-                         {{ Form::hidden('uid', $uid ?? 0) }}
+                         <input name="uid" type="hidden" value="{{ old('uid', $uid ?? 0) }}">
                         
-                      {{ Form::close() }}
+                      </form>
                     </div>
                   </div>
                 </div>

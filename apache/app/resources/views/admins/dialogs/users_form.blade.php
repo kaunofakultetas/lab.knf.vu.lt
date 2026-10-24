@@ -1,29 +1,29 @@
 @if($type =='new')
-{{ Form::open(['url' => env('APP_URL').'/control-panel/dialog/users/store']) }}
+<form method="POST" action="{{ env('APP_URL').'/control-panel/dialog/users/store' }}" accept-charset="UTF-8">@csrf
 @else
-{{ Form::open(['url' => env('APP_URL').'/control-panel/dialog/users/update']) }}
+<form method="POST" action="{{ env('APP_URL').'/control-panel/dialog/users/update' }}" accept-charset="UTF-8">@csrf
 @endif
 <div class="mb-3">
-{{ Form::label('f1', 'Username:') }}
+<label for="f1">Username:</label>
 @if($type =='new')
-	{{ Form::text('username', $username ?? '', ['class' => 'form-control', 'maxlength'=>255, 'required'=>'required', 'id'=>'f1']) }}
+	<input class="form-control" maxlength="255" required="required" id="f1" name="username" type="text" value="{{ old('username', $username ?? '') }}">
 @else
 	<br>{{ $username ?? '' }}
 @endif
 </div>
 <div class="mb-3">
-{{ Form::label('f2', 'Email:') }}
+<label for="f2">Email:</label>
 @if($type =='new')
-	{{ Form::email('email', $email ?? '', ['class' => 'form-control', 'maxlength'=>255, 'required'=>'required', 'id'=>'f2']) }}
+	<input class="form-control" maxlength="255" required="required" id="f2" name="email" type="email" value="{{ old('email', $email ?? '') }}">
 @else
 	<br>{{ $email ?? '' }}
 @endif
 </div>
 <div class="mb-3">
  
-{{ Form::label('f3', 'Password:') }}
+<label for="f3">Password:</label>
 <div class="input-group">
-{{ Form::text('password', '', ['class' => 'form-control', 'maxlength'=>255, 'required'=>'required', 'id'=>'f3']) }}
+<input class="form-control" maxlength="255" required="required" id="f3" name="password" type="text" value="{{ old('password') }}">
 <button class="btn btn-secondary" id="gens" type="button" onClick="pgen(15);">Generate</button>
 </div>
 </div>
@@ -36,11 +36,11 @@
 </div>                        
                             
 <div class="mb-3">
-{{ Form::submit('Submit', ['class'=>'btn btn-primary', 'login'=>'login']) }}
+<input class="btn btn-primary" login="login" type="submit" value="Submit">
 </div>     
 
 @if($type =='edit')
-	{{ Form::hidden('uid', $uid ?? 0) }}
+	<input name="uid" type="hidden" value="{{ old('uid', $uid ?? 0) }}">
 @endif
              
-{{ Form::close() }}
+</form>

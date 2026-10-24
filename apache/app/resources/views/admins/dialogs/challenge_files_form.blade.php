@@ -1,23 +1,23 @@
 @if($type =='new')
-{{ Form::open(['url' => $url]) }}
+<form method="POST" action="{{ $url }}" accept-charset="UTF-8">@csrf
 @else
-{{ Form::open(['url' => $url]) }}
+<form method="POST" action="{{ $url }}" accept-charset="UTF-8">@csrf
 @endif
 <div class="mb-3">
 <label class="form-label" for="f1">Name</label>
-{{ Form::text('name', $name ?? '', ['class' => 'form-control', 'maxlength'=>255, 'required'=>'required', 'id'=>'f1']) }}
+<input class="form-control" maxlength="255" required="required" id="f1" name="name" type="text" value="{{ old('name', $name ?? '') }}">
 </div>
 <div class="mb-3">
 <label class="form-label" for="f2">File URL (with https://)</label>
-{{ Form::text('file_url', $file_url ?? '', ['class' => 'form-control', 'required'=>'required', 'id'=>'f2']) }}
+<input class="form-control" required="required" id="f2" name="file_url" type="text" value="{{ old('file_url', $file_url ?? '') }}">
 </div>
 <div class="mb-3">
-{{ Form::submit('Submit', ['class'=>'btn btn-primary', 'login'=>'login']) }}
+<input class="btn btn-primary" login="login" type="submit" value="Submit">
 </div>     
 
  
-	{{ Form::hidden('uid', $uid ?? 0) }}
-	{{ Form::hidden('type', $type ?? '') }}
+	<input name="uid" type="hidden" value="{{ old('uid', $uid ?? 0) }}">
+	<input name="type" type="hidden" value="{{ old('type', $type ?? '') }}">
  
              
-{{ Form::close() }}
+</form>

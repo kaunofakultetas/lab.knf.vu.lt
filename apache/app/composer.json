@@ -8,29 +8,39 @@
 	],
 	"license" : "MIT",
 	"require" : {
-		"php" : "^8.1",
+		"php" : "^8.3",
 		"ezyang/htmlpurifier" : "^4.18",
 		"google/recaptcha" : "^1.2",
-		"guzzlehttp/guzzle" : "^7.2",
-		"josiasmontag/laravel-recaptchav3" : "^1.0",
-		"laravel/framework" : "^10.0",
-		"laravel/sanctum" : "^3.2",
-		"laravel/tinker" : "^2.7",
-		"laravel/ui" : "^4.1",
-		"laravelcollective/html" : "^6.3",
+		"guzzlehttp/guzzle" : "^7.8.2",
+		"josiasmontag/laravel-recaptchav3" : "^1.0.5",
+		"laravel/framework" : "^13.0",
+		"laravel/sanctum" : "^4.0",
+		"laravel/tinker" : "^3.0",
+		"laravel/ui" : "^4.6",
 		"mailjet/mailjet-apiv3-php" : "^1.5",
-		"nesbot/carbon" : "^2.65",
+		"nesbot/carbon" : "^3.8.4",
 		"predis/predis" : "^2.1",
-		"simplesamlphp/simplesamlphp" : "3.0.x-dev"
+		"simplesamlphp/simplesamlphp" : "^2.5.3"
 	},
 	"require-dev" : {
 		"fakerphp/faker" : "^1.9.1",
 		"laravel/pint" : "^1.0",
 		"laravel/sail" : "^1.0.1",
-		"mockery/mockery" : "^1.4.4",
-		"nunomaduro/collision" : "^7.0",
-		"phpunit/phpunit" : "^10.0",
-		"spatie/laravel-ignition" : "^2.0"
+		"mockery/mockery" : "^1.6",
+		"nunomaduro/collision" : "^8.6",
+		"phpunit/phpunit" : "^12.0"
+	},
+	"conflict" : {
+		"symfony/clock" : ">=8.0",
+		"symfony/css-selector" : ">=8.0",
+		"symfony/error-handler" : ">=8.0",
+		"symfony/mailer" : ">=8.0",
+		"symfony/mime" : ">=8.0",
+		"symfony/process" : ">=8.0",
+		"symfony/string" : ">=8.0",
+		"symfony/uid" : ">=8.0",
+		"symfony/validator" : ">=8.0",
+		"symfony/var-dumper" : ">=8.0"
 	},
 	"autoload" : {
 		"psr-4" : {
@@ -63,7 +73,8 @@
 	    "platform-check" : false,
 		"allow-plugins" : {
 			"pestphp/pest-plugin" : true,
-			"simplesamlphp/composer-module-installer" : true
+			"simplesamlphp/composer-module-installer" : true,
+			"simplesamlphp/composer-xmlprovider-installer" : true
 		}
 	},
 	"minimum-stability" : "stable" 

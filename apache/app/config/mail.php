@@ -25,7 +25,7 @@
 return [
 
     // The mailer, from MAIL_MAILER — not set, so smtp; the
-    // .env's MAIL_DRIVER is the old name, which Laravel 10 no
+    // .env's MAIL_DRIVER is the old name, which Laravel no
     // longer reads
     'default' => env('MAIL_MAILER', 'smtp'),
 

@@ -1,21 +1,21 @@
 @if($type =='new')
-{{ Form::open(['url' => env('APP_URL').'/control-panel/dialog/partners/store', 'files' => true]) }}
+<form method="POST" action="{{ env('APP_URL').'/control-panel/dialog/partners/store' }}" accept-charset="UTF-8" enctype="multipart/form-data">@csrf
 @else
-{{ Form::open(['url' => env('APP_URL').'/control-panel/dialog/partners/update', 'files' => true]) }}
+<form method="POST" action="{{ env('APP_URL').'/control-panel/dialog/partners/update' }}" accept-charset="UTF-8" enctype="multipart/form-data">@csrf
 @endif
  <div class="mb-3">
  <label class="form-label" for="f1">Partners name</label>
-{{ Form::text('name', $name ?? '', ['class' => 'form-control', 'maxlength'=>255, 'required'=>'required', 'id'=>'f1']) }}
+<input class="form-control" maxlength="255" required="required" id="f1" name="name" type="text" value="{{ old('name', $name ?? '') }}">
 </div>
-{{ Form::label('file_path', 'Picture (JPG, PNG, GIF):') }}
-{{ Form::file('picture', ['class' => 'form-control', 'id' => 'file_name', 'required' => 'required', 'accept' => '.jpg,.png,.gif']) }}
+<label for="file_path">Picture (JPG, PNG, GIF):</label>
+<input class="form-control" id="file_name" required="required" accept=".jpg,.png,.gif" name="picture" type="file">
 </div>
 <div class="mb-3 mt-3">
-{{ Form::submit('Submit', ['class'=>'btn btn-primary', 'login'=>'login']) }}
+<input class="btn btn-primary" login="login" type="submit" value="Submit">
 </div>     
 
 @if($type =='edit')
-	{{ Form::hidden('uid', $uid ?? 0) }}
+	<input name="uid" type="hidden" value="{{ old('uid', $uid ?? 0) }}">
 @endif
              
-{{ Form::close() }}
+</form>

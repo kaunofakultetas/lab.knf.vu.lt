@@ -39,12 +39,12 @@
               <h2 class="mb-0 p-1">Challenges</h2>
             </div>  
             <div class="col-lg-5">   
-             {{ Form::open(['method' => 'GET', 'class' => 'd-flex align-items-center']) }}
+             <form method="GET" action="{{ url()->current() }}" accept-charset="UTF-8" class="d-flex align-items-center">
                   <div class="form-group flex-grow-1">  
-                    {{ Form::text('q', $search, ['class' => 'form-control form-control-xs float-right', 'placeholder' => 'Search by challenge name or description']) }}
+                    <input class="form-control form-control-xs float-right" placeholder="Search by challenge name or description" name="q" type="text" value="{{ old('q', $search) }}">
                   </div>
-                  {{ Form::button('Search', ['class' => 'btn btn-primary ml-2', 'type' => 'submit']) }}
-                {{ Form::close() }}
+                  <button class="btn btn-primary ml-2" type="submit">Search</button>
+                </form>
              </div>
              </div>
                   @if($search !== '')

@@ -49,29 +49,29 @@
                       <h3 class="h4 mb-0">Email Form</h3>
                     </div>
                     <div class="card-body"> 
-                      {{ Form::open(['url' => $url]) }}
+                      <form method="POST" action="{{ $url }}" accept-charset="UTF-8">@csrf
                         <div class="mb-3">
                           <label class="form-label">Name</label>
-                          {{ Form::text('name', $name ?? '', ['class' => 'form-control', 'required'=>'required']) }} 
+                          <input class="form-control" required="required" name="name" type="text" value="{{ old('name', $name ?? '') }}"> 
                         </div>
                         
                         <div class="mb-3">
                           <label class="form-label">Subject</label>
-                          {{ Form::text('subject', $subject ?? '', ['class' => 'form-control', 'required'=>'required']) }} 
+                          <input class="form-control" required="required" name="subject" type="text" value="{{ old('subject', $subject ?? '') }}"> 
                         </div>
                         
                         <div class="mb-3"> 
                             <label class="form-label">Content</label>
-							{{ Form::textarea('content', $content ?? '', ['class' => 'form-control', 'required'=>'required', 'rows'=>20]) }}  
+							<textarea class="form-control" required="required" rows="20" name="content" cols="50">{{ old('content', $content ?? '') }}</textarea>  
                         </div> 
                         
                         <div class="mb-3 mt-3">
-                        {{ Form::submit('Submit', ['class'=>'btn btn-primary']) }}
+                        <input class="btn btn-primary" type="submit" value="Submit">
                          </div>
                          
-                         {{ Form::hidden('uid', $uid ?? 0) }}
+                         <input name="uid" type="hidden" value="{{ old('uid', $uid ?? 0) }}">
                         
-                      {{ Form::close() }}
+                      </form>
                     </div>
                   </div>
                 </div>

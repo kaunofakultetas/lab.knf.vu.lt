@@ -3,15 +3,15 @@ FROM php:8.4.27-apache
 # MySQL deps
 RUN docker-php-ext-install pdo_mysql
 
-# SAML deps
+# SAML deps: intl, and bcmath for SimpleSAMLphp's XML library
 RUN apt-get -y update \
     && apt-get install -y libicu-dev \
-    && docker-php-ext-install intl
+    && docker-php-ext-install intl bcmath
 
-# PHP 8.4 reports the implicitly nullable parameters of the locked
-# Laravel 10 and Symfony 6 code as deprecated, some of them before
-# Laravel's own error handler takes over; keep those notices out of
-# the pages, as PHP 8.1 had none to show
+# Without a php.ini, PHP prints its notices into the page; keep the
+# deprecation notices a newer PHP raises about older library code out
+# of the pages, some of which come before Laravel's own error handler
+# takes over
 RUN echo 'error_reporting = E_ALL & ~E_DEPRECATED' > "$PHP_INI_DIR/conf.d/error-reporting.ini"
 
 # Without a php.ini, PHP names its exact version in an X-Powered-By
@@ -19,8 +19,8 @@ RUN echo 'error_reporting = E_ALL & ~E_DEPRECATED' > "$PHP_INI_DIR/conf.d/error-
 RUN echo 'expose_php = Off' > "$PHP_INI_DIR/conf.d/expose-php.ini"
 
 # Without a php.ini, PHP also fills $_SERVER['argv'] from a web
-# request's query string, which Laravel 10.6 reads to pick its
-# environment (CVE-2024-52301); web requests take no arguments
+# request's query string, which Laravel before 10.48.23 read to pick
+# its environment (CVE-2024-52301); web requests take no arguments
 RUN echo 'register_argc_argv = Off' > "$PHP_INI_DIR/conf.d/register-argc-argv.ini"
 
 # SimpleSAMLphp keeps the VU login in a PHP session file and tells
@@ -52,10 +52,8 @@ COPY ports.conf /etc/apache2/ports.conf
 COPY --chown=1000:1000 app /var/www/html
 RUN ln -sfn /var/www/html/storage/app/public /var/www/html/public/upload
 
-# Install vendor dependencies, exactly the locked versions: nette/schema
-# and nette/utils, which only Laravel's unused Markdown support pulls in,
-# cap PHP below 8.3, so only that upper bound is ignored
-RUN composer install --no-dev --optimize-autoloader --ignore-platform-req=php+
+# Install vendor dependencies, exactly the locked versions
+RUN composer install --no-dev --optimize-autoloader
 
 
 # SimpleSAML symlink

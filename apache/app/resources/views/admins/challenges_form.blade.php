@@ -49,44 +49,44 @@
                       <h3 class="h4 mb-0">Challenges form</h3>
                     </div>
                     <div class="card-body"> 
-                      {{ Form::open(['url' => $url]) }}
+                      <form method="POST" action="{{ $url }}" accept-charset="UTF-8">@csrf
                         <div class="mb-3">
                           <label class="form-label">Name</label>
-                          {{ Form::text('name', $name, ['class' => 'form-control', 'required'=>'required', 'maxlength'=>255]) }} 
+                          <input class="form-control" required="required" maxlength="255" name="name" type="text" value="{{ old('name', $name) }}"> 
                         </div>
                         
                         <div class="mb-3">
                           <label class="form-label">Select partner</label>
-                          {{ Form::select("partner_id", $partner_list, $partner_id ?? 0, ['class'=>'form-control', 'id' => 'partner', 'required'=>'required']) }}
+                          <select class="form-control" id="partner" required="required" name="partner_id">@foreach ($partner_list as $option_value => $option_text)<option value="{{ $option_value }}"@if ((string) $option_value === (string) old("partner_id", $partner_id ?? 0)) selected="selected"@endif>{{ $option_text }}</option>@endforeach</select>
                         </div>
                         
                         <div class="mb-3"> 
                         	<label class="form-label">Description</label>
-							{{ Form::textarea('descr', $descr, ['class' => 'form-control', 'required'=>'required']) }}  
+							<textarea class="form-control" required="required" name="descr" cols="50" rows="10">{{ old('descr', $descr) }}</textarea>  
                         </div>
                         
                         <div class="mb-3"> 
                         	<label class="form-label">Content</label>
-							{{ Form::textarea('content', $content, ['id'=>'summernote','required'=>'required']) }}  
+							<textarea id="summernote" required="required" name="content" cols="50" rows="10">{{ old('content', $content) }}</textarea>  
                         </div>
                          
                         <div class="mb-3">
                           <label class="form-label">Answer</label>
-                          {{ Form::text('answer', $answer, ['class' => 'form-control', 'required'=>'required', 'maxlength'=>255]) }} 
+                          <input class="form-control" required="required" maxlength="255" name="answer" type="text" value="{{ old('answer', $answer) }}"> 
                         </div>
                         
                         <div class="mb-3">
                           <label class="form-label">Points</label>
-                          {{ Form::number('points', $points, ['class' => 'form-control', 'required'=>'required']) }} 
+                          <input class="form-control" required="required" name="points" type="number" value="{{ old('points', $points) }}"> 
                         </div>
                         
                         <div class="mb-3 mt-3">
-                        {{ Form::submit('Submit', ['class'=>'btn btn-primary']) }}
+                        <input class="btn btn-primary" type="submit" value="Submit">
                          </div>
                          
-                         {{ Form::hidden('uid', $uid ?? 0) }}
+                         <input name="uid" type="hidden" value="{{ old('uid', $uid ?? 0) }}">
                         
-                      {{ Form::close() }}
+                      </form>
                     </div>
                   </div>
                 </div>

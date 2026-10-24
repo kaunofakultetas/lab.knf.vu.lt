@@ -50,14 +50,14 @@
                   <div class="card-body"> 
                     <p class="card-text">
                     
-                    {{ Form::open() }}
+                    <form method="POST" action="{{ url()->current() }}" accept-charset="UTF-8">@csrf
                     
                      <div class="input-group"> 
-                          {{ Form::text('answer', '', ['class' => 'form-control', 'required'=>'required', 'placeholder'=>'VU{...}', 'maxlength'=>260]) }} 
-                          {{ Form::submit('Submit', ['class'=>'btn btn-primary', 'login'=>'login']) }} 
+                          <input class="form-control" required="required" placeholder="VU{...}" maxlength="260" name="answer" type="text" value="{{ old('answer') }}"> 
+                          <input class="btn btn-primary" login="login" type="submit" value="Submit"> 
                      </div>
                      
-                     {{ Form::close() }}
+                     </form>
                     
                     </p>
                     </div>

@@ -38,9 +38,11 @@ return [
     'expiration' => null,
 
     // The middleware Sanctum's stateful requests would run
-    // through, the app's own versions
+    // through: the app's own CSRF check and cookie encryption,
+    // and Sanctum's session check
     'middleware' => [
-        'verify_csrf_token' => App\Http\Middleware\VerifyCsrfToken::class,
+        'authenticate_session' => Laravel\Sanctum\Http\Middleware\AuthenticateSession::class,
         'encrypt_cookies' => App\Http\Middleware\EncryptCookies::class,
+        'validate_csrf_token' => App\Http\Middleware\VerifyCsrfToken::class,
     ],
 ];

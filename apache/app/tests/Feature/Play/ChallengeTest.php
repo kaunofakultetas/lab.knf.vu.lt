@@ -835,7 +835,7 @@ final class ChallengeTest extends TestCase
         $challenge = $this->makeChallenge();
         $checks = 0;
         DB::listen(function (QueryExecuted $query) use (&$checks, $challenge) {
-            if (str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_challenges_submitted`') && ++$checks === 2) {
+            if (str_starts_with($query->sql, 'select count(*) as `aggregate` from `cyber_challenges_submitted`') && ++$checks === 2) {
                 DB::table('cyber_challenges_submitted')->insert([
                     'user_id'      => $this->player->id,
                     'challenge_id' => $challenge->id,
@@ -1020,7 +1020,7 @@ final class ChallengeTest extends TestCase
         $challenge = $this->makeChallenge(['points' => 30]);
         $checks = 0;
         DB::listen(function (QueryExecuted $query) use (&$checks, $challenge) {
-            if (str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_challenges_submitted`') && ++$checks === 2) {
+            if (str_starts_with($query->sql, 'select count(*) as `aggregate` from `cyber_challenges_submitted`') && ++$checks === 2) {
                 DB::table('cyber_challenges')->where('id', $challenge->id)->delete();
             }
         });

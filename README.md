@@ -79,7 +79,10 @@ single sign-on, the way VU staff do with VU's identity provider. To use your own
    `session.phpsession.savepath` to `/var/www/simplesamlphp-sessions`, the folder the sample
    keeps across redeploys, and `session.duration` to `36 * 60 * 60`, as long as a lab session:
    signing out ends the single sign-on at your identity provider only while SimpleSAMLphp
-   still holds its session.
+   still holds its session. The image runs SimpleSAMLphp 2.5, which sends no NameID policy
+   unless asked: to request a transient NameID, as earlier versions did, add
+   `'NameIDPolicy' => ['Format' => 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient']`
+   to `default-sp` in `authsources.php`. The lab reads only the attributes.
 2. Allow your identity provider's address in `endpoint/Caddyfile`, where `https://sso.vu.lt`
    is now.
 3. Make yourself an admin. The database starts with one main admin whose uid is `admin`;
@@ -95,7 +98,7 @@ Players can use the same sign-on, or register with an e-mail address.
 | Service | What it does |
 |---|---|
 | `vuknflab-endpoint` | Caddy on port 80: the security headers, `/dbgate`, `/static`, and everything else to the app |
-| `vuknflab-apache` | the lab itself, a Laravel app on PHP 8.4 and Apache, published as [`vuknf/vuknflab-apache`](https://hub.docker.com/r/vuknf/vuknflab-apache) |
+| `vuknflab-apache` | the lab itself, a Laravel 13 app on PHP 8.4 and Apache, published as [`vuknf/vuknflab-apache`](https://hub.docker.com/r/vuknf/vuknflab-apache) |
 | `vuknflab-mysql` | MySQL, created from `mysql/init.sql` |
 | `vuknflab-redis` | Redis: the sessions and the cached leaderboard |
 | `vuknflab-static` | fonts, icons and Bootstrap, served from the lab itself rather than a CDN |

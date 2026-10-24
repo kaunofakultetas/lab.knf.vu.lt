@@ -3,14 +3,17 @@
 // -----------------------------------------------------------
 //  [*] VerifyCsrfToken — the CSRF check of the web routes
 //
-//  Laravel's CSRF check: every POST, PUT, PATCH and DELETE
-//  of the web group must carry the session's token, in the
-//  _token field or the X-CSRF-TOKEN header, or it ends on
-//  the 419 page. GET requests are never checked, so every
-//  change the control panel makes from its lists is a POST,
-//  which its script sends with the token of the page's
-//  csrf-token meta tag. A sign-out refused this way gets a
-//  page that offers it again instead of the error page.
+//  Laravel's request-forgery check (PreventRequestForgery):
+//  every POST, PUT, PATCH and DELETE of the web group must
+//  come from a page of the site — as the browser's
+//  Sec-Fetch-Site header says, which no page's script can
+//  set — or carry the session's token, in the _token field
+//  or the X-CSRF-TOKEN header, or it ends on the 419 page.
+//  GET requests are never checked, so every change the
+//  control panel makes from its lists is a POST, which its
+//  script sends with the token of the page's csrf-token
+//  meta tag. A sign-out refused this way gets a page that
+//  offers it again instead of the error page.
 //
 //  Used by:
 //    - app/Http/Kernel.php — the web group
@@ -20,7 +23,7 @@
 namespace App\Http\Middleware;
 
 use Closure;
-use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken as Middleware;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery as Middleware;
 use Illuminate\Session\TokenMismatchException;
 
 
@@ -68,20 +71,23 @@ class VerifyCsrfToken extends Middleware
     // handle
     // -----------------------------------------------------------
     //
-    // Laravel's check, but a sign-out whose token it refuses
-    // gets the signout_retry page, still with status 419,
-    // rather than the error page. Such a sign-out comes from
-    // a page that outlived its session — a long-open tab, or
-    // Redis emptied by a stack update — and nothing was signed
-    // out: for the VU sign-outs the single sign-on stays open,
-    // and on a shared computer the next "Login with VU SSO"
-    // would sign in as the same person. The page offers the
-    // sign-out again under the session's current token. It
-    // waits for a press rather than sending itself, so that no
-    // other site can sign a visitor out of the VU single
-    // sign-on by posting here. The page is served at the
-    // sign-out's own address, which a later login never
-    // resumes (Controller::opensByGet).
+    // Laravel's check, but a sign-out it refuses gets the
+    // signout_retry page, still with status 419, rather than
+    // the error page. Such a sign-out comes from a page that
+    // outlived its session — a long-open tab, or Redis emptied
+    // by a stack update — in a browser that sends no
+    // Sec-Fetch-Site header, or a script; a browser that sends
+    // one passes the check as the sign-out comes from the
+    // site's own page. Nothing was signed out: for the VU
+    // sign-outs the single sign-on stays open, and on a shared
+    // computer the next "Login with VU SSO" would sign in as
+    // the same person. The page offers the sign-out again
+    // under the session's current token. It waits for a press
+    // rather than sending itself, so that no other site can
+    // sign a visitor out of the VU single sign-on by posting
+    // here. The page is served at the sign-out's own address,
+    // which a later login never resumes
+    // (Controller::opensByGet).
     //
     // Used by:
     //   - app/Http/Kernel.php — the web group, before every

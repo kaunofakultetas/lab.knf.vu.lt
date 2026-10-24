@@ -49,7 +49,7 @@
                     </div>
                     <div class="card-body">
                      
-                      {{ Form::open(['url' => route('settings.reg_open')]) }}
+                      <form method="POST" action="{{ route('settings.reg_open') }}" accept-charset="UTF-8">@csrf
                         <div class="mb-3">
                           <label class="form-label" for="eventstart">Registration</label>
                            
@@ -61,9 +61,9 @@
                              
                         </div>
                         
-                        {{ Form::submit('Submit', ['class'=>'btn btn-primary', 'login'=>'login']) }}
+                        <input class="btn btn-primary" login="login" type="submit" value="Submit">
                            
-                      {{ Form::close() }}
+                      </form>
                       
                       
                     </div>

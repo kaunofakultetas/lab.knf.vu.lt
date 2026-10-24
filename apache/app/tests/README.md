@@ -5,7 +5,7 @@ through `apache/runTests.sh`, never against the live stack.
 
 | Suite | Folder | What it covers |
 |---|---|---|
-| Unit | `tests/Unit` | Pure helpers, no application: place ordinals, "3 days ago", the client-address picker, custom.js at the end of the player script bundle and two of its rules (the filter's cookies, the held-back form), the libraries the bundles leave out, and the image's .env |
+| Unit | `tests/Unit` | Pure helpers, no application: place ordinals, "3 days ago", the client-address picker, custom.js at the end of the player script bundle and two of its rules (the filter's cookies, the held-back form), the libraries the bundles leave out, the image's .env, and the VU sign-on's SAML messages through the real SimpleSAMLphp, saml2 and xmlseclibs |
 | Feature | `tests/Feature` | The app through its HTTP kernel: registration, login, password reset, VU SSO, challenges, voting, leaderboards, groups, pages, feedback, the whole control panel, the route table's guards, CSRF, mails, models, error pages |
 | Http | `tests/Http` | The image's own Apache, started by `run.sh` with the production environment: document root, rewrites, pages free of PHP diagnostics, directory listing, `/upload`, CSRF outside PHPUnit, forged client addresses, answers that name no PHP or Apache version, PHP taking no arguments from a query string |
 | Defects | `tests/Defects` | Open defects, each stating the wanted behaviour under a `LAB-nn` id (see below) — none at the moment |
@@ -58,16 +58,15 @@ MySQL creating its schema.
   them only once — fine under Apache, fatal under PHPUnit. Tests that
   open either page, and tests that overload a class, run in separate
   processes (`#[RunTestsInSeparateProcesses]`) and open the page once.
-  Laravel 10.6 leaves its error handlers in place after each test, and
-  on PHP 8.4 that kills every isolated test without a word, so
-  `TestCase::tearDown` takes them off — keep calling `parent::tearDown()`.
 - Style: test files follow the house-comments skill for PHP — file
   header, class banner and a banner per test method, data provider and
   hook. Check them from the repository root with
   `python3 .claude/skills/house-comments/scripts/house_check_php84.py --new apache/app/tests`.
-  The app runs PHP 8.4 (`php:8.4.27-apache`), which reports the locked
-  Laravel 10 and Symfony 6 code as deprecated. PHPUnit counts those
-  deprecations under the run's report; they do not fail it.
+  The app runs PHP 8.4 (`php:8.4.27-apache`) with Laravel 13, Symfony 7.4
+  and SimpleSAMLphp 2.5, and the suite with PHPUnit 12 and Mockery 1.6
+  from `/opt/test-tools`. A green run reports no deprecations: one that
+  appears is new, and PHPUnit counts it under the run's report without
+  failing the run.
 - Races are pinned without real concurrency: the test listens to its own
   request's queries (`DB::listen`) or Redis commands and slips the other
   request's write in where it would land live — see
