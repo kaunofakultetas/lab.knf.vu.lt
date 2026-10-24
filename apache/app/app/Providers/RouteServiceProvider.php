@@ -65,6 +65,11 @@ class RouteServiceProvider extends ServiceProvider
     // pass the routes' r_exists checks and reach pages that
     // print the id into their scripts.
     //
+    // Known bug LAB-56 (low): [0-9]+ lets a leading zero
+    // through, which MySQL reads as the plain number but the
+    // pages' inline scripts read as an octal one. Fix:
+    // [1-9][0-9]*.
+    //
     // Used by:
     //   - Laravel, once every provider is registered
     // -----------------------------------------------------------

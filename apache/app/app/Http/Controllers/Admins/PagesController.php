@@ -172,6 +172,10 @@ class PagesController extends BaseController
     // one short. A refused form goes back with the errors and
     // what was typed.
     //
+    // Known bug LAB-69 (low): the alias may hold a slash, ? or
+    // #, which /page/{alias} can never reach. Fix: letters,
+    // digits, dashes and underscores only.
+    //
     // Used by:
     //   - the page form, for a new page
     // -----------------------------------------------------------
@@ -246,6 +250,10 @@ class PagesController extends BaseController
     // was typed — then goes to the list with "Updated!". A
     // page another admin deleted in the meantime goes to the
     // list with "No page!" instead.
+    //
+    // Known bug LAB-69 (low): the alias may hold a slash, ? or
+    // #, which /page/{alias} can never reach. Fix: letters,
+    // digits, dashes and underscores only.
     //
     // Used by:
     //   - the page form, for an existing page

@@ -121,6 +121,13 @@ class ChallengesController extends BaseController
     // process: Apache serves each request afresh, and the
     // tests render these pages in separate processes.
     //
+    // Known bug LAB-59 (low): the boxes start filled, and a
+    // category or Filter click saves their text in cookies
+    // (custom.js), so the prices of that moment become bounds
+    // the player never typed, and hide later challenges
+    // outside them. Fix: leave the boxes empty with the prices
+    // as placeholders.
+    //
     // Used by:
     //   - the Home link of the player sidebar
     //     (users/partials/sidebar.blade.php), the end of every
@@ -306,6 +313,12 @@ class ChallengesController extends BaseController
     //
     // By design answers have no rate limit.
     //
+    // Known bug LAB-60 (low): the group of the address is
+    // checked to exist, not to hold the player, so a right
+    // answer from a group the player is not in goes on to that
+    // group's page, a 404, and the toast is lost. Fix: treat a
+    // group the player is not in as no group.
+    //
     // Used by:
     //   - the answer form of users/challenge.blade.php
     // -----------------------------------------------------------
@@ -447,6 +460,12 @@ class ChallengesController extends BaseController
     // does not exist and a hidden one the player may not open
     // (hiddenFromPlayer) are a 404 and count nothing. The
     // answer is an empty page.
+    //
+    // Known bug LAB-55 (medium): the votes live in Redis
+    // alone, which the stack update starts empty
+    // (vuknflab-redis has no volume), so every count goes back
+    // to 0 and every player may vote again. Fix: keep the
+    // votes in MySQL, a row per player and challenge.
     //
     // Used by:
     //   - thumbs() and thumbs_list() of custom.js — the vote

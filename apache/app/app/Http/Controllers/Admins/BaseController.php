@@ -105,6 +105,11 @@ class BaseController extends Controller
     // of the list. It is capped at a million pages, far beyond
     // any list here, so the slice's offset stays an integer.
     //
+    // Known bug LAB-66 (low): a page past the end of a list is
+    // handed out as it is, and the lists show "No …" without
+    // page links for an empty page, as after deleting the last
+    // row of the last page. Fix: give the last page instead.
+    //
     // Used by:
     //   - the paged lists of ChallengesController,
     //     EmailsController, PagesController, UsersController

@@ -79,6 +79,17 @@ class R_Exists
     // returns nothing, which Laravel answers with an empty
     // page; every route names one of the eight.
     //
+    // Known bug LAB-58 (low): a GET page refused for a missing
+    // group or challenge goes back() to the page the browser
+    // came from — after an add or an update, that very page —
+    // so it redirects to itself until the browser gives up.
+    // Known bug LAB-64 (low): a missing membership, group
+    // challenge or file link is let through, and the action
+    // reads the id again later, so a row another admin creates
+    // in between is changed or deleted by an admin who does
+    // not own it. Fix: send a refused GET to its list, and
+    // refuse a missing row here.
+    //
     // Used by:
     //   - the r_exists alias — the group and challenge routes
     // -----------------------------------------------------------

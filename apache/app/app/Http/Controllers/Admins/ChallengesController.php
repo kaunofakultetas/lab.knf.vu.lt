@@ -135,6 +135,11 @@ class ChallengesController extends BaseController
     // Categories and Files links, which a lab admin gets on
     // its own challenges only.
     //
+    // Known bug LAB-68 (low): the view puts
+    // request()->query('q') itself back into the search box,
+    // which fails on a list, so q[]= in the address ends in a
+    // 500. Fix: hand the view the search settled on here.
+    //
     // Used by:
     //   - the All challenges link of the panel's sidebar
     //   - the list's own search form and its Clear all link
@@ -233,6 +238,11 @@ class ChallengesController extends BaseController
     // with "Created!". A form missing a field, or with a name
     // or flag longer than the 255 characters their columns
     // hold, goes back with the errors and what was typed.
+    //
+    // Known bug LAB-63 (low): points need only be present, so
+    // a word is stored as 0, a negative number takes points
+    // off every solver, and a number past 2147483647 is
+    // clipped. Fix: a whole number from 0 to a sane maximum.
     //
     // Used by:
     //   - the challenge form, for a new challenge
@@ -341,6 +351,11 @@ class ChallengesController extends BaseController
     // main admin corrected. New points count for later solves
     // only: a solve keeps the points it gave, kept with it as
     // points_given.
+    //
+    // Known bug LAB-63 (low): points need only be present, so
+    // a word is stored as 0, a negative number takes points
+    // off every solver, and a number past 2147483647 is
+    // clipped. Fix: a whole number from 0 to a sane maximum.
     //
     // Used by:
     //   - the challenge form, for an existing challenge
@@ -562,6 +577,15 @@ class ChallengesController extends BaseController
     // name. The page prints the id into its add button's
     // script, which is safe as the route takes digits only
     // (RouteServiceProvider::boot).
+    //
+    // Known bug LAB-56 (low): the digits-only pattern lets a
+    // leading zero through; MySQL reads 010 as 10, but the
+    // script reads it as the octal 8, so the add button acts
+    // on another record than the page shows. Fix: refuse a
+    // leading zero in the patterns, or print the id as a
+    // number. Known bug LAB-67 (low): the view prints no page
+    // links, so links past the 50th are out of reach. Fix:
+    // print the paginator's links under the table.
     //
     // Used by:
     //   - the files links of the challenges list

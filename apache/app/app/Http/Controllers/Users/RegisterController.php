@@ -118,6 +118,14 @@ class RegisterController extends Controller
     // good for two minutes only, and a refused score says so
     // in words (lang/en/validation.php).
     //
+    // Known bug LAB-61 (low): the free username and e-mail are
+    // checked before the insert with nothing between two
+    // requests, so a double press, which the token fetch
+    // invites, ends the second request on username_UNIQUE, a
+    // 500, though the account was made. Fix: answer the
+    // duplicate key as a taken username, and ignore a second
+    // press in custom.js.
+    //
     // Used by:
     //   - the registration form of users/register.blade.php
     // -----------------------------------------------------------

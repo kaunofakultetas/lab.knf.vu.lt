@@ -69,6 +69,10 @@ class AppServiceProvider extends ServiceProvider
     //
     // Sets nothing up.
     //
+    // Known bug LAB-65 (low): the paginators keep Laravel's
+    // Tailwind markup, which the Bootstrap-styled panel cannot
+    // draw. Fix: Paginator::useBootstrapFive().
+    //
     // Used by:
     //   - Laravel, once every provider is registered
     // -----------------------------------------------------------

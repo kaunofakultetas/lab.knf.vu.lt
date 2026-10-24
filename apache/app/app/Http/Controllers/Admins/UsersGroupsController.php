@@ -346,6 +346,13 @@ class UsersGroupsController extends BaseController
     // button's script, which is safe as the route takes
     // digits only (RouteServiceProvider::boot).
     //
+    // Known bug LAB-56 (low): the digits-only pattern lets a
+    // leading zero through; MySQL reads 010 as 10, but the
+    // script reads it as the octal 8, so the add button acts
+    // on another record than the page shows. Fix: refuse a
+    // leading zero in the patterns, or print the id as a
+    // number.
+    //
     // Used by:
     //   - the members buttons of the groups list
     // -----------------------------------------------------------
@@ -517,6 +524,13 @@ class UsersGroupsController extends BaseController
     // list, under the group's name. The page prints the id
     // into its add button's script, which is safe as the
     // route takes digits only (RouteServiceProvider::boot).
+    //
+    // Known bug LAB-56 (low): the digits-only pattern lets a
+    // leading zero through; MySQL reads 010 as 10, but the
+    // script reads it as the octal 8, so the add button acts
+    // on another record than the page shows. Fix: refuse a
+    // leading zero in the patterns, or print the id as a
+    // number.
     //
     // Used by:
     //   - the challenges buttons of the groups list

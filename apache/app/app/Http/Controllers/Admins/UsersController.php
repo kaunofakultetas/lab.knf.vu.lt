@@ -111,6 +111,11 @@ class UsersController extends BaseController
     // given — 0 included, and nothing that is not text — and
     // the page links keep q.
     //
+    // Known bug LAB-68 (low): the view puts
+    // request()->query('q') itself back into the search box,
+    // which fails on a list, so q[]= in the address ends in a
+    // 500. Fix: hand the view the search settled on here.
+    //
     // Used by:
     //   - the All users link of the panel's sidebar, and the
     //     redirects of the account actions
@@ -295,6 +300,12 @@ class UsersController extends BaseController
     // goes back with the error, and an account another admin
     // deleted in the meantime with "No user!", having changed
     // and mailed nothing.
+    //
+    // Known bug LAB-70 (low): the login form takes the first
+    // account with the e-mail, so a password set on a VU
+    // account whose e-mail a local account also holds never
+    // signs in. Fix: refuse such a password, or let the login
+    // try every account with the e-mail.
     //
     // Used by:
     //   - the account dialog, for an existing account

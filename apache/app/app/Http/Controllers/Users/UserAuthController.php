@@ -314,6 +314,17 @@ class UserAuthController extends BaseController
     // (VerifyCsrfToken) offers it again, so the VU single
     // sign-on still ends.
     //
+    // Known bug LAB-54 (medium): SimpleSAMLphp ends the VU
+    // sign-on only while it still holds the visitor's session,
+    // a PHP session file in /tmp that PHP deletes once it is
+    // 24 minutes old (the image sets no
+    // session.gc_maxlifetime) and every redeploy empties;
+    // without it the sign-out returns to the lab and the VU
+    // sign-on stays open. Fix: a session.gc_maxlifetime of 8
+    // hours or more, a SimpleSAMLphp session store a redeploy
+    // keeps, and the identity provider's own logout when no
+    // session is left.
+    //
     // Used by:
     //   - Post_Link() of custom.js — the sign-out link of the
     //     player top bar, for VU accounts

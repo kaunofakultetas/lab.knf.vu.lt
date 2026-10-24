@@ -8,7 +8,7 @@ through `apache/runTests.sh`, never against the live stack.
 | Unit | `tests/Unit` | Pure helpers, no application: place ordinals, "3 days ago", the client-address picker, and custom.js at the end of the player script bundle |
 | Feature | `tests/Feature` | The app through its HTTP kernel: registration, login, password reset, VU SSO, challenges, voting, leaderboards, groups, pages, feedback, the whole control panel, the route table's guards, CSRF, mails, models, error pages |
 | Http | `tests/Http` | The image's own Apache, started by `run.sh` with the production environment: document root, rewrites, pages free of PHP diagnostics, directory listing, `/upload`, CSRF outside PHPUnit, forged client addresses, answers that name no PHP or Apache version, PHP taking no arguments from a query string |
-| Defects | `tests/Defects` | Open defects, each stating the wanted behaviour under a `LAB-nn` id (see below) — none at the moment |
+| Defects | `tests/Defects` | Open defects, each stating the wanted behaviour under a `LAB-nn` id (see below) — LAB-54 to LAB-70 at the moment |
 
 ## Running
 

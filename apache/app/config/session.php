@@ -68,7 +68,10 @@ return [
 
     // The Secure flag, from SESSION_SECURE_COOKIE — not set,
     // so the cookie goes without it, though the site is served
-    // over https
+    // over https. Known bug LAB-62 (low): a browser would send
+    // the session and XSRF-TOKEN cookies on a plain http
+    // request, which HSTS narrows to a first visit. Fix:
+    // default the flag to on
     'secure' => env('SESSION_SECURE_COOKIE'),
 
     // Scripts cannot read the cookie
