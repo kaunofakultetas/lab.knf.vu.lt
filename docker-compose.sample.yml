@@ -37,12 +37,12 @@ services:
   vuknflab-apache:
     container_name: vuknflab-apache
 
-    # # Self-Built Image
-    # image: vuknflab-apache
-    # build: ./apache
-
     # Docker Hub Image
     image: vuknf/vuknflab-apache:latest
+
+    # # Self-built
+    # image: vuknflab-apache
+    # build: ./apache
 
     user: 1000:1000
     read_only: true
