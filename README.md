@@ -48,6 +48,11 @@ cp .env.sample .env                               # then fill it in, see below
 The script creates the data, log and SSO folders and starts everything. On the first start
 MySQL builds the database from `mysql/init.sql`, so give it a minute.
 
+MySQL reads that file only into an empty database. A lab set up before the votes moved into
+MySQL (October 2026) needs their table before it runs the new image, or the dashboard fails:
+run the ``CREATE TABLE `cyber_challenges_votes` `` statement of `mysql/init.sql` once, in
+DbGate at `/dbgate`.
+
 What goes into `.env`:
 
 | Setting | What to put there |
@@ -70,7 +75,11 @@ single sign-on, the way VU staff do with VU's identity provider. To use your own
 1. Put your [SimpleSAMLphp](https://simplesamlphp.org) service provider files under
    `_SSO/simplesaml/`: `config/`, `metadata/` with your identity provider, and `cert/`. The
    service provider is called `default-sp`, and the identity provider should release the
-   `uid`, `mail`, `givenName` and `sn` attributes.
+   `uid`, `mail`, `givenName` and `sn` attributes. In its `config.php`, set
+   `session.phpsession.savepath` to `/var/www/simplesamlphp-sessions`, the folder the sample
+   keeps across redeploys, and `session.duration` to `36 * 60 * 60`, as long as a lab session:
+   signing out ends the single sign-on at your identity provider only while SimpleSAMLphp
+   still holds its session.
 2. Allow your identity provider's address in `endpoint/Caddyfile`, where `https://sso.vu.lt`
    is now.
 3. Make yourself an admin. The database starts with one main admin whose uid is `admin`;
@@ -88,7 +97,7 @@ Players can use the same sign-on, or register with an e-mail address.
 | `vuknflab-endpoint` | Caddy on port 80: the security headers, `/dbgate`, `/static`, and everything else to the app |
 | `vuknflab-apache` | the lab itself, a Laravel app on PHP 8.4 and Apache, published as [`vuknf/vuknflab-apache`](https://hub.docker.com/r/vuknf/vuknflab-apache) |
 | `vuknflab-mysql` | MySQL, created from `mysql/init.sql` |
-| `vuknflab-redis` | Redis: the sessions, the cached leaderboard and solve feed, and the votes |
+| `vuknflab-redis` | Redis: the sessions and the cached leaderboard |
 | `vuknflab-static` | fonts, icons and Bootstrap, served from the lab itself rather than a CDN |
 | `vuknflab-dbgate` | DbGate, a database browser at `/dbgate` |
 

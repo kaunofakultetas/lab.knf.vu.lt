@@ -87,7 +87,8 @@ class LeaderboardController extends BaseController
     //
     // The users.leaderboard view with ranking_table, its ranks
     // turned into ordinals and the last solves into how long
-    // ago they were.
+    // ago they were, counted from their Unix times
+    // (ChallengesHistory::lastTimes).
     //
     // Used by:
     //   - the Leaderboard links of the player top bar
@@ -104,8 +105,12 @@ class LeaderboardController extends BaseController
             return $user;
         });
 
-        $ordinalUsers = collect($ordinalUsers)->map(function($user) {
-            $user['last_challenge'] = SettingsController::time_elapsed_string($user['last_challenge']);
+        $last_times = ChallengesHistory::lastTimes();
+
+        // Every answer books a history row; a solve without one
+        // falls back to its local time
+        $ordinalUsers = collect($ordinalUsers)->map(function($user) use ($last_times) {
+            $user['last_challenge'] = SettingsController::time_elapsed_string(isset($last_times[$user['user_id']]) ? '@' . $last_times[$user['user_id']] : $user['last_challenge']);
             return $user;
         });
 

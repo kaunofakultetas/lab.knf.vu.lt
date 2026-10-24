@@ -17,6 +17,7 @@
 namespace Tests\Feature\Auth;
 
 use App\Mail\UserVerifyMail;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -766,5 +767,72 @@ final class LoginTest extends TestCase
         $this->assertSame(1, preg_match('/name="_token" value="([^"]+)"/', $retry->getContent(), $token));
         $this->post('/user/logout', ['_token' => $token[1]])->assertRedirect('/');
         $this->assertGuest('users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_sign_out_pressed_again_leaves_no_page_to_resume
+    // -----------------------------------------------------------
+    //
+    // A sign-out sent from a page whose session has ended is
+    // offered again, and pressed again the guard refuses it,
+    // as the session is gone; Laravel then keeps the
+    // sign-out's own address as the page asked for. The next
+    // login goes on to the dashboard all the same, as a login
+    // resumes no address a GET cannot open.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_sign_out_pressed_again_leaves_no_page_to_resume(): void
+    {
+        $this->app['env'] = 'production';
+        $player = $this->makePlayer();
+        $this->signIn($player);
+        $this->startSession();
+        $stale = csrf_token();
+        Auth::guard('users')->logout();
+        $this->app['session']->regenerateToken();
+
+        // The page answering the refused sign-out offers it again,
+        // and its button stores the sign-out as the page to resume
+        $retry = $this->post('/user/logout', ['_token' => $stale]);
+        $retry->assertStatus(419);
+        $this->assertSame(1, preg_match('/name="_token" value="([^"]+)"/', $retry->getContent(), $token));
+        $this->from('https://lab.knf.vu.lt/user/logout')->post('/user/logout', ['_token' => $token[1]]);
+        $this->assertStringEndsWith('/user/logout', (string) session('url.intended'));
+
+        $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD, '_token' => csrf_token()])
+            ->assertRedirect('/user/dashboard');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_session_cookie_travels_over_https_only
+    // -----------------------------------------------------------
+    //
+    // The session cookie carries the Secure flag, as the site
+    // is served over https only: a browser never sends it on a
+    // plain http request.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_session_cookie_travels_over_https_only(): void
+    {
+        $cookie = $this->get('/')->getCookie(config('session.cookie'), false);
+
+        $this->assertNotNull($cookie);
+        $this->assertTrue($cookie->isSecure());
     }
 }

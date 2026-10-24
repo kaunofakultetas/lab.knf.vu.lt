@@ -25,7 +25,7 @@
 namespace Tests\Feature\Play;
 
 use App\Models\ChallengesCategories;
-use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
 use PHPUnit\Framework\Attributes\RunTestsInSeparateProcesses;
 use Tests\TestCase;
@@ -164,8 +164,8 @@ final class DashboardTest extends TestCase
     // -----------------------------------------------------------
     //
     // A solved challenge's card says so, drops the link to the
-    // challenge and shows the vote buttons with the counts
-    // kept in Redis.
+    // challenge and shows the vote buttons with the counts of
+    // its rows in cyber_challenges_votes.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -176,16 +176,18 @@ final class DashboardTest extends TestCase
         $player = $this->makePlayer();
         $challenge = $this->makeChallenge();
         $this->recordSolve($player, $challenge);
-        Redis::set("ThumbsUp_{$challenge->public_id}", 7);
-        Redis::set("ThumbsDown_{$challenge->public_id}", 2);
+        foreach (['up', 'up', 'up', 'down', 'down'] as $vote) {
+            DB::table('cyber_challenges_votes')->insert(['user_id' => $this->makePlayer()->id, 'challenge_id' => $challenge->id, 'vote' => $vote, 'created' => date('Y-m-d H:i:s')]);
+        }
         $this->signIn($player);
 
         $response = $this->get('/user/dashboard');
 
         $response->assertSee('Challenge Solved');
         $response->assertDontSee("href=\"/user/challenge/{$challenge->public_id}\"", false);
-        $response->assertSee("<span id=\"thumbs-up-count-{$challenge->public_id}\">7</span>", false);
+        $response->assertSee("<span id=\"thumbs-up-count-{$challenge->public_id}\">3</span>", false);
         $response->assertSee("<span id=\"thumbs-down-count-{$challenge->public_id}\">2</span>", false);
+        $response->assertSee("<button  class=\"badge border-0 text-white bg-primary thumbs-up-{$challenge->public_id}\"", false);
     }
 
 
@@ -197,8 +199,9 @@ final class DashboardTest extends TestCase
     // test_the_vote_buttons_lock_once_the_player_voted
     // -----------------------------------------------------------
     //
-    // After the player's vote the buttons on the card are
-    // rendered disabled.
+    // After the player's vote — a row of the player's in
+    // cyber_challenges_votes — the buttons on the card are
+    // rendered disabled, the other thumb's too.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -209,12 +212,13 @@ final class DashboardTest extends TestCase
         $player = $this->makePlayer();
         $challenge = $this->makeChallenge();
         $this->recordSolve($player, $challenge);
-        Redis::set("Vote_{$challenge->public_id}_{$player->id}", 1);
+        DB::table('cyber_challenges_votes')->insert(['user_id' => $player->id, 'challenge_id' => $challenge->id, 'vote' => 'down', 'created' => date('Y-m-d H:i:s')]);
         $this->signIn($player);
 
         $response = $this->get('/user/dashboard');
 
         $response->assertSee("<button disabled class=\"badge border-0 text-white bg-primary thumbs-up-{$challenge->public_id}\"", false);
+        $response->assertSee("<button disabled class=\"badge border-0 bg-white text-primary thumbs-down-{$challenge->public_id} \"", false);
     }
 
 
@@ -440,26 +444,33 @@ final class DashboardTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_the_points_filter_starts_at_the_pages_prices
+    // test_the_points_filter_shows_the_pages_prices_as_hints
     // -----------------------------------------------------------
     //
-    // The points filter's boxes start at the cheapest and the
-    // dearest challenge on the page, so a challenge of any
-    // price shows until the player sets a bound.
+    // The points filter's boxes start empty, with the cheapest
+    // and the dearest challenge on the page as their
+    // placeholders: an empty box is no bound, so a challenge
+    // of any price shows, and the cookies that keep the filter
+    // keep only bounds the player typed, never the prices of
+    // the moment.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_the_points_filter_starts_at_the_pages_prices(): void
+    public function test_the_points_filter_shows_the_pages_prices_as_hints(): void
     {
         $this->makeChallenge(['points' => 500]);
         $this->makeChallenge(['points' => 3]);
 
-        $response = $this->signIn($this->makePlayer())->get('/user/dashboard');
+        $html = $this->signIn($this->makePlayer())->get('/user/dashboard')->getContent();
+        preg_match('/<input[^>]*id="min"[^>]*>/', $html, $min);
+        preg_match('/<input[^>]*id="max"[^>]*>/', $html, $max);
 
-        $response->assertSee('id="min" name="min" min="0" value="3"', false);
-        $response->assertSee('id="max" name="max" min="0" value="500"', false);
+        $this->assertStringContainsString('placeholder="3"', $min[0] ?? '');
+        $this->assertStringNotContainsString('value=', $min[0] ?? '');
+        $this->assertStringContainsString('placeholder="500"', $max[0] ?? '');
+        $this->assertStringNotContainsString('value=', $max[0] ?? '');
     }
 
 
@@ -471,8 +482,8 @@ final class DashboardTest extends TestCase
     // test_the_points_filter_starts_empty_without_challenges
     // -----------------------------------------------------------
     //
-    // With no challenge on the page the boxes start empty,
-    // which the filter reads as no bound.
+    // With no challenge on the page the boxes have no price
+    // to show as a hint either.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -482,7 +493,7 @@ final class DashboardTest extends TestCase
     {
         $response = $this->signIn($this->makePlayer())->get('/user/dashboard');
 
-        $response->assertSee('id="min" name="min" min="0" value=""', false);
-        $response->assertSee('id="max" name="max" min="0" value=""', false);
+        $response->assertSee('id="min" name="min" min="0" placeholder=""', false);
+        $response->assertSee('id="max" name="max" min="0" placeholder=""', false);
     }
 }

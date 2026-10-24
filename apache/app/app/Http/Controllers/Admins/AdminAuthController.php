@@ -108,16 +108,13 @@ class AdminAuthController extends Controller
     // token gets the signout_retry page (VerifyCsrfToken),
     // whose button posts here again.
     //
-    // Known bug LAB-54 (medium): SimpleSAMLphp ends the VU
-    // sign-on only while it still holds the visitor's session,
-    // a PHP session file in /tmp that PHP deletes once it is
-    // 24 minutes old (the image sets no
-    // session.gc_maxlifetime) and every redeploy empties;
-    // without it the sign-out returns to the lab and the VU
-    // sign-on stays open. Fix: a session.gc_maxlifetime of 8
-    // hours or more, a SimpleSAMLphp session store a redeploy
-    // keeps, and the identity provider's own logout when no
-    // session is left.
+    // SimpleSAMLphp tells sso.vu.lt about the sign-out only
+    // while it still holds the VU login, a PHP session file:
+    // the image keeps such a file for 36 hours, where PHP's
+    // default would delete it after 24 minutes
+    // (conf.d/session.ini, apache/Dockerfile), and the folder
+    // SimpleSAMLphp keeps them in is mounted from the host, so
+    // that a redeploy keeps them too.
     //
     // Used by:
     //   - Post_Link() of custom_admin.js — the sign-out link of

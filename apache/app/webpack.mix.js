@@ -13,7 +13,6 @@ mix.combine([
 
 mix.combine([
     'resources/views/assets/vendor/choices.js/public/assets/styles/choices.min.css',
-    'resources/views/assets/css/daterangepicker.css', 
 	'node_modules/select2/dist/css/select2.min.css', 
     'resources/views/assets/css/summernote.min.css', 
     'resources/views/assets/css/jquery.toast.css',
@@ -24,12 +23,8 @@ mix.combine([
 mix.scripts([
 	'resources/views/assets/vendor/bootstrap/js/bootstrap.bundle.min.js',
 	'resources/views/assets/js/jquery-3.6.3.min.js',
-	'resources/views/assets/js/moment.min.js',
-	'resources/views/assets/js/moment-timezone.min.js', 
-	'resources/views/assets/js/jquery.countdown.min.js',
 	'resources/views/assets/js/jquery.matchHeight.js',
 	'resources/views/assets/js/summernote.min.js',
-	'resources/views/assets/js/daterangepicker.js', 
 	'resources/views/assets/vendor/just-validate/js/just-validate.min.js',
 	'resources/views/assets/vendor/choices.js/public/assets/scripts/choices.min.js',   
 	'resources/views/assets/js/jquery.toast.js',
@@ -41,9 +36,6 @@ mix.scripts([
 mix.scripts([
 	'resources/views/assets/vendor/bootstrap/js/bootstrap.bundle.min.js',
 	'resources/views/assets/js/jquery-3.6.3.min.js',
-	'resources/views/assets/js/moment.min.js',
-	'resources/views/assets/js/moment-timezone.min.js',
-	'resources/views/assets/js/jquery.countdown.min.js',
 	'resources/views/assets/js/jquery.matchHeight.js', 
 	'resources/views/assets/vendor/just-validate/js/just-validate.min.js',
 	'resources/views/assets/vendor/choices.js/public/assets/scripts/choices.min.js',  

@@ -145,7 +145,7 @@ class UsersGroupsController extends BaseController
             $arr = array();
         }
 
-        $curr_page = $this->listPage();
+        $curr_page = $this->listPage(count($arr));
 
         $perPage = 50;
 
@@ -340,18 +340,11 @@ class UsersGroupsController extends BaseController
     // GET /control-panel/users/vu-groups/users_list/{uid}
     //
     // The admins.users-groups-userlist view: the group's
-    // members by VU id, the latest added first like every
-    // list of the panel, 50 to a page of the list, under the
+    // members by VU id, the latest added first like every list
+    // of the panel, 50 to a page of the list, under the
     // group's name. The page prints the id into its add
-    // button's script, which is safe as the route takes
-    // digits only (RouteServiceProvider::boot).
-    //
-    // Known bug LAB-56 (low): the digits-only pattern lets a
-    // leading zero through; MySQL reads 010 as 10, but the
-    // script reads it as the octal 8, so the add button acts
-    // on another record than the page shows. Fix: refuse a
-    // leading zero in the patterns, or print the id as a
-    // number.
+    // button's script, which is safe as the route takes a
+    // plain number only (RouteServiceProvider::boot).
     //
     // Used by:
     //   - the members buttons of the groups list
@@ -366,7 +359,7 @@ class UsersGroupsController extends BaseController
             $arr = array();
         }
 
-        $curr_page = $this->listPage();
+        $curr_page = $this->listPage(count($arr));
 
         $perPage = 50;
 
@@ -492,7 +485,11 @@ class UsersGroupsController extends BaseController
     // Removes the membership row uid — one member of one group
     // — and goes back with "Deleted!". The route's r_exists
     // check (membership_owned) keeps a lab admin to the
-    // members of its own groups.
+    // members of its own groups, and lets a row already gone
+    // through, as removing it again changes nothing; a row
+    // another admin created with that id in the meantime is
+    // checked here again and left alone unless the admin may
+    // change its group.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the remove
@@ -501,9 +498,17 @@ class UsersGroupsController extends BaseController
 
     public function group_destroy($uid)
     {
-        session()->flash('success', 'Deleted!');
+        $group_id = GroupsUsers::whereKey($uid)->value('group_id');
 
-        GroupsUsers::destroy($uid);
+        if ($group_id !== null) {
+            if (! $this->mayChangeGroup($group_id)) {
+                return back()->withErrors(['You don\'t have permissions to do this!']);
+            }
+
+            GroupsUsers::destroy($uid);
+        }
+
+        session()->flash('success', 'Deleted!');
 
         return back();
     }
@@ -522,15 +527,8 @@ class UsersGroupsController extends BaseController
     // The admins.users-groups-challengeslist view: the group's
     // challenges by name, newest first, 50 to a page of the
     // list, under the group's name. The page prints the id
-    // into its add button's script, which is safe as the
-    // route takes digits only (RouteServiceProvider::boot).
-    //
-    // Known bug LAB-56 (low): the digits-only pattern lets a
-    // leading zero through; MySQL reads 010 as 10, but the
-    // script reads it as the octal 8, so the add button acts
-    // on another record than the page shows. Fix: refuse a
-    // leading zero in the patterns, or print the id as a
-    // number.
+    // into its add button's script, which is safe as the route
+    // takes a plain number only (RouteServiceProvider::boot).
     //
     // Used by:
     //   - the challenges buttons of the groups list
@@ -549,7 +547,7 @@ class UsersGroupsController extends BaseController
             $arr = array();
         }
 
-        $curr_page = $this->listPage();
+        $curr_page = $this->listPage(count($arr));
 
         $perPage = 50;
 
@@ -585,7 +583,9 @@ class UsersGroupsController extends BaseController
     // Removes the group-challenge row uid and goes back with
     // "Deleted!". The route's r_exists check
     // (group_challenge_owned) keeps a lab admin to the
-    // challenges of its own groups.
+    // challenges of its own groups; a row it let through as
+    // already gone, but which another admin created in the
+    // meantime, is checked here again, as in group_destroy.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the remove
@@ -594,9 +594,17 @@ class UsersGroupsController extends BaseController
 
     public function challenge_destroy($uid)
     {
-        session()->flash('success', 'Deleted!');
+        $group_id = GroupsChallenges::whereKey($uid)->value('group_id');
 
-        GroupsChallenges::destroy($uid);
+        if ($group_id !== null) {
+            if (! $this->mayChangeGroup($group_id)) {
+                return back()->withErrors(['You don\'t have permissions to do this!']);
+            }
+
+            GroupsChallenges::destroy($uid);
+        }
+
+        session()->flash('success', 'Deleted!');
 
         return back();
     }
@@ -730,8 +738,10 @@ class UsersGroupsController extends BaseController
             return $user;
         });
 
+        // Every answer books a history row; a solve without one
+        // falls back to its local time
         $ordinalUsers = collect($ordinalUsers)->map(function($user) {
-            $user['last_challenge'] = SettingsController::time_elapsed_string($user['last_challenge']);
+            $user['last_challenge'] = SettingsController::time_elapsed_string(isset($user['last_time']) ? '@' . $user['last_time'] : $user['last_challenge']);
             return $user;
         });
 
@@ -755,7 +765,7 @@ class UsersGroupsController extends BaseController
     // the group's members ranked by the points the group's
     // challenges gave them, ties going to whose latest of
     // those solves was booked first, with the time of that
-    // solve.
+    // solve, local and Unix.
     //
     // Used by:
     //   - group_leaderboard (above)
@@ -763,14 +773,26 @@ class UsersGroupsController extends BaseController
 
     public static function get_group_leaderboard($challenges, $members)
     {
+        // One history row per player and challenge at most, so
+        // the join cannot repeat a solve and its points; only
+        // the group's challenges are read
+        $solved_at = DB::table('cyber_challenges_history')
+            ->whereIn('challenge_id', $challenges)
+            ->selectRaw('`user_id`, `challenge_id`, MAX(`created_time`) AS `created_time`')
+            ->groupBy('user_id', 'challenge_id');
+
         $data = DB::table('cyber_users')
             ->leftJoin('cyber_challenges_submitted', 'cyber_challenges_submitted.user_id', '=', 'cyber_users.id')
+            ->leftJoinSub($solved_at, 'solved_at', function ($join) {
+                $join->on('solved_at.user_id', '=', 'cyber_challenges_submitted.user_id')
+                    ->on('solved_at.challenge_id', '=', 'cyber_challenges_submitted.challenge_id');
+            })
             ->whereIn('cyber_challenges_submitted.challenge_id', $challenges)
             ->whereIn('cyber_users.vu_id', $members)
             ->groupBy('cyber_users.id')
             ->orderByRaw('SUM(`cyber_challenges_submitted`.`points_given`) DESC')
             ->orderByRaw('MAX(`cyber_challenges_submitted`.`id`)')
-            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`id`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
+            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`id`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`, MAX(`solved_at`.`created_time`) AS `last_time`')
             ->get()->toArray();
 
         return $data;

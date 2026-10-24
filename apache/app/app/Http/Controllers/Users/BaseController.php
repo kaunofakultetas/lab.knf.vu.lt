@@ -72,7 +72,7 @@ class BaseController extends Controller
     // player's memberships by VU id, the feed is the six
     // latest solves of challenges every player may see, read
     // from the database (ChallengesHistory::feed), with how
-    // long ago each was.
+    // long ago each was, counted from its Unix time.
     //
     // Used by:
     //   - Laravel, when it builds a player controller for a
@@ -119,9 +119,11 @@ class BaseController extends Controller
             // =====================================================
             $task_history = ChallengesHistory::feed();
 
+            // From the Unix time: created is local time, which
+            // repeats an hour when the clocks go back in October
             if(count($task_history)>0){
                 foreach ($task_history as $kk => $vv) {
-                    $task_history[$kk]['elapsed'] = SettingsController::time_elapsed_string($vv['created']);
+                    $task_history[$kk]['elapsed'] = SettingsController::time_elapsed_string('@' . $vv['created_time']);
                 }
             }
 

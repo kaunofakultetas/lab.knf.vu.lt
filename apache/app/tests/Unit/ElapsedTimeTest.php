@@ -228,4 +228,33 @@ final class ElapsedTimeTest extends TestCase
 
         $this->assertSame([], $deprecations);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_every_copy_reads_unix_seconds
+    // -----------------------------------------------------------
+    //
+    // Unix seconds after an @, which the pages hand over as
+    // the local times in the database repeat an hour when the
+    // clocks go back in October, read as their real age by
+    // all three copies, in the application's Europe/Vilnius
+    // as anywhere.
+    //
+    // Used by:
+    //   - PHPUnit — the Unit suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_every_copy_reads_unix_seconds(): void
+    {
+        date_default_timezone_set('Europe/Vilnius');
+        $then = '@' . (time() - 300);
+
+        $this->assertSame('5 minutes ago', PlayerSettings::time_elapsed_string($then));
+        $this->assertSame('5 minutes ago', AdminLeaderboard::time_elapsed_string($then));
+        $this->assertSame('5 minutes ago', AdminSettings::time_elapsed_string($then));
+    }
 }

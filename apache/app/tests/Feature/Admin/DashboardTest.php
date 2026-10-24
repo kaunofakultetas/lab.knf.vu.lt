@@ -16,6 +16,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Models\ChallengesHistory;
 use App\Models\User;
 use Tests\TestCase;
 
@@ -96,8 +97,8 @@ final class DashboardTest extends TestCase
     public function test_the_latest_solves_are_listed_newest_first(): void
     {
         $player = $this->makePlayer(['username' => 'FastSolver']);
-        $this->recordSolve($player, $this->makeChallenge(['name' => 'Older Task', 'points' => 10]), date('Y-m-d H:i:s', strtotime('-3 days')));
-        $this->recordSolve($player, $this->makeChallenge(['name' => 'Newer Task', 'points' => 25]), date('Y-m-d H:i:s', strtotime('-2 hours')));
+        $this->recordSolveSecondsAgo($player, $this->makeChallenge(['name' => 'Older Task', 'points' => 10]), 3 * 86400);
+        $this->recordSolveSecondsAgo($player, $this->makeChallenge(['name' => 'Newer Task', 'points' => 25]), 7200);
 
         $response = $this->signInAdmin($this->makeAdmin())->get('/control-panel/dashboard');
 
@@ -106,6 +107,34 @@ final class DashboardTest extends TestCase
             '<td>Newer Task</td>', '<td>25</td>', '<td>FastSolver</td>', '2 hours ago',
             '<td>Older Task</td>', '<td>10</td>', '<td>FastSolver</td>', '3 days ago',
         ], false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_times_are_counted_from_unix_time
+    // -----------------------------------------------------------
+    //
+    // How long ago a solve was — in the latest solves and in
+    // the top ten — is counted from its Unix time, which stays
+    // right in the hour the clocks repeat in October.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_times_are_counted_from_unix_time(): void
+    {
+        $this->recordSolveInTheRepeatedHour($this->makePlayer(), $this->makeChallenge(['name' => 'Night Task']));
+
+        $response = $this->signInAdmin($this->makeAdmin())->get('/control-panel/dashboard');
+
+        $response->assertSeeInOrder(['<td>Night Task</td>', '<span class="text-muted">10 minutes ago</span>'], false);
+        $response->assertSee('<h3 class="h6 fw-normal text-dark">10 minutes ago</h3>', false);
+        $response->assertDontSee('3 hours ago');
     }
 
 
@@ -225,5 +254,35 @@ final class DashboardTest extends TestCase
         $response->assertSeeInOrder(['Solved at least<br>one challenge', '<strong class="text-lg">1</strong>', 'Total<br>groups'], false);
         $response->assertSee('<td>Real Task</td>', false);
         $response->assertDontSee('<td>Ghost Task</td>', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_top_ten_falls_back_to_the_local_time
+    // -----------------------------------------------------------
+    //
+    // A solve without a history row — which no answer leaves,
+    // but older data may — shows how long ago it was by its
+    // local time in the top ten, rather than breaking the
+    // page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_top_ten_falls_back_to_the_local_time(): void
+    {
+        $player = $this->makePlayer();
+        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', time() - 7200));
+        ChallengesHistory::where(['user_id' => $player->id])->delete();
+
+        $response = $this->signInAdmin($this->makeAdmin())->get('/control-panel/dashboard');
+
+        $response->assertOk();
+        $response->assertSee('<h3 class="h6 fw-normal text-dark">2 hours ago</h3>', false);
     }
 }

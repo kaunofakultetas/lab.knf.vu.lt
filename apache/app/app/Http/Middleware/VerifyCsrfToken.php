@@ -79,14 +79,9 @@ class VerifyCsrfToken extends Middleware
     // sign-out again under the session's current token. It
     // waits for a press rather than sending itself, so that no
     // other site can sign a visitor out of the VU single
-    // sign-on by posting here.
-    //
-    // Known bug LAB-57 (low): user/logout sits behind
-    // auth:users, so once the session has ended the retry
-    // button's POST is refused by the guard, and the retry
-    // page's own address becomes the page the next login
-    // resumes, a 405. Fix: leave user/logout out of SIGN_OUTS,
-    // and keep intendedWithin from resuming a sign-out.
+    // sign-on by posting here. The page is served at the
+    // sign-out's own address, which a later login never
+    // resumes (Controller::opensByGet).
     //
     // Used by:
     //   - app/Http/Kernel.php — the web group, before every

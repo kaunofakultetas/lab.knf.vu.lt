@@ -19,17 +19,15 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Http\Controllers\Admins\UsersController;
 use App\Mail\SendNewPass;
 use App\Models\ChallengesHistory;
 use App\Models\ChallengesSubmitted;
 use App\Models\GroupsUsers;
 use App\Models\User;
-use Illuminate\Redis\Events\CommandExecuted;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -742,10 +740,10 @@ final class UsersTest extends TestCase
     // test_deleting_an_account_takes_its_votes_back
     // -----------------------------------------------------------
     //
-    // The deleted accounts' votes come off the challenge's
-    // thumbs counts, in the direction each was cast, and their
-    // marks go; the vote of a player who stays is left as it
-    // was.
+    // The deleted accounts' rows in cyber_challenges_votes go,
+    // so their votes come off the challenge's thumbs counts,
+    // whichever way each was cast; the vote of a player who
+    // stays is left as it was.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -765,54 +763,10 @@ final class UsersTest extends TestCase
         $this->post("/control-panel/users/delete/{$up->id}");
         $this->post("/control-panel/users/delete/{$down->id}");
 
-        $this->assertSame(1, (int) Redis::get("ThumbsUp_{$challenge->public_id}"));
-        $this->assertSame(0, (int) Redis::get("ThumbsDown_{$challenge->public_id}"));
-        $this->assertNull(Redis::get("Vote_{$challenge->public_id}_{$up->id}"));
-        $this->assertNull(Redis::get("Vote_{$challenge->public_id}_{$down->id}"));
-        $this->assertSame('up', Redis::get("Vote_{$challenge->public_id}_{$stays->id}"));
-    }
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_an_account_deleted_twice_at_once_takes_its_vote_back_once
-    // -----------------------------------------------------------
-    //
-    // A delete sent twice at once, a double click, takes the
-    // account's vote off once: deleting the mark claims it.
-    // Here the second delete runs in full while the first one
-    // reads the mark, so both read the vote, and only the one
-    // that deletes the mark takes the vote off.
-    //
-    // Used by:
-    //   - PHPUnit — the Feature suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    public function test_an_account_deleted_twice_at_once_takes_its_vote_back_once(): void
-    {
-        $challenge = $this->makeChallenge();
-        $voter = $this->makePlayer();
-        $this->signIn($voter)->post("/user/challenge/vote/down/{$challenge->public_id}");
-        $this->signIn($this->makePlayer())->post("/user/challenge/vote/down/{$challenge->public_id}");
-        $this->signInAdmin($this->makeAdmin(true));
-        $mark = "Vote_{$challenge->public_id}_{$voter->id}";
-        $interleaved = false;
-        Redis::enableEvents();
-        Redis::purge();
-        Event::listen(CommandExecuted::class, function (CommandExecuted $event) use ($mark, $voter, &$interleaved) {
-            if (!$interleaved && strtolower($event->command) === 'get' && ($event->parameters[0] ?? null) === $mark) {
-                $interleaved = true;
-                app(UsersController::class)->destroy($voter->id);
-            }
-        });
-
-        $this->post("/control-panel/users/delete/{$voter->id}");
-
-        $this->assertTrue($interleaved);
-        $this->assertSame(1, (int) Redis::get("ThumbsDown_{$challenge->public_id}"));
+        $this->assertSame([$stays->id => 'up'], DB::table('cyber_challenges_votes')->pluck('vote', 'user_id')->all());
+        $this->signIn($stays)->get("/user/challenge/{$challenge->public_id}")
+            ->assertSee('<span id="thumbs-up-count">1</span>', false)
+            ->assertSee('<span id="thumbs-down-count">0</span>', false);
     }
 
 
@@ -842,5 +796,66 @@ final class UsersTest extends TestCase
 
         $this->assertSame('newcomer@players.test', User::where('username', 'Newcomer')->value('email'));
         $this->assertFalse(User::where('email', 'hijacked@players.test')->exists());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_account_sharing_a_local_accounts_email_gets_no_password
+    // -----------------------------------------------------------
+    //
+    // The login form signs in the first account with the
+    // e-mail, so a password set on a VU account whose e-mail
+    // an older local account also holds would never work: the
+    // panel refuses it, says why, and mails nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_account_sharing_a_local_accounts_email_gets_no_password(): void
+    {
+        Mail::fake();
+        $this->makePlayer(['email' => 'jonas@stud.vu.lt']);
+        $vu = $this->makeSsoPlayer(['email' => 'jonas@stud.vu.lt', 'password' => '']);
+
+        $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/users')
+            ->post('/control-panel/dialog/users/update', ['uid' => $vu->id, 'password' => 'new-pass-123', 'notif' => 1]);
+
+        $this->assertErrorFlashed('This e-mail also belongs to a local account, which the login form signs into');
+        Mail::assertNothingSent();
+        $this->assertSame('', $vu->refresh()->password);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_account_with_an_email_of_its_own_gets_its_password
+    // -----------------------------------------------------------
+    //
+    // A VU account whose e-mail no other account holds still
+    // gets the password typed, mailed with notif, and the
+    // login form signs in with it.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_account_with_an_email_of_its_own_gets_its_password(): void
+    {
+        Mail::fake();
+        $vu = $this->makeSsoPlayer(['password' => '']);
+
+        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/dialog/users/update', ['uid' => $vu->id, 'password' => 'new-pass-123', 'notif' => 1]);
+
+        Mail::assertSent(SendNewPass::class);
+        $this->assertTrue(Auth::guard('users')->attempt(['email' => $vu->email, 'password' => 'new-pass-123']));
     }
 }

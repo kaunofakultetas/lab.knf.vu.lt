@@ -59,16 +59,13 @@ class RouteServiceProvider extends ServiceProvider
     // under /api with the api group and the site's routes
     // with the web group — sessions, cookies and CSRF. A
     // route parameter that carries a record's id — uid,
-    // email_id, challenge_id or user_id — takes digits only,
-    // and other text in its place is a 404: MySQL reads text
-    // that starts with a number as that number, so it would
-    // pass the routes' r_exists checks and reach pages that
-    // print the id into their scripts.
-    //
-    // Known bug LAB-56 (low): [0-9]+ lets a leading zero
-    // through, which MySQL reads as the plain number but the
-    // pages' inline scripts read as an octal one. Fix:
-    // [1-9][0-9]*.
+    // email_id, challenge_id or user_id — takes a plain whole
+    // number only, digits without a leading zero, and other
+    // text in its place is a 404: MySQL reads text that
+    // starts with a number as that number, so it would pass
+    // the routes' r_exists checks and reach pages that print
+    // the id into their scripts, and the scripts read a
+    // number with a leading zero as an octal one.
     //
     // Used by:
     //   - Laravel, once every provider is registered
@@ -78,7 +75,7 @@ class RouteServiceProvider extends ServiceProvider
     {
         $this->configureRateLimiting();
 
-        Route::patterns(['uid' => '[0-9]+', 'email_id' => '[0-9]+', 'challenge_id' => '[0-9]+', 'user_id' => '[0-9]+']);
+        Route::patterns(['uid' => '[1-9][0-9]*', 'email_id' => '[1-9][0-9]*', 'challenge_id' => '[1-9][0-9]*', 'user_id' => '[1-9][0-9]*']);
 
         $this->routes(function () {
             Route::middleware('api')

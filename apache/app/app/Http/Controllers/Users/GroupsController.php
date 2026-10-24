@@ -203,8 +203,10 @@ class GroupsController extends BaseController
             return $user;
         });
 
+        // Every answer books a history row; a solve without one
+        // falls back to its local time
         $ordinalUsers = collect($ordinalUsers)->map(function($user) {
-            $user['last_challenge'] = SettingsController::time_elapsed_string($user['last_challenge']);
+            $user['last_challenge'] = SettingsController::time_elapsed_string(isset($user['last_time']) ? '@' . $user['last_time'] : $user['last_challenge']);
             return $user;
         });
 
@@ -229,9 +231,11 @@ class GroupsController extends BaseController
     // those solves gave — the group's points, as the group
     // page counts them — and, among equal points, by whose
     // latest of those solves was booked first. The booking
-    // order is the solve's id, not its time, which repeats
-    // an hour when the clocks go back in October; the time
-    // of the latest is the last challenge shown.
+    // order is the solve's id, not its time, which repeats an
+    // hour when the clocks go back in October; the time of the
+    // latest is the last challenge shown, and last_time its
+    // Unix time from the history table, which the page counts
+    // how long ago from.
     //
     // Used by:
     //   - group_leaderboard (above)
@@ -239,14 +243,26 @@ class GroupsController extends BaseController
 
     public static function get_group_leaderboard($challenges, $members)
     {
+        // One history row per player and challenge at most, so
+        // the join cannot repeat a solve and its points; only
+        // the group's challenges are read
+        $solved_at = DB::table('cyber_challenges_history')
+            ->whereIn('challenge_id', $challenges)
+            ->selectRaw('`user_id`, `challenge_id`, MAX(`created_time`) AS `created_time`')
+            ->groupBy('user_id', 'challenge_id');
+
         $data = DB::table('cyber_users')
             ->leftJoin('cyber_challenges_submitted', 'cyber_challenges_submitted.user_id', '=', 'cyber_users.id')
+            ->leftJoinSub($solved_at, 'solved_at', function ($join) {
+                $join->on('solved_at.user_id', '=', 'cyber_challenges_submitted.user_id')
+                    ->on('solved_at.challenge_id', '=', 'cyber_challenges_submitted.challenge_id');
+            })
             ->whereIn('cyber_challenges_submitted.challenge_id', $challenges)
             ->whereIn('cyber_users.vu_id', $members)
             ->groupBy('cyber_users.id')
             ->orderByRaw('SUM(`cyber_challenges_submitted`.`points_given`) DESC')
             ->orderByRaw('MAX(`cyber_challenges_submitted`.`id`)')
-            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`id`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`')
+            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`id`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`, MAX(`solved_at`.`created_time`) AS `last_time`')
             ->get()->toArray();
 
         return $data;

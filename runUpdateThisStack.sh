@@ -5,7 +5,7 @@
 # STEP 1: Create necessary files and directories
 # ==============================================
 # Data directories
-mkdir -p ./_DATA/apache/{downloads,public}
+mkdir -p ./_DATA/apache/{downloads,public,simplesamlphp-sessions}
 mkdir -p ./_DATA/mysql
 
 # Logs directories

@@ -7,10 +7,10 @@
 //  (vuknflab-mysql), whose schema mysql/init.sql creates —
 //  the app has no migrations — and the stack's Redis
 //  (vuknflab-redis), which holds the sessions, Laravel's
-//  cache and the app's own keys: the cached leaderboard,
-//  the solve feed and the votes. The host, database, user
-//  and password come from docker-compose.yml; the port and
-//  the Redis client (predis) from the image's .env.
+//  cache and the app's own key, the cached leaderboard. The
+//  host, database, user and password come from
+//  docker-compose.yml; the port and the Redis client
+//  (predis) from the image's .env.
 //
 //  Used by:
 //    - Laravel's database and Redis layers — every model,

@@ -5,10 +5,10 @@
 //      them
 //
 //  The heart of the lab: the dashboard of challenges, a
-//  challenge's page, the answer form that books a solve
-//  and its points, the thumbs-up and thumbs-down votes kept
-//  in Redis, and the feedback dialog. Every route asks for
-//  a signed-in player.
+//  challenge's page, the answer form that books a solve and
+//  its points, the thumbs-up and thumbs-down votes, kept in
+//  MySQL, and the feedback dialog. Every route asks for a
+//  signed-in player.
 //
 //    GET  /user/dashboard                                — the dashboard
 //    GET  /user/challenge/{public_id}/{public_group_id?} — a challenge
@@ -30,7 +30,6 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Redis;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
@@ -46,6 +45,7 @@ use App\Models\ChallengesHistory;
 use App\Models\ChallengesFiles;
 use App\Models\ChallengesCategories;
 use App\Models\ChallengesSubmitted;
+use App\Models\ChallengesVotes;
 
 
 
@@ -65,6 +65,7 @@ use App\Models\ChallengesSubmitted;
 //   vote             — a thumbs-up or thumbs-down
 //   dialog_feedback  — the feedback dialog
 //   feedback_save    — stores feedback
+//   memberOf         — whether the player is in a group
 //   hiddenFromPlayer — whether a hidden challenge is closed
 //                      to the player
 //
@@ -112,21 +113,15 @@ class ChallengesController extends BaseController
     // whether the player solved it, its category names and
     // category ids — the classes the page's category filter
     // reads — and its votes. The points filter's boxes start
-    // at the cheapest and the dearest challenge on the page,
-    // so no card is filtered out before the player sets a
-    // bound; with no challenge they start empty, which the
-    // filter (custom.js) reads as no bound, as it reads a box
-    // the player empties. The sorting helper is declared
-    // inside the action, so the action runs once per PHP
-    // process: Apache serves each request afresh, and the
+    // empty, with the cheapest and the dearest challenge on
+    // the page as their placeholders: the filter (custom.js)
+    // reads an empty box as no bound, so no card is filtered
+    // out before the player types a bound, and the cookies
+    // that keep the filter keep only what the player typed,
+    // never the prices of the moment. The sorting helper is
+    // declared inside the action, so the action runs once per
+    // PHP process: Apache serves each request afresh, and the
     // tests render these pages in separate processes.
-    //
-    // Known bug LAB-59 (low): the boxes start filled, and a
-    // category or Filter click saves their text in cookies
-    // (custom.js), so the prices of that moment become bounds
-    // the player never typed, and hide later challenges
-    // outside them. Fix: leave the boxes empty with the prices
-    // as placeholders.
     //
     // Used by:
     //   - the Home link of the player sidebar
@@ -143,6 +138,9 @@ class ChallengesController extends BaseController
         if (count(Challenges::where(['hidden'=>0])->orderby('points')->get()->toArray()) > 0) {
             $arr = Challenges::where(['hidden'=>0])->orderby('points')->get()->toArray();
 
+            $tally = ChallengesVotes::tally(array_column($arr, 'id'));
+            $voted = ChallengesVotes::where(['user_id' => Auth::guard('users')->id()])->pluck('vote', 'challenge_id');
+
             foreach ($arr as $k => $v) {
                 $arr[$k]['public_id'] = $v['public_id'];
 
@@ -158,9 +156,9 @@ class ChallengesController extends BaseController
                     ->leftJoin('cyber_categories', 'cyber_categories.id', '=', 'cyber_challenges_categories.cat_id')
                     ->get()->pluck('id')->toArray());
 
-                $arr[$k]['thumbs_up_count'] = Redis::get('ThumbsUp_'.$v['public_id']) ?? 0;
-                $arr[$k]['thumbs_down_count'] = Redis::get('ThumbsDown_'.$v['public_id']) ?? 0;
-                $arr[$k]['voted'] = Redis::get('Vote_'.$v['public_id'].'_'.Auth::guard('users')->id()) ?? 0;
+                $arr[$k]['thumbs_up_count'] = $tally[$v['id']]['up'] ?? 0;
+                $arr[$k]['thumbs_down_count'] = $tally[$v['id']]['down'] ?? 0;
+                $arr[$k]['voted'] = $voted[$v['id']] ?? 0;
             }
         } else {
             $arr = array();
@@ -263,7 +261,9 @@ class ChallengesController extends BaseController
             return redirect(route('user_dashboard'))->withErrors(['Challenge doesn\'t exists!']);
         }
 
-        $files = ChallengesFiles::getFilesById(Challenges::getIdByPublicId($public_id));
+        $challenge_id = Challenges::getIdByPublicId($public_id);
+        $files = ChallengesFiles::getFilesById($challenge_id);
+        $tally = ChallengesVotes::tally([$challenge_id])[$challenge_id] ?? ['up' => 0, 'down' => 0];
 
         return view('users.challenge', [
             'data'=>Challenges::where(['public_id'=>$public_id])->get()->first(),
@@ -271,9 +271,9 @@ class ChallengesController extends BaseController
             'files'=>$files,
             'public_id' => $public_id,
             'public_group_id' => $public_group_id,
-            'thumbs_up_count'=>Redis::get('ThumbsUp_'.$public_id) ?? 0,
-            'thumbs_down_count'=>Redis::get('ThumbsDown_'.$public_id) ?? 0,
-            'voted'=>Redis::get('Vote_'.$public_id.'_'.Auth::guard('users')->id()) ?? 0
+            'thumbs_up_count'=>$tally['up'],
+            'thumbs_down_count'=>$tally['down'],
+            'voted'=>ChallengesVotes::where(['user_id' => Auth::guard('users')->id(), 'challenge_id' => $challenge_id])->value('vote') ?? 0
         ]);
     }
 
@@ -311,13 +311,13 @@ class ChallengesController extends BaseController
     // challenge that does not exist. A hidden challenge takes
     // no answer from a player it is hidden from, as in show.
     //
-    // By design answers have no rate limit.
+    // A right answer from a group's page goes back to that
+    // group's page, but to the dashboard when the player is
+    // not in the group (memberOf) — a link a member shared, or
+    // a membership removed while the page was open — as the
+    // group's page would answer 404.
     //
-    // Known bug LAB-60 (low): the group of the address is
-    // checked to exist, not to hold the player, so a right
-    // answer from a group the player is not in goes on to that
-    // group's page, a 404, and the toast is lost. Fix: treat a
-    // group the player is not in as no group.
+    // By design answers have no rate limit.
     //
     // Used by:
     //   - the answer form of users/challenge.blade.php
@@ -424,7 +424,7 @@ class ChallengesController extends BaseController
                     return back()->withErrors(['Already solved']);
                 }
 
-                if($public_group_id == NULL){
+                if($public_group_id == NULL || ! $this->memberOf($public_group_id)){
                     return redirect(route('user_dashboard'))->withSuccess("Your answer is correct! You received $challenge_points points");
                 } else {
                     return redirect('/user/group/'.$public_group_id)->withSuccess("Your answer is correct! You received $challenge_points points");
@@ -448,24 +448,15 @@ class ChallengesController extends BaseController
     //
     // POST /user/challenge/vote/{type}/{public_id}
     //
-    // One vote per player and challenge: up or down adds one
-    // to the challenge's ThumbsUp_ or ThumbsDown_ counter in
-    // Redis — INCR, so votes cast at the same moment all
-    // count — once the player's mark is claimed with SETNX,
-    // which sets it only when it is unset, so a player's two
-    // votes sent at once count once. The mark holds the
-    // vote's direction, so deleting the account can take the
-    // vote back (Admins\UsersController::destroy); marks set
-    // before it did hold 1. Any other type, a challenge that
-    // does not exist and a hidden one the player may not open
-    // (hiddenFromPlayer) are a 404 and count nothing. The
-    // answer is an empty page.
-    //
-    // Known bug LAB-55 (medium): the votes live in Redis
-    // alone, which the stack update starts empty
-    // (vuknflab-redis has no volume), so every count goes back
-    // to 0 and every player may vote again. Fix: keep the
-    // votes in MySQL, a row per player and challenge.
+    // One vote per player and challenge, up or down, kept as a
+    // row of cyber_challenges_votes (ChallengesVotes): the
+    // table's unique key leaves out a second vote of the same
+    // player, even two sent at once, and the pages count the
+    // rows, so the votes last as long as the database — Redis,
+    // which a stack update starts empty, holds none. Any other
+    // type, a challenge that does not exist and a hidden one
+    // the player may not open (hiddenFromPlayer) are a 404 and
+    // count nothing. The answer is an empty page.
     //
     // Used by:
     //   - thumbs() and thumbs_list() of custom.js — the vote
@@ -478,16 +469,12 @@ class ChallengesController extends BaseController
             abort(404);
         }
 
-        // The mark is checked and set in one command
-        if(Redis::setnx('Vote_'.$public_id.'_'.Auth::guard('users')->id(), $type)){
-            if($type == 'up'){
-                Redis::incr('ThumbsUp_'.$public_id);
-            }
-
-            if($type == 'down'){
-                Redis::incr('ThumbsDown_'.$public_id);
-            }
-        }
+        ChallengesVotes::insertOrIgnore([
+            'user_id' => Auth::guard('users')->id(),
+            'challenge_id' => Challenges::getIdByPublicId($public_id),
+            'vote' => $type,
+            'created' => date('Y-m-d H:i:s'),
+        ]);
     }
 
 
@@ -553,6 +540,37 @@ class ChallengesController extends BaseController
         ]);
 
         return back()->withSuccess("Thank you for your feedback!");
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // memberOf
+    // -----------------------------------------------------------
+    //
+    // Whether the signed-in player belongs to the group with
+    // the public id, by VU id, as GroupExists asks before a
+    // group's page opens; a local account belongs to no group.
+    //
+    // Used by:
+    //   - submit_answer (above) — where a right answer goes on
+    //     to
+    // -----------------------------------------------------------
+
+    private function memberOf($public_group_id)
+    {
+        $vu_id = Auth::guard('users')->user()->vu_id;
+
+        if (empty($vu_id)) {
+            return false;
+        }
+
+        return GroupsUsers::where(['vu_id' => $vu_id])
+            ->whereIn('group_id', Groups::where(['public_id' => $public_group_id])->pluck('id'))
+            ->exists();
     }
 
 

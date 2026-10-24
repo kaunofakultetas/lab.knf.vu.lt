@@ -506,4 +506,96 @@ final class AccessTest extends TestCase
 
         $this->assertSame(0, GroupsUsers::where('group_id', $other->id)->count());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_id_with_a_leading_zero_is_a_404
+    // -----------------------------------------------------------
+    //
+    // An id with a leading zero, which MySQL reads as the
+    // plain number but the pages' inline scripts read as an
+    // octal one, is a 404, so no add button acts on another
+    // record than its page shows; the plain id opens the page,
+    // its script naming the same number.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_id_with_a_leading_zero_is_a_404(): void
+    {
+        $group = $this->makeGroup();
+        $challenge = $this->makeChallenge();
+        $this->signInAdmin($this->makeAdmin(true));
+
+        foreach ([
+            "/control-panel/users/vu-groups/users_list/0{$group->id}",
+            "/control-panel/users/vu-groups/challenges_list/0{$group->id}",
+            "/control-panel/challenges/files/0{$challenge->id}",
+        ] as $page) {
+            $this->get($page)->assertNotFound();
+        }
+
+        $this->get("/control-panel/users/vu-groups/users_list/{$group->id}")->assertSee("users_togroups_form('new', {$group->id})", false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_search_sent_as_a_list_shows_the_list
+    // -----------------------------------------------------------
+    //
+    // The accounts and challenges lists treat a search that is
+    // not text, such as q[]= in the address, as no search, and
+    // their search boxes show it so: the page opens rather
+    // than failing on the list.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_search_sent_as_a_list_shows_the_list(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->get('/control-panel/users?q[]=x')->assertOk();
+        $this->get('/control-panel/challenges?q[]=x')->assertOk();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_lists_page_with_the_panels_own_markup
+    // -----------------------------------------------------------
+    //
+    // A paged list draws its page links with Bootstrap's
+    // markup, the styling the panel loads, rather than
+    // Laravel's default Tailwind markup, which the panel
+    // cannot draw.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_lists_page_with_the_panels_own_markup(): void
+    {
+        foreach (range(1, 51) as $n) {
+            $this->makeChallenge();
+        }
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/challenges');
+
+        $response->assertSee('class="pagination"', false);
+        $response->assertSee('class="page-item', false);
+    }
 }

@@ -23,6 +23,7 @@
 
 namespace Tests\Feature\Play;
 
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -293,6 +294,71 @@ final class GroupTest extends TestCase
 
 
     // -----------------------------------------------------------
+    // test_the_group_leaderboard_counts_the_last_solve_from_its_unix_time
+    // -----------------------------------------------------------
+    //
+    // How long ago a member's last group solve was is counted
+    // from its Unix time, which stays right in the hour the
+    // clocks repeat in October.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_group_leaderboard_counts_the_last_solve_from_its_unix_time(): void
+    {
+        $group = $this->makeGroup();
+        $member = $this->makeSsoPlayer();
+        $this->joinGroup($group, $member);
+        $challenge = $this->makeChallenge();
+        $this->assignToGroup($group, $challenge);
+        $this->recordSolveInTheRepeatedHour($member, $challenge);
+
+        $response = $this->signIn($member)->get("/user/group/leaderboard/{$group->public_id}");
+
+        $this->assertStringContainsString('<h3 class="h6 fw-normal text-dark">10 minutes ago</h3>', $this->pageContent($response));
+        $this->assertStringNotContainsString('3 hours ago', $this->pageContent($response));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_solve_with_two_history_rows_counts_once_on_the_group_leaderboard
+    // -----------------------------------------------------------
+    //
+    // The Unix time comes from the history rows, which have no
+    // unique key; a solve with two of them still gives its
+    // points once.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_solve_with_two_history_rows_counts_once_on_the_group_leaderboard(): void
+    {
+        $group = $this->makeGroup();
+        $member = $this->makeSsoPlayer();
+        $this->joinGroup($group, $member);
+        $challenge = $this->makeChallenge(['points' => 30]);
+        $this->assignToGroup($group, $challenge);
+        $this->recordSolve($member, $challenge);
+        DB::table('cyber_challenges_history')->insert(['user_id' => $member->id, 'challenge_id' => $challenge->id, 'created_time' => time(), 'created' => date('Y-m-d H:i:s')]);
+
+        $response = $this->signIn($member)->get("/user/group/leaderboard/{$group->public_id}");
+
+        $response->assertSee('<b>30</b> points', false);
+        $response->assertDontSee('<b>60</b> points', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
     // test_a_group_tie_goes_to_who_got_there_first
     // -----------------------------------------------------------
     //
@@ -353,5 +419,39 @@ final class GroupTest extends TestCase
 
         $response->assertSee("href=\"https://lab.knf.vu.lt/user/group/leaderboard/{$twin->public_id}\"", false);
         $response->assertDontSee("href=\"https://lab.knf.vu.lt/user/group/leaderboard/{$mine->public_id}\"", false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_group_leaderboard_falls_back_to_the_local_time
+    // -----------------------------------------------------------
+    //
+    // A solve without a history row — which no answer leaves,
+    // but older data may — shows how long ago it was by its
+    // local time on the group leaderboard, rather than
+    // breaking the page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_group_leaderboard_falls_back_to_the_local_time(): void
+    {
+        $group = $this->makeGroup();
+        $member = $this->makeSsoPlayer();
+        $this->joinGroup($group, $member);
+        $challenge = $this->makeChallenge();
+        $this->assignToGroup($group, $challenge);
+        $this->recordSolve($member, $challenge, date('Y-m-d H:i:s', time() - 7200));
+        DB::table('cyber_challenges_history')->where('user_id', $member->id)->delete();
+
+        $response = $this->signIn($member)->get("/user/group/leaderboard/{$group->public_id}");
+
+        $response->assertOk();
+        $this->assertStringContainsString('<h3 class="h6 fw-normal text-dark">2 hours ago</h3>', $this->pageContent($response));
     }
 }

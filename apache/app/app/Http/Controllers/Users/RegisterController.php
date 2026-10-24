@@ -39,6 +39,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use ReCaptcha\ReCaptcha;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\QueryException;
 
 
 
@@ -118,13 +119,12 @@ class RegisterController extends Controller
     // good for two minutes only, and a refused score says so
     // in words (lang/en/validation.php).
     //
-    // Known bug LAB-61 (low): the free username and e-mail are
-    // checked before the insert with nothing between two
-    // requests, so a double press, which the token fetch
-    // invites, ends the second request on username_UNIQUE, a
-    // 500, though the account was made. Fix: answer the
-    // duplicate key as a taken username, and ignore a second
-    // press in custom.js.
+    // Two registrations sent at once — a double press — both
+    // pass the check that the username is free, and the later
+    // insert meets the username_UNIQUE key: it goes back as
+    // the taken username it is, not as a server error. The
+    // form's script also ignores a second press while it
+    // fetches the token.
     //
     // Used by:
     //   - the registration form of users/register.blade.php
@@ -145,14 +145,24 @@ class RegisterController extends Controller
             return redirect()->route('register_users')->withErrors($validator)->withInput($request->except('password', 'password_confirmation'));
         }
 
-        $user = User::create([
-            'user_type' => 1,
-            'username' => trim(strip_tags($request->input('username'))),
-            'email' => trim(strip_tags($request->input('email'))),
-            'password' => Hash::make($request->input('password')),
-            'status'=>0,
-            'newsletter' => 0
-        ]);
+        // MySQL's duplicate-entry error: the same registration
+        // made a moment ago by the other half of a double press
+        try {
+            $user = User::create([
+                'user_type' => 1,
+                'username' => trim(strip_tags($request->input('username'))),
+                'email' => trim(strip_tags($request->input('email'))),
+                'password' => Hash::make($request->input('password')),
+                'status'=>0,
+                'newsletter' => 0
+            ]);
+        } catch (QueryException $e) {
+            if ((int) ($e->errorInfo[1] ?? 0) !== 1062) {
+                throw $e;
+            }
+
+            return redirect()->route('register_users')->withErrors(['username' => __('validation.unique', ['attribute' => 'username'])])->withInput($request->except('password', 'password_confirmation'));
+        }
 
         self::send_verification($user);
 

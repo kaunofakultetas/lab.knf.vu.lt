@@ -79,6 +79,7 @@
                                 </tr>
                                 <tr>  
                                 @endforeach
+                                <tr><td colspan="3">{!! $recordlist->links()->render() !!}</td></tr>
  
                             @elseif(count($recordlist) == 0)
                             	<tr>

@@ -594,8 +594,8 @@ final class ChallengeTest extends TestCase
     // test_solving_inside_a_group_returns_to_the_group
     // -----------------------------------------------------------
     //
-    // An answer given on a group's challenge page leads back
-    // to that group's dashboard.
+    // An answer a member gives on a group's challenge page
+    // leads back to that group's dashboard.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -605,6 +605,9 @@ final class ChallengeTest extends TestCase
     {
         $challenge = $this->makeChallenge(['points' => 15]);
         $group = $this->makeGroup();
+        $member = $this->makeSsoPlayer();
+        $this->joinGroup($group, $member);
+        $this->signIn($member);
 
         $response = $this->answer($challenge, $challenge->answer, $group->public_id);
 
@@ -1173,5 +1176,70 @@ final class ChallengeTest extends TestCase
         $this->post("/user/challenge/{$challenge->public_id}?answer=packet_wizard", ['answer' => 'wrong guess']);
 
         $this->assertSame(0, ChallengesSubmitted::where('challenge_id', $challenge->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_right_answer_from_a_group_the_player_is_not_in_goes_to_the_dashboard
+    // -----------------------------------------------------------
+    //
+    // A right answer sent from a group's address the player is
+    // not in — a link a member shared, or a membership removed
+    // while the page was open — books the solve and goes on to
+    // the dashboard with the points won, not to the group's
+    // page, which would answer 404.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_right_answer_from_a_group_the_player_is_not_in_goes_to_the_dashboard(): void
+    {
+        $challenge = $this->makeChallenge(['points' => 15]);
+        $group = $this->makeGroup();
+        $this->assignToGroup($group, $challenge);
+
+        $response = $this->answer($challenge, $challenge->answer, $group->public_id);
+
+        $response->assertRedirect('/user/dashboard');
+        $response->assertSessionHas('success', 'Your answer is correct! You received 15 points');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_right_answer_from_another_groups_member_goes_to_the_dashboard
+    // -----------------------------------------------------------
+    //
+    // A VU player who is a member of another group, answering
+    // rightly from the address of a group they are not in,
+    // goes to the dashboard too: the membership is checked
+    // against the group the address names, not merely looked
+    // for.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_right_answer_from_another_groups_member_goes_to_the_dashboard(): void
+    {
+        $challenge = $this->makeChallenge(['points' => 15]);
+        $group = $this->makeGroup();
+        $this->assignToGroup($group, $challenge);
+        $player = $this->makeSsoPlayer();
+        $this->joinGroup($this->makeGroup(), $player);
+        $this->signIn($player);
+
+        $response = $this->answer($challenge, $challenge->answer, $group->public_id);
+
+        $response->assertRedirect('/user/dashboard');
+        $response->assertSessionHas('success', 'Your answer is correct! You received 15 points');
     }
 }

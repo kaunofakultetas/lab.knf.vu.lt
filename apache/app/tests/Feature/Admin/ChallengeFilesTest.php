@@ -21,6 +21,8 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\ChallengesFiles;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -520,5 +522,204 @@ final class ChallengeFilesTest extends TestCase
 
         $this->assertSame(1, ChallengesFiles::where('challenge_id', $named->id)->count());
         $this->assertSame(0, ChallengesFiles::where('challenge_id', $other->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_lab_admin_changes_no_link_created_meanwhile
+    // -----------------------------------------------------------
+    //
+    // A lab admin's change of a file link that does not exist
+    // yet passes the ownership check, which lets a missing
+    // link through. Another admin then creates a link with
+    // that id on a challenge of their own, here right after
+    // the check, and the change leaves it alone and goes back
+    // with the permissions error: the action checks the admin
+    // again on the link it finds.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_lab_admin_changes_no_link_created_meanwhile(): void
+    {
+        $challenge = $this->makeChallenge(['created_by' => $this->makeAdmin(true)->id]);
+        $id = (int) ChallengesFiles::max('id') + 1000;
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/challenges');
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($challenge, $id, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select `challenge_id` from `cyber_challenges_files`')) {
+                $interleaved = true;
+                ChallengesFiles::insert(['id' => $id, 'challenge_id' => $challenge->id, 'name' => 'capture.pcap', 'file_url' => 'https://files.test/real']);
+            }
+        });
+
+        $response = $this->post("/control-panel/challenges_file/update", ['uid' => $id, 'name' => 'capture.pcap', 'file_url' => 'https://elsewhere.test/fake']);
+
+        $this->assertTrue($interleaved);
+        $response->assertRedirect('/control-panel/challenges');
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->assertSame('https://files.test/real', ChallengesFiles::whereKey($id)->value('file_url'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_lab_admin_deletes_no_link_created_meanwhile
+    // -----------------------------------------------------------
+    //
+    // A lab admin's deletion of a file link that does not
+    // exist yet passes the ownership check, which lets a
+    // missing link through. Another admin then creates a link
+    // with that id on a challenge of their own, here right
+    // after the check, and the deletion leaves it alone and
+    // goes back with the permissions error: the action checks
+    // the admin again on the link it finds.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_lab_admin_deletes_no_link_created_meanwhile(): void
+    {
+        $challenge = $this->makeChallenge(['created_by' => $this->makeAdmin(true)->id]);
+        $id = (int) ChallengesFiles::max('id') + 1000;
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/challenges');
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($challenge, $id, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select `challenge_id` from `cyber_challenges_files`')) {
+                $interleaved = true;
+                ChallengesFiles::insert(['id' => $id, 'challenge_id' => $challenge->id, 'name' => 'capture.pcap', 'file_url' => 'https://files.test/real']);
+            }
+        });
+
+        $response = $this->post("/control-panel/challenges/files/delete/{$id}", []);
+
+        $this->assertTrue($interleaved);
+        $response->assertRedirect('/control-panel/challenges');
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->assertTrue(ChallengesFiles::whereKey($id)->exists());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_file_links_page_links_its_other_pages
+    // -----------------------------------------------------------
+    //
+    // A challenge with more than 50 file links shows them 50
+    // to a page with links to the other pages, so every link
+    // can be reached from the panel.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_file_links_page_links_its_other_pages(): void
+    {
+        $challenge = $this->makeChallenge();
+        foreach (range(1, 51) as $n) {
+            ChallengesFiles::create(['challenge_id' => $challenge->id, 'name' => "file{$n}.pcap", 'file_url' => "https://files.test/{$n}"]);
+        }
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/challenges/files/{$challenge->id}");
+
+        $response->assertSee("files/{$challenge->id}?page=2", false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_list_of_link_ids_changes_no_link_created_meanwhile
+    // -----------------------------------------------------------
+    //
+    // A link's change takes one id. Here a lab admin sends two
+    // — the id another admin's new link is about to take, and
+    // a link of the lab admin's own — and the other admin
+    // creates that link right after the ownership check: a
+    // list would be checked by its own link and change the
+    // other admin's. The change is refused with an error on
+    // the id, and both links stay as they were.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_list_of_link_ids_changes_no_link_created_meanwhile(): void
+    {
+        $admin = $this->makeAdmin();
+        $own = ChallengesFiles::create(['challenge_id' => $this->makeChallenge(['created_by' => $admin->id])->id, 'name' => 'mine.pcap', 'file_url' => 'https://files.test/mine']);
+        $challenge = $this->makeChallenge(['created_by' => $this->makeAdmin(true)->id]);
+        $id = (int) ChallengesFiles::max('id') + 1000;
+        $this->signInAdmin($admin)->from('/control-panel/challenges');
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($challenge, $id, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select `challenge_id` from `cyber_challenges_files`')) {
+                $interleaved = true;
+                ChallengesFiles::insert(['id' => $id, 'challenge_id' => $challenge->id, 'name' => 'capture.pcap', 'file_url' => 'https://files.test/real']);
+            }
+        });
+
+        $response = $this->post('/control-panel/challenges_file/update', ['uid' => [$id, $own->id], 'name' => 'capture.pcap', 'file_url' => 'https://elsewhere.test/fake']);
+
+        $this->assertTrue($interleaved);
+        $response->assertSessionHasErrors('uid');
+        $this->assertSame('https://files.test/real', ChallengesFiles::whereKey($id)->value('file_url'));
+        $this->assertSame('https://files.test/mine', $own->refresh()->file_url);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_link_dialog_shows_no_link_created_meanwhile
+    // -----------------------------------------------------------
+    //
+    // The edit dialog of a file link that does not exist yet
+    // passes the ownership check, which lets a missing link
+    // through. Another admin then creates a link with that id
+    // on a challenge of their own, here right after the check,
+    // and the dialog sends the lab admin back with the
+    // permissions error instead of showing the link's name and
+    // address.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_link_dialog_shows_no_link_created_meanwhile(): void
+    {
+        $challenge = $this->makeChallenge(['created_by' => $this->makeAdmin(true)->id]);
+        $id = (int) ChallengesFiles::max('id') + 1000;
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/challenges');
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($challenge, $id, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select `challenge_id` from `cyber_challenges_files`')) {
+                $interleaved = true;
+                ChallengesFiles::insert(['id' => $id, 'challenge_id' => $challenge->id, 'name' => 'their-capture.pcap', 'file_url' => 'https://files.test/theirs']);
+            }
+        });
+
+        $response = $this->get("/control-panel/dialog/challenge_file/edit/{$id}");
+
+        $this->assertTrue($interleaved);
+        $response->assertRedirect('/control-panel/challenges');
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $response->assertDontSee('https://files.test/theirs');
     }
 }

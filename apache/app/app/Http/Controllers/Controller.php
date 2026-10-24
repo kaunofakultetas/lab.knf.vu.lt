@@ -24,6 +24,8 @@ use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 
 
@@ -40,6 +42,7 @@ use Illuminate\Http\RedirectResponse;
 // traits, and one helper of the app's own.
 //
 //   intendedWithin — the redirect that ends a login
+//   opensByGet     — whether a GET opens an address
 //
 // Used by:
 //   - Users\BaseController and Admins\BaseController
@@ -72,7 +75,8 @@ class Controller extends BaseController
     // Laravel keeps the address the visitor came from, which
     // may be anywhere. Nor is a dialog: the panel and the
     // player side load those into a modal, and one a guest
-    // was bounced from would come back as a bare form.
+    // was bounced from would come back as a bare form. Nor is
+    // an address a GET does not open (opensByGet).
     //
     // Used by:
     //   - Users\UserAuthController — login and cp
@@ -83,10 +87,41 @@ class Controller extends BaseController
     {
         $intended = session()->pull('url.intended');
 
-        if (is_string($intended) && str_starts_with($intended, url($path) . '/') && ! str_contains($intended, '/dialog/')) {
+        if (is_string($intended) && str_starts_with($intended, url($path) . '/') && ! str_contains($intended, '/dialog/') && $this->opensByGet($intended)) {
             return redirect($intended);
         }
 
         return redirect($fallback);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // opensByGet
+    // -----------------------------------------------------------
+    //
+    // Whether a GET opens the address, by the site's routes. A
+    // guest's refused POST leaves the address the form was
+    // sent from as the page asked for, and that may answer
+    // POST alone: the sign-out offered again after a session
+    // ended is served at the sign-out's own address, and
+    // resuming it would end the next login on a 405.
+    //
+    // Used by:
+    //   - intendedWithin (above)
+    // -----------------------------------------------------------
+
+    private function opensByGet(string $url): bool
+    {
+        try {
+            app('router')->getRoutes()->match(Request::create($url, 'GET'));
+        } catch (HttpExceptionInterface $e) {
+            return false;
+        }
+
+        return true;
     }
 }

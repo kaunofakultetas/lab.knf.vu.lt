@@ -15,8 +15,11 @@
 //    - Users\ChallengesController::submit_answer — writes a
 //      row
 //    - Users\BaseController — the sidebar's feed
+//    - Users\LeaderboardController::index — the last solves
+//      of the leaderboard
 //    - Admins\LeaderboardController::dashboard — the latest
-//      solves of the control panel
+//      solves and the top ten's last solves of the control
+//      panel
 //    - Admins\ChallengesController::destroy — deletes a
 //      challenge's rows
 //    - Admins\UsersController::destroy — deletes an
@@ -41,11 +44,12 @@ use Illuminate\Database\Eloquent\Model;
 //
 // Columns: created_time, created, user_id and challenge_id.
 //
-//   feed — the sidebar's six latest solves
+//   feed      — the sidebar's six latest solves
+//   lastTimes — the Unix time of every player's last solve
 //
 // Used by:
-//   - Users\ChallengesController::submit_answer and
-//     Users\BaseController
+//   - Users\ChallengesController::submit_answer,
+//     Users\BaseController and Users\LeaderboardController
 //   - Admins\LeaderboardController, Admins\ChallengesController
 //     and Admins\UsersController
 // -----------------------------------------------------------
@@ -114,5 +118,35 @@ class ChallengesHistory extends Model
             ->take(6)
             ->get()
             ->toArray();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // lastTimes
+    // -----------------------------------------------------------
+    //
+    // The Unix time of every player's latest solve, keyed by
+    // user id, which the leaderboards count how long ago from:
+    // the local times of the created columns repeat an hour
+    // when the clocks go back in October. Only the pages that
+    // show it read it — the table has no index on the player,
+    // and the leaderboard copy UpdateRankingTable rebuilds
+    // before every request would read all of it every time.
+    //
+    // Used by:
+    //   - Users\LeaderboardController::index
+    //   - Admins\LeaderboardController::dashboard — the top ten
+    // -----------------------------------------------------------
+
+    public static function lastTimes(): array
+    {
+        return self::selectRaw('`user_id`, MAX(`created_time`) AS `last_time`')
+            ->groupBy('user_id')
+            ->pluck('last_time', 'user_id')
+            ->all();
     }
 }

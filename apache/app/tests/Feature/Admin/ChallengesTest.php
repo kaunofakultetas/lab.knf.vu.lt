@@ -585,6 +585,38 @@ final class ChallengesTest extends TestCase
 
 
     // -----------------------------------------------------------
+    // test_deleting_a_challenge_takes_its_votes_along
+    // -----------------------------------------------------------
+    //
+    // The challenge's rows in cyber_challenges_votes go with
+    // it; another challenge's votes stay, the deleted one's
+    // voters' included.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_deleting_a_challenge_takes_its_votes_along(): void
+    {
+        $doomed = $this->makeChallenge();
+        $kept = $this->makeChallenge();
+        $player = $this->makePlayer();
+        $this->signIn($player)->post("/user/challenge/vote/up/{$doomed->public_id}");
+        $this->signIn($player)->post("/user/challenge/vote/down/{$kept->public_id}");
+        $this->signIn($this->makePlayer())->post("/user/challenge/vote/down/{$doomed->public_id}");
+
+        $this->signInAdmin($this->makeAdmin(true))->post("/control-panel/challenges/delete/{$doomed->id}");
+
+        $this->assertSame(0, DB::table('cyber_challenges_votes')->where('challenge_id', $doomed->id)->count());
+        $this->assertSame([$player->id => 'down'], DB::table('cyber_challenges_votes')->where('challenge_id', $kept->id)->pluck('vote', 'user_id')->all());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
     // test_the_visibility_switch_flips_a_challenge
     // -----------------------------------------------------------
     //
@@ -1337,5 +1369,197 @@ final class ChallengesTest extends TestCase
 
         $this->assertTrue($interleaved);
         $this->assertSame(1, ChallengesCategories::where('challenge_id', $challenge->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_challenge_points_are_a_whole_number_in_range
+    // -----------------------------------------------------------
+    //
+    // Points are a whole number from 0 to 100000, on a new
+    // challenge and on an edit alike: MySQL, running
+    // non-strict, would store a word as 0 and clip a number
+    // past its integers, and negative points would take points
+    // off every solver.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_challenge_points_are_a_whole_number_in_range(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/challenges/create');
+
+        foreach (['-100', 'abc', '3000000000'] as $n => $points) {
+            $this->post('/control-panel/challenges/store', $this->challengeForm(['name' => "Odd points {$n}", 'points' => $points]))
+                ->assertSessionHasErrors('points');
+        }
+        $challenge = $this->makeChallenge(['points' => 30]);
+        $this->post('/control-panel/challenges/update', $this->challengeForm(['uid' => $challenge->id, 'points' => '-5']))
+            ->assertSessionHasErrors('points');
+
+        $this->assertSame(0, Challenges::where('name', 'like', 'Odd points %')->count());
+        $this->assertEquals(30, $challenge->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_deleted_challenges_page_sends_the_admin_to_the_list
+    // -----------------------------------------------------------
+    //
+    // A challenge's edit form opened after another admin
+    // deleted the challenge goes to the challenges list with
+    // "No challenge!", even when the browser comes from that
+    // same form, as after an update.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_deleted_challenges_page_sends_the_admin_to_the_list(): void
+    {
+        $challenge = $this->makeChallenge();
+        $page = "/control-panel/challenges/edit/{$challenge->id}";
+        $this->signInAdmin($this->makeAdmin(true))->post("/control-panel/challenges/delete/{$challenge->id}");
+
+        $this->from($page)->get($page)->assertRedirect('/control-panel/challenges');
+        $this->assertErrorFlashed('No challenge!');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_list_page_past_the_end_shows_the_last_page
+    // -----------------------------------------------------------
+    //
+    // As every paged list of the panel, the challenges list
+    // shows its last page for a page past its end.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_list_page_past_the_end_shows_the_last_page(): void
+    {
+        $this->makeChallenge(['name' => 'Packet Detective']);
+
+        $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/challenges?page=5')->assertSee('Packet Detective');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_challenge_page_goes_to_the_list
+    // -----------------------------------------------------------
+    //
+    // A challenge's page refused to a lab admin — another
+    // admin's challenge, or one that no longer exists — goes
+    // to the challenges list with the error, even when the
+    // browser comes from that very page: an admin who lost the
+    // right to a challenge while its edit form was open, and
+    // saved it, would otherwise be sent back to the page again
+    // and again.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_challenge_page_goes_to_the_list(): void
+    {
+        $other = $this->makeChallenge();
+        $this->signInAdmin($this->makeAdmin());
+
+        foreach (["/control-panel/challenges/edit/{$other->id}", "/control-panel/challenges/files/{$other->id}"] as $page) {
+            $this->from($page)->get($page)->assertRedirect('/control-panel/challenges');
+            $this->assertErrorFlashed(self::REFUSAL);
+        }
+        $this->from('/control-panel/challenges/edit/987654321')->get('/control-panel/challenges/edit/987654321')
+            ->assertRedirect('/control-panel/challenges');
+        $this->assertErrorFlashed('No challenge!');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_form_or_dialog_goes_back
+    // -----------------------------------------------------------
+    //
+    // A refused dialog, which opens over the page it was asked
+    // from, and a refused form go back to that page — here the
+    // dashboard, so going back is told apart from going to the
+    // list — whether the challenge is another admin's or gone.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_form_or_dialog_goes_back(): void
+    {
+        $other = $this->makeChallenge(['name' => 'Their Task']);
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
+
+        $this->get("/control-panel/dialog/challenges/categories/{$other->id}")->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed(self::REFUSAL);
+        $this->get('/control-panel/dialog/challenges/categories/987654321')->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed('No challenge!');
+        $this->post("/control-panel/challenges/delete/{$other->id}")->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed(self::REFUSAL);
+        $this->post('/control-panel/challenges/delete/987654321')->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed('No challenge!');
+        $this->post('/control-panel/challenges/update', $this->challengeForm(['uid' => $other->id, 'name' => 'Taken Over']))
+            ->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed(self::REFUSAL);
+
+        $this->assertSame('Their Task', $other->refresh()->name);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_challenge_points_take_both_ends_of_the_range
+    // -----------------------------------------------------------
+    //
+    // The points range includes both its ends: 0 and 100000
+    // are taken, on a new challenge and on an edit, and 100001
+    // is refused.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_challenge_points_take_both_ends_of_the_range(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/challenges/create');
+
+        $this->post('/control-panel/challenges/store', $this->challengeForm(['name' => 'Free task', 'points' => '0']))->assertSessionHasNoErrors();
+        $this->post('/control-panel/challenges/store', $this->challengeForm(['name' => 'Grand task', 'points' => '100000']))->assertSessionHasNoErrors();
+        $this->post('/control-panel/challenges/store', $this->challengeForm(['name' => 'Too grand task', 'points' => '100001']))->assertSessionHasErrors('points');
+        $challenge = $this->makeChallenge(['points' => 30]);
+        $this->post('/control-panel/challenges/update', $this->challengeForm(['uid' => $challenge->id, 'points' => '100000']))->assertSessionHasNoErrors();
+
+        $this->assertEquals(0, Challenges::where('name', 'Free task')->value('points'));
+        $this->assertEquals(100000, Challenges::where('name', 'Grand task')->value('points'));
+        $this->assertFalse(Challenges::where('name', 'Too grand task')->exists());
+        $this->assertEquals(100000, $challenge->refresh()->points);
     }
 }

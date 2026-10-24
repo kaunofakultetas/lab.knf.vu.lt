@@ -4,12 +4,12 @@
 //  [*] config/cache.php — Laravel's cache
 //
 //  Laravel's stock cache settings. The app's own cached
-//  data — the leaderboard, the solve feed, the votes — goes
-//  to Redis directly, past this cache; through it go only
-//  Laravel's own users: the sessions, whose redis driver is
-//  built on this store, and the api group's rate limiter.
-//  The image's .env picks the Redis store; the tests use
-//  the in-memory one (phpunit.xml).
+//  data — the leaderboard — goes to Redis directly, past
+//  this cache; through it go only Laravel's own users: the
+//  sessions, whose redis driver is built on this store, and
+//  the api group's rate limiter. The image's .env picks the
+//  Redis store; the tests use the in-memory one
+//  (phpunit.xml).
 //
 //  Used by:
 //    - Laravel's cache and rate limiter

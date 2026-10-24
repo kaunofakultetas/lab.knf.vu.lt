@@ -108,6 +108,17 @@ CREATE TABLE `cyber_challenges_history` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `cyber_challenges_votes` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `challenge_id` int NOT NULL,
+  `vote` enum('up','down') NOT NULL,
+  `created` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_challenge_vote_unique` (`user_id`, `challenge_id`),
+  KEY `challenge_vote` (`challenge_id`, `vote`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- -----------------------------------------------------
 --  Groups
 -- -----------------------------------------------------

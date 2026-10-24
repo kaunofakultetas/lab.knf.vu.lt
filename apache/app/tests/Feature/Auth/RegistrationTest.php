@@ -18,8 +18,12 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Http\Controllers\Users\RegisterController;
 use App\Mail\UserVerifyMail;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -911,5 +915,51 @@ final class RegistrationTest extends TestCase
         $response->assertSee('data-recaptcha-key="test-sitekey"', false);
         $response->assertSee('name="g-recaptcha-response"', false);
         $response->assertDontSee('grecaptcha.execute', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_double_clicked_registration_ends_without_a_server_error
+    // -----------------------------------------------------------
+    //
+    // Two registrations sent at once both find the username
+    // free, and the later insert meets the username's unique
+    // key: it goes back to the form as the taken username it
+    // is, not as a server error, and one account stands. Here
+    // the second registration runs in full right after the
+    // first one's last check.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_double_clicked_registration_ends_without_a_server_error(): void
+    {
+        $this->fakeRecaptcha('register', 0.9);
+        $form = [
+            'username'              => 'Jonas',
+            'email'                 => 'jonas@players.test',
+            'password'              => 'long-enough-1',
+            'password_confirmation' => 'long-enough-1',
+            'g-recaptcha-response'  => self::RECAPTCHA_TOKEN,
+        ];
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($form, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_users` where `email` = ?')) {
+                $interleaved = true;
+                app(RegisterController::class)->store(Request::create('/register', 'POST', $form));
+            }
+        });
+
+        $response = $this->from('/register')->post('/register', $form);
+
+        $this->assertTrue($interleaved);
+        $response->assertRedirect('/register');
+        $this->assertSame('The username has already been taken.', session('errors')?->first('username'));
+        $this->assertSame(1, User::where('username', 'Jonas')->count());
     }
 }

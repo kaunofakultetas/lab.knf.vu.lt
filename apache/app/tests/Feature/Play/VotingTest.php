@@ -3,16 +3,15 @@
 // -----------------------------------------------------------
 //  [*] VotingTest — thumbs up and down on a challenge
 //
-//  The vote route counts one thumb per player and challenge
-//  in Redis — ThumbsUp_ and ThumbsDown_ keys per challenge,
-//  and a Vote_ key per challenge and player, holding the
-//  vote's direction, that locks the player's buttons. It is
-//  a POST the page's script sends with the CSRF token of
-//  the page's csrf-token meta tag, answers with an empty
-//  body, and asks for a session but not for a solve: the
-//  buttons sit on the challenge page too, before the
-//  answer. Only up and down are votes, and only for a
-//  challenge the player may open.
+//  The vote route keeps one thumb per player and challenge
+//  as a row of cyber_challenges_votes holding up or down;
+//  the pages count the rows, and the player's own row locks
+//  the player's buttons. It is a POST the page's script
+//  sends with the CSRF token of the page's csrf-token meta
+//  tag, answers with an empty body, and asks for a session
+//  but not for a solve: the buttons sit on the challenge
+//  page too, before the answer. Only up and down are votes,
+//  and only for a challenge the player may open.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -24,8 +23,9 @@ namespace Tests\Feature\Play;
 use App\Http\Controllers\Users\ChallengesController;
 use App\Models\Challenges;
 use App\Models\User;
-use Illuminate\Redis\Events\CommandExecuted;
-use Illuminate\Support\Facades\Event;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -41,8 +41,9 @@ use Tests\TestCase;
 // VotingTest
 // -----------------------------------------------------------
 //
-//   vote    — casts a vote as the given player
-//   counter — reads a vote counter of a challenge
+//   vote   — casts a vote as the given player
+//   votes  — counts a challenge's rows of one vote
+//   voteOf — reads a player's row on a challenge
 //
 // Used by:
 //   - PHPUnit — the Feature suite (runTests.sh)
@@ -78,19 +79,40 @@ final class VotingTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // counter
+    // votes
     // -----------------------------------------------------------
     //
-    // The ThumbsUp or ThumbsDown count of the challenge, 0
-    // when Redis has none yet.
+    // How many of the challenge's rows in
+    // cyber_challenges_votes hold the vote given, up or down.
     //
     // Used by:
     //   - the tests below
     // -----------------------------------------------------------
 
-    private function counter(string $thumbs, Challenges $challenge): int
+    private function votes(string $vote, Challenges $challenge): int
     {
-        return (int) Redis::get("{$thumbs}_{$challenge->public_id}");
+        return DB::table('cyber_challenges_votes')->where(['challenge_id' => $challenge->id, 'vote' => $vote])->count();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // voteOf
+    // -----------------------------------------------------------
+    //
+    // The vote of the player's row on the challenge, up or
+    // down, or nothing when the player has none.
+    //
+    // Used by:
+    //   - the tests below
+    // -----------------------------------------------------------
+
+    private function voteOf(User $player, Challenges $challenge): ?string
+    {
+        return DB::table('cyber_challenges_votes')->where(['user_id' => $player->id, 'challenge_id' => $challenge->id])->value('vote');
     }
 
 
@@ -102,9 +124,9 @@ final class VotingTest extends TestCase
     // test_a_vote_is_counted_and_answered_with_an_empty_page
     // -----------------------------------------------------------
     //
-    // An up vote raises the challenge's up count, marks the
-    // player as having voted up, and the route answers 200
-    // with nothing in the body.
+    // An up vote becomes the player's row on the challenge,
+    // holding up and the time it was cast, and the route
+    // answers 200 with nothing in the body.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -119,9 +141,10 @@ final class VotingTest extends TestCase
 
         $response->assertOk();
         $this->assertSame('', $response->getContent());
-        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
-        $this->assertSame(0, $this->counter('ThumbsDown', $challenge));
-        $this->assertSame('up', Redis::get("Vote_{$challenge->public_id}_{$player->id}"));
+        $this->assertSame(1, $this->votes('up', $challenge));
+        $this->assertSame(0, $this->votes('down', $challenge));
+        $this->assertSame('up', $this->voteOf($player, $challenge));
+        $this->assertNotNull(DB::table('cyber_challenges_votes')->where(['user_id' => $player->id])->value('created'));
     }
 
 
@@ -130,23 +153,24 @@ final class VotingTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_a_down_vote_is_counted_on_its_own_counter
+    // test_a_down_vote_counts_as_down_only
     // -----------------------------------------------------------
     //
-    // A down vote raises the down count only.
+    // A down vote is kept as down and raises the down count
+    // only.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_a_down_vote_is_counted_on_its_own_counter(): void
+    public function test_a_down_vote_counts_as_down_only(): void
     {
         $challenge = $this->makeChallenge();
 
         $this->vote($this->makePlayer(), 'down', $challenge);
 
-        $this->assertSame(0, $this->counter('ThumbsUp', $challenge));
-        $this->assertSame(1, $this->counter('ThumbsDown', $challenge));
+        $this->assertSame(0, $this->votes('up', $challenge));
+        $this->assertSame(1, $this->votes('down', $challenge));
     }
 
 
@@ -159,7 +183,8 @@ final class VotingTest extends TestCase
     // -----------------------------------------------------------
     //
     // A player's second vote on a challenge — the same thumb
-    // or the other one — changes nothing.
+    // or the other one — changes nothing: the first vote's
+    // row stays as it was, and no second row is added.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -171,11 +196,12 @@ final class VotingTest extends TestCase
         $challenge = $this->makeChallenge();
 
         $this->vote($player, 'up', $challenge);
-        $this->vote($player, 'up', $challenge);
-        $this->vote($player, 'down', $challenge);
+        $this->vote($player, 'up', $challenge)->assertOk();
+        $this->vote($player, 'down', $challenge)->assertOk();
 
-        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
-        $this->assertSame(0, $this->counter('ThumbsDown', $challenge));
+        $this->assertSame(1, $this->votes('up', $challenge));
+        $this->assertSame(0, $this->votes('down', $challenge));
+        $this->assertSame('up', $this->voteOf($player, $challenge));
     }
 
 
@@ -201,8 +227,8 @@ final class VotingTest extends TestCase
         $this->vote($this->makePlayer(), 'up', $challenge);
         $this->vote($this->makePlayer(), 'down', $challenge);
 
-        $this->assertSame(2, $this->counter('ThumbsUp', $challenge));
-        $this->assertSame(1, $this->counter('ThumbsDown', $challenge));
+        $this->assertSame(2, $this->votes('up', $challenge));
+        $this->assertSame(1, $this->votes('down', $challenge));
     }
 
 
@@ -230,9 +256,9 @@ final class VotingTest extends TestCase
         $this->vote($player, 'up', $first);
         $this->vote($player, 'down', $second);
 
-        $this->assertSame(1, $this->counter('ThumbsUp', $first));
-        $this->assertSame(0, $this->counter('ThumbsDown', $first));
-        $this->assertSame(1, $this->counter('ThumbsDown', $second));
+        $this->assertSame(1, $this->votes('up', $first));
+        $this->assertSame(0, $this->votes('down', $first));
+        $this->assertSame(1, $this->votes('down', $second));
     }
 
 
@@ -244,7 +270,7 @@ final class VotingTest extends TestCase
     // test_an_unknown_vote_type_uses_up_nothing
     // -----------------------------------------------------------
     //
-    // A type other than up or down answers 404 and counts
+    // A type other than up or down answers 404 and keeps
     // nothing, and the player's real vote still counts after
     // it.
     //
@@ -258,10 +284,11 @@ final class VotingTest extends TestCase
         $challenge = $this->makeChallenge();
 
         $this->vote($player, 'sideways', $challenge)->assertNotFound();
+        $this->assertNull($this->voteOf($player, $challenge));
         $this->vote($player, 'up', $challenge)->assertOk();
 
-        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
-        $this->assertSame(0, $this->counter('ThumbsDown', $challenge));
+        $this->assertSame(1, $this->votes('up', $challenge));
+        $this->assertSame(0, $this->votes('down', $challenge));
     }
 
 
@@ -305,13 +332,83 @@ final class VotingTest extends TestCase
 
 
     // -----------------------------------------------------------
+    // test_the_challenge_page_counts_the_rows_of_the_table
+    // -----------------------------------------------------------
+    //
+    // The counts and the lock of the challenge page come from
+    // the rows of cyber_challenges_votes alone: rows written
+    // straight into the table show as they are, those of
+    // another challenge stay out, and the player's own row
+    // locks the buttons.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_challenge_page_counts_the_rows_of_the_table(): void
+    {
+        $challenge = $this->makeChallenge();
+        $other = $this->makeChallenge();
+        $viewer = $this->makePlayer();
+        $rows = [];
+        foreach (['up', 'up', 'up', 'down'] as $vote) {
+            $rows[] = ['user_id' => $this->makePlayer()->id, 'challenge_id' => $challenge->id, 'vote' => $vote, 'created' => date('Y-m-d H:i:s')];
+        }
+        $rows[] = ['user_id' => $viewer->id, 'challenge_id' => $challenge->id, 'vote' => 'down', 'created' => date('Y-m-d H:i:s')];
+        $rows[] = ['user_id' => $viewer->id, 'challenge_id' => $other->id, 'vote' => 'up', 'created' => date('Y-m-d H:i:s')];
+        DB::table('cyber_challenges_votes')->insert($rows);
+
+        $this->signIn($viewer)->get("/user/challenge/{$challenge->public_id}")
+            ->assertSee('<span id="thumbs-up-count">3</span>', false)
+            ->assertSee('<span id="thumbs-down-count">2</span>', false)
+            ->assertSee('<button disabled class="badge border-0 text-white bg-primary thumbs-up"', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_votes_outlive_an_emptied_redis
+    // -----------------------------------------------------------
+    //
+    // A vote outlives Redis, which a stack update starts empty
+    // (vuknflab-redis has no volume): after Redis is emptied
+    // the challenge page still counts the vote and keeps the
+    // voter's buttons locked.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_votes_outlive_an_emptied_redis(): void
+    {
+        $challenge = $this->makeChallenge();
+        $this->signIn($this->makePlayer())->post("/user/challenge/vote/up/{$challenge->public_id}");
+        Redis::connection()->flushdb();
+
+        $response = $this->get("/user/challenge/{$challenge->public_id}");
+
+        $response->assertSee('id="thumbs-up-count">1<', false);
+        $response->assertSee('disabled class="badge border-0 text-white bg-primary thumbs-up"', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
     // test_simultaneous_votes_are_all_counted
     // -----------------------------------------------------------
     //
-    // Two votes at the same moment both count. The counter is
-    // raised with INCR, so there is no read to slip the other
-    // player's vote in after; should one come back, the other
-    // vote lands right after it and must still count.
+    // Two players' votes at the same moment both count. Each
+    // vote is a row of its own, and a page counts the rows
+    // when it is drawn, so no total is read and written back
+    // where one vote could overwrite the other. The second
+    // vote runs in full right after the first one's first step
+    // on the table, and the page shows both.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -320,20 +417,23 @@ final class VotingTest extends TestCase
     public function test_simultaneous_votes_are_all_counted(): void
     {
         $challenge = $this->makeChallenge();
-        $counter = "ThumbsUp_{$challenge->public_id}";
+        $player = $this->makePlayer();
+        $other = $this->makePlayer();
         $interleaved = false;
-        Redis::enableEvents();
-        Redis::purge();
-        Event::listen(CommandExecuted::class, function (CommandExecuted $event) use ($counter, &$interleaved) {
-            if (!$interleaved && strtolower($event->command) === 'get' && ($event->parameters[0] ?? null) === $counter) {
+        DB::listen(function (QueryExecuted $query) use ($challenge, $player, $other, &$interleaved) {
+            if (!$interleaved && str_contains($query->sql, 'cyber_challenges_votes')) {
                 $interleaved = true;
-                Redis::incr($counter);
+                Auth::guard('users')->setUser($other);
+                app(ChallengesController::class)->vote(request(), 'up', $challenge->public_id);
+                Auth::guard('users')->setUser($player);
             }
         });
 
-        $this->vote($this->makePlayer(), 'up', $challenge);
+        $this->vote($player, 'up', $challenge)->assertOk();
 
-        $this->assertSame(1 + ($interleaved ? 1 : 0), $this->counter('ThumbsUp', $challenge));
+        $this->assertTrue($interleaved);
+        $this->assertSame(2, $this->votes('up', $challenge));
+        $this->get("/user/challenge/{$challenge->public_id}")->assertSee('<span id="thumbs-up-count">2</span>', false);
     }
 
 
@@ -347,7 +447,7 @@ final class VotingTest extends TestCase
     //
     // Opened as a link, which another site can make a
     // signed-in player follow, the vote address answers 405
-    // and counts nothing.
+    // and keeps nothing.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -360,8 +460,8 @@ final class VotingTest extends TestCase
 
         $this->signIn($player)->get("/user/challenge/vote/up/{$challenge->public_id}")->assertStatus(405);
 
-        $this->assertSame(0, $this->counter('ThumbsUp', $challenge));
-        $this->assertNull(Redis::get("Vote_{$challenge->public_id}_{$player->id}"));
+        $this->assertSame(0, $this->votes('up', $challenge));
+        $this->assertNull($this->voteOf($player, $challenge));
     }
 
 
@@ -374,7 +474,7 @@ final class VotingTest extends TestCase
     // -----------------------------------------------------------
     //
     // A public id no challenge has answers 404 and leaves no
-    // counter or lock behind in Redis.
+    // row behind.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -384,7 +484,7 @@ final class VotingTest extends TestCase
     {
         $this->signIn($this->makePlayer())->post('/user/challenge/vote/up/no-such-challenge')->assertNotFound();
 
-        $this->assertSame([], Redis::keys('*no-such-challenge*'));
+        $this->assertSame(0, DB::table('cyber_challenges_votes')->count());
     }
 
 
@@ -415,7 +515,8 @@ final class VotingTest extends TestCase
         $this->vote($this->makePlayer(), 'up', $challenge)->assertNotFound();
         $this->vote($member, 'up', $challenge)->assertOk();
 
-        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
+        $this->assertSame(1, $this->votes('up', $challenge));
+        $this->assertSame('up', $this->voteOf($member, $challenge));
     }
 
 
@@ -454,11 +555,12 @@ final class VotingTest extends TestCase
     // -----------------------------------------------------------
     //
     // A player's vote sent twice at the same moment, by a double
-    // click or a script, counts once: the vote claims the
-    // player's mark and raises the counter only when the claim
-    // is new. The second vote runs in full right after the
-    // first one's first step on the mark, where a check followed
-    // by a separate write would let both through.
+    // click or a script, counts once and answers no error: the
+    // table's unique key on the player and the challenge
+    // leaves the second row out. The second vote runs in full
+    // right after the first one's first step on the table,
+    // where a check followed by a separate write would let
+    // both through, or fail the first on the key.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -468,20 +570,50 @@ final class VotingTest extends TestCase
     {
         $challenge = $this->makeChallenge();
         $player = $this->makePlayer();
-        $mark = "Vote_{$challenge->public_id}_{$player->id}";
         $interleaved = false;
-        Redis::enableEvents();
-        Redis::purge();
-        Event::listen(CommandExecuted::class, function (CommandExecuted $event) use ($mark, $challenge, &$interleaved) {
-            if (!$interleaved && ($event->parameters[0] ?? null) === $mark) {
+        DB::listen(function (QueryExecuted $query) use ($challenge, &$interleaved) {
+            if (!$interleaved && str_contains($query->sql, 'cyber_challenges_votes')) {
                 $interleaved = true;
                 app(ChallengesController::class)->vote(request(), 'up', $challenge->public_id);
             }
         });
 
-        $this->vote($player, 'up', $challenge);
+        $this->vote($player, 'up', $challenge)->assertOk();
 
         $this->assertTrue($interleaved);
-        $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
+        $this->assertSame(1, $this->votes('up', $challenge));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_votes_of_a_deleted_account_do_not_count
+    // -----------------------------------------------------------
+    //
+    // A vote whose account no longer exists — one cast while
+    // the account was being deleted, written after the
+    // account's votes were deleted — is not counted.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_votes_of_a_deleted_account_do_not_count(): void
+    {
+        $challenge = $this->makeChallenge();
+        $gone = (int) User::max('id') + 1000;
+        $voter = $this->makePlayer();
+        DB::table('cyber_challenges_votes')->insert([
+            ['user_id' => $voter->id, 'challenge_id' => $challenge->id, 'vote' => 'up', 'created' => date('Y-m-d H:i:s')],
+            ['user_id' => $gone, 'challenge_id' => $challenge->id, 'vote' => 'up', 'created' => date('Y-m-d H:i:s')],
+            ['user_id' => $gone + 1, 'challenge_id' => $challenge->id, 'vote' => 'down', 'created' => date('Y-m-d H:i:s')],
+        ]);
+
+        $this->signIn($this->makePlayer())->get("/user/challenge/{$challenge->public_id}")
+            ->assertSee('<span id="thumbs-up-count">1</span>', false)
+            ->assertSee('<span id="thumbs-down-count">0</span>', false);
     }
 }

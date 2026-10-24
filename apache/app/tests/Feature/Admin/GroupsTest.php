@@ -831,6 +831,71 @@ final class GroupsTest extends TestCase
 
 
     // -----------------------------------------------------------
+    // test_the_group_leaderboard_counts_the_last_solve_from_its_unix_time
+    // -----------------------------------------------------------
+    //
+    // The panel's group leaderboard counts how long ago a
+    // member's last group solve was from its Unix time, which
+    // stays right in the hour the clocks repeat in October.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_group_leaderboard_counts_the_last_solve_from_its_unix_time(): void
+    {
+        $group = $this->makeGroup();
+        $player = $this->makeSsoPlayer();
+        $this->joinGroup($group, $player);
+        $challenge = $this->makeChallenge();
+        $this->assignToGroup($group, $challenge);
+        $this->recordSolveInTheRepeatedHour($player, $challenge);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/vu-groups/leaderboard/{$group->id}");
+
+        $response->assertSee('<h3 class="h6 fw-normal text-dark">10 minutes ago</h3>', false);
+        $response->assertDontSee('3 hours ago');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_solve_with_two_history_rows_counts_once_on_the_group_leaderboard
+    // -----------------------------------------------------------
+    //
+    // The Unix time comes from the history rows, which have no
+    // unique key; on the panel's group leaderboard too, a
+    // solve with two of them gives its points once.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_solve_with_two_history_rows_counts_once_on_the_group_leaderboard(): void
+    {
+        $group = $this->makeGroup();
+        $player = $this->makeSsoPlayer();
+        $this->joinGroup($group, $player);
+        $challenge = $this->makeChallenge(['points' => 30]);
+        $this->assignToGroup($group, $challenge);
+        $this->recordSolve($player, $challenge);
+        DB::table('cyber_challenges_history')->insert(['user_id' => $player->id, 'challenge_id' => $challenge->id, 'created_time' => time(), 'created' => date('Y-m-d H:i:s')]);
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/vu-groups/leaderboard/{$group->id}");
+
+        $response->assertSee('<b>30</b> points', false);
+        $response->assertDontSee('<b>60</b> points', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
     // test_a_second_add_never_doubles_a_member
     // -----------------------------------------------------------
     //
@@ -1094,5 +1159,243 @@ final class GroupsTest extends TestCase
         $this->post('/control-panel/dialog/users/vu-groups/users_store?vu_id=s2222222', ['uid' => $group->id, 'vu_id' => 's1111111']);
 
         $this->assertSame(['s1111111'], GroupsUsers::where('group_id', $group->id)->pluck('vu_id')->all());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_deleted_groups_page_sends_the_admin_to_the_groups_list
+    // -----------------------------------------------------------
+    //
+    // A group's page opened after another admin deleted the
+    // group goes to the groups list with "No group!", even
+    // when the browser comes from that same page, as after an
+    // add: going back would land on the refused page again and
+    // again.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_deleted_groups_page_sends_the_admin_to_the_groups_list(): void
+    {
+        $group = $this->makeGroup();
+        $page = "/control-panel/users/vu-groups/users_list/{$group->id}";
+        $this->signInAdmin($this->makeAdmin(true))->post("/control-panel/users/vu-groups/delete/{$group->id}");
+
+        $this->from($page)->get($page)->assertRedirect('/control-panel/users/vu-groups');
+        $this->assertErrorFlashed('No group!');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_page_past_the_end_shows_the_last_page
+    // -----------------------------------------------------------
+    //
+    // A list asked for a page past its end shows its last
+    // page, as it is the page a deletion of the last row of
+    // the last page goes back to, rather than "No Groups"
+    // without links to the rest.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_page_past_the_end_shows_the_last_page(): void
+    {
+        $this->makeGroup(null, ['name' => 'Networks Lab 1']);
+
+        $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/users/vu-groups?page=2')->assertSee('Networks Lab 1');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_lab_admin_removes_no_member_added_meanwhile
+    // -----------------------------------------------------------
+    //
+    // A lab admin's removal of a membership that does not
+    // exist yet passes the ownership check, as removing a row
+    // already gone changes nothing. Another admin then adds a
+    // row with that id to a group of their own, here right
+    // after the check, and the removal leaves it alone and
+    // goes back with the permissions error: the action checks
+    // the admin again on the row it finds.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_lab_admin_removes_no_member_added_meanwhile(): void
+    {
+        $group = $this->makeGroup($this->makeAdmin(true));
+        $value = 's1234567';
+        $id = (int) GroupsUsers::max('id') + 1000;
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/users/vu-groups');
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($group, $value, $id, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select `group_id` from `cyber_users_groups`')) {
+                $interleaved = true;
+                GroupsUsers::insert(['id' => $id, 'group_id' => $group->id, 'vu_id' => $value]);
+            }
+        });
+
+        $response = $this->post("/control-panel/users/vu-groups/delete_group/{$id}");
+
+        $this->assertTrue($interleaved);
+        $response->assertRedirect('/control-panel/users/vu-groups');
+        $this->assertErrorFlashed(self::REFUSAL);
+        $this->assertTrue(GroupsUsers::whereKey($id)->exists());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_lab_admin_removes_no_group_challenge_added_meanwhile
+    // -----------------------------------------------------------
+    //
+    // A lab admin's removal of a group challenge that does not
+    // exist yet passes the ownership check, as removing a row
+    // already gone changes nothing. Another admin then adds a
+    // row with that id to a group of their own, here right
+    // after the check, and the removal leaves it alone and
+    // goes back with the permissions error: the action checks
+    // the admin again on the row it finds.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_lab_admin_removes_no_group_challenge_added_meanwhile(): void
+    {
+        $group = $this->makeGroup($this->makeAdmin(true));
+        $value = $this->makeChallenge()->id;
+        $id = (int) GroupsChallenges::max('id') + 1000;
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/users/vu-groups');
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($group, $value, $id, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select `group_id` from `cyber_groups_challenges`')) {
+                $interleaved = true;
+                GroupsChallenges::insert(['id' => $id, 'group_id' => $group->id, 'challenge_id' => $value]);
+            }
+        });
+
+        $response = $this->post("/control-panel/users/vu-groups/delete_challenge/{$id}");
+
+        $this->assertTrue($interleaved);
+        $response->assertRedirect('/control-panel/users/vu-groups');
+        $this->assertErrorFlashed(self::REFUSAL);
+        $this->assertTrue(GroupsChallenges::whereKey($id)->exists());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_group_page_goes_to_the_list
+    // -----------------------------------------------------------
+    //
+    // A group's page refused to a lab admin — another admin's
+    // group — goes to the groups list with the error, even
+    // when the browser comes from that very page, which going
+    // back would redirect to again and again.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_group_page_goes_to_the_list(): void
+    {
+        $other = $this->makeGroup($this->makeAdmin(true));
+        $this->signInAdmin($this->makeAdmin());
+
+        foreach (['users_list', 'challenges_list', 'leaderboard'] as $page) {
+            $address = "/control-panel/users/vu-groups/{$page}/{$other->id}";
+            $this->from($address)->get($address)->assertRedirect('/control-panel/users/vu-groups');
+            $this->assertErrorFlashed(self::REFUSAL);
+        }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_group_form_or_dialog_goes_back
+    // -----------------------------------------------------------
+    //
+    // A refused dialog of a group, which opens over the page
+    // it was asked from, and a refused form go back to that
+    // page — here the dashboard, so going back is told apart
+    // from going to the list — whether the group is another
+    // admin's or gone.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_group_form_or_dialog_goes_back(): void
+    {
+        $other = $this->makeGroup($this->makeAdmin(true));
+        $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
+
+        $this->get("/control-panel/dialog/users/vu-groups/user_add_new/{$other->id}")->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed(self::REFUSAL);
+        $this->get('/control-panel/dialog/users/vu-groups/user_add_new/987654321')->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed('No group!');
+        $this->post("/control-panel/users/vu-groups/delete/{$other->id}")->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed(self::REFUSAL);
+
+        $this->assertTrue(Groups::whereKey($other->id)->exists());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_group_leaderboard_falls_back_to_the_local_time
+    // -----------------------------------------------------------
+    //
+    // A solve without a history row — which no answer leaves,
+    // but older data may — shows how long ago it was by its
+    // local time on the panel's group leaderboard, rather than
+    // breaking the page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_group_leaderboard_falls_back_to_the_local_time(): void
+    {
+        $group = $this->makeGroup();
+        $player = $this->makeSsoPlayer();
+        $this->joinGroup($group, $player);
+        $challenge = $this->makeChallenge();
+        $this->assignToGroup($group, $challenge);
+        $this->recordSolve($player, $challenge, date('Y-m-d H:i:s', time() - 7200));
+        DB::table('cyber_challenges_history')->where('user_id', $player->id)->delete();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/vu-groups/leaderboard/{$group->id}");
+
+        $response->assertOk();
+        $response->assertSee('<h3 class="h6 fw-normal text-dark">2 hours ago</h3>', false);
     }
 }

@@ -23,6 +23,12 @@ RUN echo 'expose_php = Off' > "$PHP_INI_DIR/conf.d/expose-php.ini"
 # environment (CVE-2024-52301); web requests take no arguments
 RUN echo 'register_argc_argv = Off' > "$PHP_INI_DIR/conf.d/register-argc-argv.ini"
 
+# SimpleSAMLphp keeps the VU login in a PHP session file and tells
+# sso.vu.lt about a sign-out only while the file is there; PHP's own
+# default deletes a session file 24 minutes after its last write, so
+# keep one as long as a lab session lasts, 36 hours
+RUN echo 'session.gc_maxlifetime = 129600' > "$PHP_INI_DIR/conf.d/session.ini"
+
 # Apache
 RUN a2enmod rewrite remoteip
 
@@ -54,6 +60,10 @@ RUN composer install --no-dev --optimize-autoloader --ignore-platform-req=php+
 
 # SimpleSAML symlink
 RUN ln -sfn /var/www/html/vendor/simplesamlphp/simplesamlphp/public /var/www/html/public/simplesaml
+
+# SimpleSAMLphp's sessions, a folder docker-compose mounts from the
+# host, so that a redeploy keeps them (session.phpsession.savepath)
+RUN mkdir -p /var/www/simplesamlphp-sessions && chown 1000:1000 /var/www/simplesamlphp-sessions
 
 
 USER 1000:1000

@@ -66,6 +66,9 @@ use Lunaweb\RecaptchaV3\Facades\RecaptchaV3;
 //   makePartner, makeCategory, makeChallenge — content
 //   makeGroup, joinGroup, assignToGroup — VU groups (labs)
 //   recordSolve — a solve, booked the way the app books it
+//   recordSolveInTheRepeatedHour — a solve whose local time
+//     reads earlier than it was
+//   recordSolveSecondsAgo — a solve a number of seconds ago
 //   signIn, signInAdmin — sessions
 //   fakeRecaptcha — the reCAPTCHA verdict
 //   setRegistrationOpen, setEventRange — the settings rows
@@ -99,13 +102,13 @@ abstract class TestCase extends BaseTestCase
     // setUp
     // -----------------------------------------------------------
     //
-    // Empties the throwaway Redis, where the ranking table,
-    // the solve history and the votes live, and gives the
-    // request globals the client address Apache always sets:
-    // SettingsController::getUserIP reads $_SERVER directly
-    // rather than the request, and the PHP command line has
-    // no REMOTE_ADDR of its own. The proxy headers it trusts
-    // are cleared, so each test sets the ones it needs.
+    // Empties the throwaway Redis, where the ranking table
+    // lives, and gives the request globals the client address
+    // Apache always sets: SettingsController::getUserIP reads
+    // $_SERVER directly rather than the request, and the PHP
+    // command line has no REMOTE_ADDR of its own. The proxy
+    // headers it trusts are cleared, so each test sets the
+    // ones it needs.
     //
     // Used by:
     //   - PHPUnit, before every test
@@ -406,13 +409,11 @@ abstract class TestCase extends BaseTestCase
     // recordSolve
     // -----------------------------------------------------------
     //
-    // Books a solve the way ChallengesController::submit_answer
-    // does — the submission row, the history row and the
-    // points added to the player — at the given time, now by
-    // default. Unlike a real solve it leaves Redis alone: the
-    // ranking table is rebuilt by the next request anyway,
-    // while the history shown in the sidebar is only written
-    // by a real answer.
+    // Books a solve the way
+    // ChallengesController::submit_answer does — the
+    // submission row, the history row and the points added to
+    // the player — at the given time, now by default, the
+    // history row's Unix time included.
     //
     // Used by:
     //   - the Feature tests that need a solve on record
@@ -435,6 +436,61 @@ abstract class TestCase extends BaseTestCase
             'created'      => $when,
         ]);
         $player->increment('points', $challenge->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // recordSolveInTheRepeatedHour
+    // -----------------------------------------------------------
+    //
+    // Books a solve as the hour the clocks repeat in October
+    // leaves it: its local times — the created columns — read
+    // earlier than it was, while the Unix time of its history
+    // row is right. The local time reads three hours ago and
+    // the Unix time ten minutes ago, a gap no page rounds
+    // away, so a page counting from the local time shows
+    // "3 hours ago" where "10 minutes ago" is right.
+    //
+    // Used by:
+    //   - the Feature tests of the pages that show how long ago
+    //     a solve was
+    // -----------------------------------------------------------
+
+    protected function recordSolveInTheRepeatedHour(User $player, Challenges $challenge): void
+    {
+        $this->recordSolve($player, $challenge, date('Y-m-d H:i:s', strtotime('-3 hours')));
+        ChallengesHistory::where(['user_id' => $player->id, 'challenge_id' => $challenge->id])->update(['created_time' => time() - 600]);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // recordSolveSecondsAgo
+    // -----------------------------------------------------------
+    //
+    // Books a solve the given number of seconds ago, the Unix
+    // time of its history row exact. The pages count how long
+    // ago a solve was from that Unix time, and a day of the
+    // local clock is not always 86400 seconds: a solve booked
+    // three days ago by the local clock reads "2 days ago" for
+    // three days after the clocks go forward in March.
+    //
+    // Used by:
+    //   - the Feature tests that read "3 days ago" off a page
+    // -----------------------------------------------------------
+
+    protected function recordSolveSecondsAgo(User $player, Challenges $challenge, int $seconds): void
+    {
+        $at = time() - $seconds;
+        $this->recordSolve($player, $challenge, date('Y-m-d H:i:s', $at));
+        ChallengesHistory::where(['user_id' => $player->id, 'challenge_id' => $challenge->id])->update(['created_time' => $at]);
     }
 
 

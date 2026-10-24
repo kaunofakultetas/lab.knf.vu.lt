@@ -4,8 +4,9 @@
 //  [*] AppServiceProvider — the app's own service provider
 //
 //  Laravel's skeleton provider for the app's own bindings
-//  and boot-time setup, left empty: the app registers
-//  nothing here. The Validator import is unused.
+//  and boot-time setup: the app registers nothing here, and
+//  sets one thing up, the markup of its page links. The
+//  Validator import is unused.
 //
 //  Used by:
 //    - config/app.php — the providers list
@@ -14,6 +15,7 @@
 
 namespace App\Providers;
 
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Validator;
 
@@ -28,9 +30,10 @@ use Illuminate\Support\Facades\Validator;
 // AppServiceProvider
 // -----------------------------------------------------------
 //
-// Both hooks are empty. The recaptchav3 rule the forms
-// validate with comes from the RecaptchaV3 package's own
-// provider, not from here.
+// register is empty, and boot picks Bootstrap's markup for
+// the page links. The recaptchav3 rule the forms validate
+// with comes from the RecaptchaV3 package's own provider,
+// not from here.
 //
 // Used by:
 //   - config/app.php — the providers list
@@ -67,11 +70,11 @@ class AppServiceProvider extends ServiceProvider
     // boot
     // -----------------------------------------------------------
     //
-    // Sets nothing up.
-    //
-    // Known bug LAB-65 (low): the paginators keep Laravel's
-    // Tailwind markup, which the Bootstrap-styled panel cannot
-    // draw. Fix: Paginator::useBootstrapFive().
+    // Has the page links of every paged list drawn with
+    // Bootstrap 5's markup, the styling the control panel
+    // loads; Laravel's default markup is Tailwind's, which the
+    // panel cannot draw — arrows as wide as the table, and the
+    // links twice over.
     //
     // Used by:
     //   - Laravel, once every provider is registered
@@ -79,5 +82,6 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot()
     {
+        Paginator::useBootstrapFive();
     }
 }

@@ -55,6 +55,7 @@ use App\Models\ChallengesHistory;
 use App\Models\ChallengesFiles;
 use App\Models\ChallengesCategories;
 use App\Models\ChallengesSubmitted;
+use App\Models\ChallengesVotes;
 use App\Models\GroupsChallenges;
 
 
@@ -131,14 +132,11 @@ class ChallengesController extends BaseController
     // name, description or content contains the q query
     // parameter when one is given — 0 included, and nothing
     // that is not text — and the page links keep q. The view
-    // gets the admin's id too, for the edit, delete,
-    // Categories and Files links, which a lab admin gets on
-    // its own challenges only.
-    //
-    // Known bug LAB-68 (low): the view puts
-    // request()->query('q') itself back into the search box,
-    // which fails on a list, so q[]= in the address ends in a
-    // 500. Fix: hand the view the search settled on here.
+    // gets the search as settled here for its search box, so
+    // a q that is not text shows as no search, and the
+    // admin's id, for the edit, delete, Categories and Files
+    // links, which a lab admin gets on its own challenges
+    // only.
     //
     // Used by:
     //   - the All challenges link of the panel's sidebar
@@ -165,7 +163,7 @@ class ChallengesController extends BaseController
             $arr = array();
         }
 
-        $curr_page = $this->listPage();
+        $curr_page = $this->listPage(count($arr));
 
         $perPage = 50;
 
@@ -183,7 +181,8 @@ class ChallengesController extends BaseController
         }
         return view('admins.challenges', [
             'recordlist' => $paginator,
-            'user_id'=>Auth::guard('admins')->id()
+            'user_id'=>Auth::guard('admins')->id(),
+            'search' => $q
         ]);
     }
 
@@ -235,14 +234,13 @@ class ChallengesController extends BaseController
     // fresh UUID as its public id, the flag trimmed and the
     // content through clean_content; hidden unless the
     // admin's account is a main admin's. Then to the list
-    // with "Created!". A form missing a field, or with a name
-    // or flag longer than the 255 characters their columns
-    // hold, goes back with the errors and what was typed.
-    //
-    // Known bug LAB-63 (low): points need only be present, so
-    // a word is stored as 0, a negative number takes points
-    // off every solver, and a number past 2147483647 is
-    // clipped. Fix: a whole number from 0 to a sane maximum.
+    // with "Created!". A form missing a field, with a name or
+    // flag longer than the 255 characters their columns hold,
+    // or with points other than a whole number from 0 to
+    // 100000 goes back with the errors and what was typed:
+    // MySQL, running non-strict, would store a word as 0 and
+    // clip a number past its integers, and negative points
+    // would take points off every solver.
     //
     // Used by:
     //   - the challenge form, for a new challenge
@@ -256,7 +254,7 @@ class ChallengesController extends BaseController
             'descr' => 'required',
             'content' => 'required',
             'answer' => 'required|max:255',
-            'points' => 'required'
+            'points' => 'required|integer|min:0|max:100000'
         ]);
 
         if ($validator->fails()) {
@@ -342,20 +340,16 @@ class ChallengesController extends BaseController
     // POST /control-panel/challenges/update
     //
     // Changes the challenge with the posted uid to the form's
-    // fields — every one required and the name and flag held
-    // to 255 characters, as in store, a form that fails going
-    // back with the errors and what was typed — with the
+    // fields — every one required, the name and flag held to
+    // 255 characters and the points to a whole number from 0
+    // to 100000, as in store, a form that fails going back
+    // with the errors and what was typed — with the
     // content through clean_content, then goes to the list
     // with "Updated!". The hidden switch and the author
     // stay as they were, so a lab admin keeps a challenge a
     // main admin corrected. New points count for later solves
     // only: a solve keeps the points it gave, kept with it as
     // points_given.
-    //
-    // Known bug LAB-63 (low): points need only be present, so
-    // a word is stored as 0, a negative number takes points
-    // off every solver, and a number past 2147483647 is
-    // clipped. Fix: a whole number from 0 to a sane maximum.
     //
     // Used by:
     //   - the challenge form, for an existing challenge
@@ -369,7 +363,7 @@ class ChallengesController extends BaseController
             'descr' => 'required',
             'content' => 'required',
             'answer' => 'required|max:255',
-            'points' => 'required'
+            'points' => 'required|integer|min:0|max:100000'
         ]);
 
         if ($validator->fails()) {
@@ -402,15 +396,14 @@ class ChallengesController extends BaseController
     // POST /control-panel/challenges/delete/{uid}
     //
     // Deletes the challenge with its feed rows, file links,
-    // solves, categories and group places, then goes back
-    // with "Deleted!".
-    // The points its solves gave come off the solvers' totals
-    // first, as a total is the sum of the player's solves. It
-    // all runs in one transaction that first locks the
-    // challenge's row: a second delete of the same challenge
-    // waits, then finds it gone and goes back with "No
-    // challenge!", and an answer being booked finishes before,
-    // so its points come off too.
+    // solves, votes, categories and group places, then goes
+    // back with "Deleted!". The points its solves gave come
+    // off the solvers' totals first, as a total is the sum of
+    // the player's solves. It all runs in one transaction that
+    // first locks the challenge's row: a second delete of the
+    // same challenge waits, then finds it gone and goes back
+    // with "No challenge!", and an answer being booked
+    // finishes before, so its points come off too.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -442,6 +435,7 @@ class ChallengesController extends BaseController
             ChallengesSubmitted::where(['challenge_id'=>$uid])->delete();
             ChallengesCategories::where(['challenge_id'=>$uid])->delete();
             GroupsChallenges::where(['challenge_id'=>$uid])->delete();
+            ChallengesVotes::where(['challenge_id'=>$uid])->delete();
 
             return true;
         });
@@ -573,19 +567,10 @@ class ChallengesController extends BaseController
     // GET /control-panel/challenges/files/{uid}
     //
     // The admins.challenges_files view: the challenge's file
-    // links, 50 to a page of the list, under the challenge's
-    // name. The page prints the id into its add button's
-    // script, which is safe as the route takes digits only
-    // (RouteServiceProvider::boot).
-    //
-    // Known bug LAB-56 (low): the digits-only pattern lets a
-    // leading zero through; MySQL reads 010 as 10, but the
-    // script reads it as the octal 8, so the add button acts
-    // on another record than the page shows. Fix: refuse a
-    // leading zero in the patterns, or print the id as a
-    // number. Known bug LAB-67 (low): the view prints no page
-    // links, so links past the 50th are out of reach. Fix:
-    // print the paginator's links under the table.
+    // links, 50 to a page with the page links under them,
+    // under the challenge's name. The page prints the id into
+    // its add button's script, which is safe as the route
+    // takes a plain number only (RouteServiceProvider::boot).
     //
     // Used by:
     //   - the files links of the challenges list
@@ -599,7 +584,7 @@ class ChallengesController extends BaseController
             $arr = array();
         }
 
-        $curr_page = $this->listPage();
+        $curr_page = $this->listPage(count($arr));
 
         $perPage = 50;
 
@@ -682,7 +667,11 @@ class ChallengesController extends BaseController
     // The admins.dialogs.challenge_files_form view: for new,
     // an empty link of the challenge uid, posting to
     // file_store; for edit, the link uid, posting to
-    // file_update — a link that does not exist is a 404.
+    // file_update — a link that does not exist is a 404, and a
+    // link of a challenge the admin may not change goes back
+    // with "You don't have permissions to do this!", as the
+    // route's check lets a missing link through and another
+    // admin may create it in the meantime.
     //
     // Used by:
     //   - file_form_new and file_form_edit (above)
@@ -695,9 +684,17 @@ class ChallengesController extends BaseController
             $name = '';
             $file_url = '';
         } elseif($type =='edit'){
+            $file = ChallengesFiles::findOrFail($uid);
+
+            // The route's check let a missing link through, which
+            // another admin may have created since
+            if (! $this->mayChangeChallenge($file->challenge_id)) {
+                return back()->withErrors(['You don\'t have permissions to do this!']);
+            }
+
             $url = env('APP_URL')."/control-panel/challenges_file/update";
-            $name = ChallengesFiles::findOrFail($uid)->name;
-            $file_url = ChallengesFiles::findOrFail($uid)->file_url;
+            $name = $file->name;
+            $file_url = $file->file_url;
         }
 
         return view('admins.dialogs.challenge_files_form', [
@@ -761,13 +758,17 @@ class ChallengesController extends BaseController
     //
     // POST /control-panel/challenges_file/update
     //
-    // Changes the link with the posted uid, under the rules of
-    // file_store and with the values they checked, then goes
-    // back with "File updated!". The route's r_exists check
+    // Changes the link with the posted uid — one whole number,
+    // as Laravel would check a list of ids by any of them and
+    // change only the first — under the rules of file_store
+    // and with the values they checked, then goes back with
+    // "File updated!". The route's r_exists check
     // (file_owned_uid) keeps a lab admin to the links of its
     // own challenges and lets an unknown link through, so a
     // link another admin deleted in the meantime is turned
-    // back here, with "No file!".
+    // back here, with "No file!", and one another admin
+    // created in the meantime is checked here again and
+    // refused unless the admin may change its challenge.
     //
     // Used by:
     //   - the link dialog, for an existing link
@@ -775,16 +776,25 @@ class ChallengesController extends BaseController
 
     public function file_update(Request $request)
     {
+        // One number: a list of ids would be checked by any of
+        // them and change only the first
         $checked = $request->validate([
+            'uid' => 'required|integer',
             'name' => 'required|string|max:255',
             'file_url' => 'required|url:http,https|starts_with:http://,https://|max:2048',
         ]);
 
-        if (ChallengesFiles::whereKey($request->input('uid'))->doesntExist()) {
+        $challenge_id = ChallengesFiles::whereKey($checked['uid'])->value('challenge_id');
+
+        if ($challenge_id === null) {
             return back()->withErrors(['No file!']);
         }
 
-        ChallengesFiles::where(['id'=>$request->input('uid')])->update([
+        if (! $this->mayChangeChallenge($challenge_id)) {
+            return back()->withErrors(['You don\'t have permissions to do this!']);
+        }
+
+        ChallengesFiles::where(['id'=>$checked['uid']])->update([
             'name'=>$checked['name'],
             'file_url'=>$checked['file_url']]);
 
@@ -806,7 +816,11 @@ class ChallengesController extends BaseController
     //
     // Deletes the link and goes back with "File deleted!". The
     // route's r_exists check (file_owned) keeps a lab admin to
-    // the links of its own challenges.
+    // the links of its own challenges, and lets a link already
+    // gone through, as deleting it again changes nothing; a
+    // link another admin created with that id in the meantime
+    // is checked here again and left alone unless the admin
+    // may change its challenge.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -815,7 +829,15 @@ class ChallengesController extends BaseController
 
     public function file_destroy($uid)
     {
-        ChallengesFiles::destroy($uid);
+        $challenge_id = ChallengesFiles::whereKey($uid)->value('challenge_id');
+
+        if ($challenge_id !== null) {
+            if (! $this->mayChangeChallenge($challenge_id)) {
+                return back()->withErrors(['You don\'t have permissions to do this!']);
+            }
+
+            ChallengesFiles::destroy($uid);
+        }
 
         session()->flash('success', 'File deleted!');
 

@@ -451,4 +451,73 @@ final class PagesTest extends TestCase
 
         $this->assertSame('rules', $page->refresh()->alias);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_page_alias_is_one_piece_of_an_address
+    // -----------------------------------------------------------
+    //
+    // A page opens at /page/{alias}, which takes one piece of
+    // an address, so an alias holds letters, digits, dashes
+    // and underscores only, on a new page and on an edit that
+    // changes it: a slash, ? or # would make the page
+    // unreachable.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_page_alias_is_one_piece_of_an_address(): void
+    {
+        $page = Pages::create(['name' => 'Rules of Play', 'content' => '<p>Old rules</p>', 'alias' => 'rules']);
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/pages');
+
+        $this->post('/control-panel/pages/store', ['name' => 'Rules', 'content' => '<p>The rules.</p>', 'alias' => 'rules/2026'])
+            ->assertSessionHasErrors('alias');
+        $this->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'Rules', 'content' => '<p>New rules</p>', 'alias' => 'rules?2026'])
+            ->assertSessionHasErrors('alias');
+
+        $this->assertFalse(Pages::where('alias', 'rules/2026')->exists());
+        $this->assertSame('rules', $page->refresh()->alias);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_page_keeps_an_older_alias_when_saved
+    // -----------------------------------------------------------
+    //
+    // A page whose alias came before the rule on its
+    // characters — with a dot — is saved under that alias, so
+    // its address stays; changing it, or a new page, is held
+    // to the rule.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_page_keeps_an_older_alias_when_saved(): void
+    {
+        $page = Pages::create(['name' => 'Rules', 'content' => '<p>Old rules</p>', 'alias' => 'rules-v1.2']);
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/pages');
+
+        $this->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'Rules', 'content' => '<p>New rules</p>', 'alias' => 'rules-v1.2'])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect('/control-panel/pages');
+        $this->post('/control-panel/pages/update', ['uid' => $page->id, 'name' => 'Rules', 'content' => '<p>Newer rules</p>', 'alias' => 'rules-v1.3'])
+            ->assertSessionHasErrors('alias');
+        $this->post('/control-panel/pages/store', ['name' => 'More rules', 'content' => '<p>More</p>', 'alias' => 'rules-v2.0'])
+            ->assertSessionHasErrors('alias');
+
+        $this->assertSame('rules-v1.2', $page->refresh()->alias);
+        $this->get('/page/rules-v1.2')->assertSee('<p>New rules</p>', false);
+        $this->assertFalse(Pages::where('alias', 'rules-v2.0')->exists());
+    }
 }

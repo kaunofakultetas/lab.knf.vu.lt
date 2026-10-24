@@ -106,8 +106,11 @@ class SettingsController extends BaseController
     // that is not zero — years down to seconds, weeks included
     // — with an s for more than one and " ago" after; every
     // such unit, comma-separated, when full is set; "just now"
-    // when there is none. The difference carries no sign, so
-    // a date in the future reads the same.
+    // when there is none. The difference carries no sign, so a
+    // date in the future reads the same. The date is anything
+    // DateTime reads; the callers hand it Unix seconds after
+    // an @, as the local times in the database repeat an hour
+    // when the clocks go back in October.
     //
     // Used by:
     //   - BaseController — the feed of recent solves
@@ -159,13 +162,15 @@ class SettingsController extends BaseController
     //
     // Copies the cyber_users_ranks view into Redis as
     // ranking_table: JSON of every ranked player, keyed by
-    // user id, best first. The view numbers players with
-    // equal points in no set order, so the rows are ordered
-    // here and their user_rank numbered anew: by points, then
-    // by whose last solve was booked first — the solve's id,
-    // as the clock repeats an hour when it goes back in
-    // October. Every ranked player has a solve, so the join
-    // keeps them all.
+    // user id, best first. The view numbers players with equal
+    // points in no set order, so the rows are ordered here and
+    // their user_rank numbered anew: by points, then by whose
+    // last solve was booked first — the solve's id, as the
+    // clock repeats an hour when it goes back in October.
+    // Every ranked player has a solve, so the join keeps them
+    // all. It runs before every request, so it reads no
+    // history: the leaderboards look up the Unix times of the
+    // last solves themselves (ChallengesHistory::lastTimes).
     //
     // Used by:
     //   - UpdateRankingTable::handle (Http/Middleware/) —

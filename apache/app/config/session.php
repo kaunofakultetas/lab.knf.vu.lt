@@ -6,11 +6,10 @@
 //  The one session players and admins share, kept in Redis
 //  by the image's .env and in memory in the tests
 //  (phpunit.xml). A session lasts SESSION_LIFETIME minutes
-//  of inactivity — the .env sets it twice, to 120 and then
-//  2160, and the later wins: 36 hours. Its cookie is named
-//  after APP_NAME, sent on every path of the site, hidden
-//  from scripts, and SameSite=Lax — which still lets a
-//  top-level link from another site carry it, so the
+//  of inactivity — 2160 in the .env, 36 hours. Its cookie
+//  is named after APP_NAME, sent on every path of the site,
+//  hidden from scripts, and SameSite=Lax — which still lets
+//  a top-level link from another site carry it, so the
 //  control panel makes no change by GET.
 //
 //  Used by:
@@ -66,13 +65,12 @@ return [
 
     'domain' => env('SESSION_DOMAIN'),
 
-    // The Secure flag, from SESSION_SECURE_COOKIE — not set,
-    // so the cookie goes without it, though the site is served
-    // over https. Known bug LAB-62 (low): a browser would send
-    // the session and XSRF-TOKEN cookies on a plain http
-    // request, which HSTS narrows to a first visit. Fix:
-    // default the flag to on
-    'secure' => env('SESSION_SECURE_COOKIE'),
+    // The Secure flag, on unless SESSION_SECURE_COOKIE says
+    // otherwise: the site is served over https only, and a
+    // browser sends a cookie without the flag on a plain http
+    // request too — the session and XSRF-TOKEN cookies
+    // included
+    'secure' => env('SESSION_SECURE_COOKIE', true),
 
     // Scripts cannot read the cookie
     'http_only' => true,

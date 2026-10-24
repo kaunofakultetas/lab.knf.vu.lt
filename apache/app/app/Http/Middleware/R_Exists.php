@@ -4,14 +4,15 @@
 //  [*] R_Exists — ownership checks of groups and challenges
 //
 //  Guards the control panel's group and challenge routes:
-//  the group or challenge the request names — or the group a
-//  member or a group challenge belongs to, or the challenge
-//  a file link belongs to — must belong to the signed-in
-//  admin, created_by, unless the admin is a main admin, who
-//  may touch them all. A missing group or challenge sends
-//  the admin back with "No group!" or "No challenge!",
-//  someone else's with "You don't have permissions to do
-//  this!".
+//  the group or challenge the request names — or the group
+//  a member or a group challenge belongs to, or the
+//  challenge a file link belongs to — must belong to the
+//  signed-in admin, created_by, unless the admin is a main
+//  admin, who may touch them all. A missing group or
+//  challenge sends the admin back with "No group!" or "No
+//  challenge!", someone else's with "You don't have
+//  permissions to do this!" — a page of a group or
+//  challenge to its list instead.
 //
 //  Used by:
 //    - app/Http/Kernel.php — the r_exists alias
@@ -45,8 +46,10 @@ use App\Models\GroupsUsers;
 // R_Exists
 // -----------------------------------------------------------
 //
-// One method, handle, which the alias hands one of eight
-// types after its colon.
+//   handle  — the check, which the alias hands one of eight
+//             types after its colon
+//   refuse  — the refusal of a group or challenge, missing
+//             or someone else's
 //
 // Used by:
 //   - app/Http/Kernel.php — the r_exists alias
@@ -79,16 +82,16 @@ class R_Exists
     // returns nothing, which Laravel answers with an empty
     // page; every route names one of the eight.
     //
-    // Known bug LAB-58 (low): a GET page refused for a missing
-    // group or challenge goes back() to the page the browser
-    // came from — after an add or an update, that very page —
-    // so it redirects to itself until the browser gives up.
-    // Known bug LAB-64 (low): a missing membership, group
-    // challenge or file link is let through, and the action
-    // reads the id again later, so a row another admin creates
-    // in between is changed or deleted by an admin who does
-    // not own it. Fix: send a refused GET to its list, and
-    // refuse a missing row here.
+    // A refusal goes back to the page the admin came from, but
+    // a page of a group or challenge refused — one that no
+    // longer exists, or one the admin may not change — goes to
+    // its list (refuse): it is often the very page an add or
+    // an update went back to, and going back there would
+    // redirect to itself until the browser gave up. The row
+    // types let a row that does not exist through, as removing
+    // it again changes nothing; the actions behind them check
+    // the admin again on the row they find, as another admin
+    // may have created it in the meantime.
     //
     // Used by:
     //   - the r_exists alias — the group and challenge routes
@@ -104,10 +107,10 @@ class R_Exists
                 if(Auth::guard('admins')->user()?->main == 1 || Groups::where(['id'=>$uid, 'created_by'=>Auth::guard('admins')->id()])->count() == 1){
                     return $next($request);
                 } else {
-                    return back()->withErrors(['You don\'t have permissions to do this!']);
+                    return $this->refuse($request, 'You don\'t have permissions to do this!', '/control-panel/users/vu-groups');
                 }
             } else {
-                return back()->withErrors(['No group!']);
+                return $this->refuse($request, 'No group!', '/control-panel/users/vu-groups');
             }
         }
 
@@ -134,10 +137,10 @@ class R_Exists
                 if(Auth::guard('admins')->user()?->main == 1 || Challenges::where(['id'=>$uid, 'created_by'=>Auth::guard('admins')->id()])->count() == 1){
                     return $next($request);
                 } else {
-                    return back()->withErrors(['You don\'t have permissions to do this!']);
+                    return $this->refuse($request, 'You don\'t have permissions to do this!', '/control-panel/challenges');
                 }
             } else {
-                return back()->withErrors(['No challenge!']);
+                return $this->refuse($request, 'No challenge!', '/control-panel/challenges');
             }
         }
 
@@ -205,5 +208,35 @@ class R_Exists
                 return back()->withErrors(['You don\'t have permissions to do this!']);
             }
         }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // refuse
+    // -----------------------------------------------------------
+    //
+    // The refusal of a group or challenge — one that does not
+    // exist, or another admin's — with the error given: a page
+    // opened by GET goes to the list given, as going back could
+    // land on the refused page itself, the page an update went
+    // back to when its admin lost the right to it meanwhile; a
+    // dialog, which opens over the page it was asked from, and
+    // a POST go back.
+    //
+    // Used by:
+    //   - handle (above) — group_owned and challenge_owned
+    // -----------------------------------------------------------
+
+    private function refuse($request, string $error, string $list)
+    {
+        if ($request->isMethod('GET') && ! str_contains($request->path(), '/dialog/')) {
+            return redirect($list)->withErrors([$error]);
+        }
+
+        return back()->withErrors([$error]);
     }
 }

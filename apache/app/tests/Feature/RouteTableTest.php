@@ -570,28 +570,30 @@ final class RouteTableTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_every_id_in_an_address_takes_digits_only
+    // test_every_id_in_an_address_is_a_plain_number
     // -----------------------------------------------------------
     //
     // Every route parameter that names a record by its id
-    // takes digits only, so other text in its place is a 404
+    // takes a plain whole number only — digits without a
+    // leading zero — so other text in its place is a 404
     // before any check reads it: MySQL reads text that starts
-    // with a number as that number. The parameters that carry
-    // no id are listed here, so a new one has to be placed on
-    // one side or the other.
+    // with a number as that number, and the pages' scripts
+    // read a number with a leading zero as an octal one. The
+    // parameters that carry no id are listed here, so a new
+    // one has to be placed on one side or the other.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_every_id_in_an_address_takes_digits_only(): void
+    public function test_every_id_in_an_address_is_a_plain_number(): void
     {
         $notIds = ['public_id', 'public_group_id', 'alias', 'reset_token', 'verify_token', 'type', 'status', 'status_id'];
         $ids = 0;
 
         foreach (Router::getRoutes() as $route) {
             foreach (array_diff($route->parameterNames(), $notIds) as $name) {
-                $this->assertSame('[0-9]+', $route->wheres[$name] ?? null, "{$route->uri()}: {$name}");
+                $this->assertSame('[1-9][0-9]*', $route->wheres[$name] ?? null, "{$route->uri()}: {$name}");
                 $ids++;
             }
         }

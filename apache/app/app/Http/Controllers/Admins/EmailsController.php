@@ -126,7 +126,7 @@ class EmailsController extends BaseController
             $arr = array();
         }
 
-        $curr_page = $this->listPage();
+        $curr_page = $this->listPage(count($arr));
 
         $perPage = 50;
 

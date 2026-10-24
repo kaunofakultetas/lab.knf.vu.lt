@@ -25,16 +25,25 @@ $(document).ready(function(){
 		    layoutMode: 'fitRows' 
 		  }); 
 		  
-		  if(Cookies.get('filter_points_from') != undefined && Cookies.get('filter_points_to') != undefined && Cookies.get('filter_category') != undefined){
-			  $('#min').val(Cookies.get('filter_points_from'));
-			  $('#max').val(Cookies.get('filter_points_to'))
+		  // The filter's cookies from before its boxes started
+		  // empty held the prices of their day rather than bounds
+		  // the player typed, and would hide dearer challenges
+		  // added since: they are dropped unread, and the filter
+		  // keeps its bounds under names of its own
+		  Cookies.remove('filter_category');
+		  Cookies.remove('filter_points_from');
+		  Cookies.remove('filter_points_to');
+		  
+		  if(Cookies.get('dashboard_filter_from') != undefined && Cookies.get('dashboard_filter_to') != undefined && Cookies.get('dashboard_filter_category') != undefined){
+			  $('#min').val(Cookies.get('dashboard_filter_from'));
+			  $('#max').val(Cookies.get('dashboard_filter_to'))
 			  // Only a category one of the page's own buttons carries
 			  // comes back from the cookie: other hosts of the domain
 			  // can set the cookie too, and .is() builds HTML out of
 			  // a string that looks like it; anything else, an
 			  // "undefined" saved by a Filter click without a
 			  // category among them, means no category
-			  var category = Cookies.get('filter_category');
+			  var category = Cookies.get('dashboard_filter_category');
 			  var $button = $('.button-group-cats .button-group').filter(function() {
 				  return $(this).attr('data-filter') === category;
 			  });
@@ -46,7 +55,7 @@ $(document).ready(function(){
 			  $grid.isotope({
 				      filter: function() {
 				        var price = $(this).data('price');
-				        return (!category || $(this).is(category)) && price >= pointsBound(Cookies.get('filter_points_from'), -Infinity) && price <= pointsBound(Cookies.get('filter_points_to'), Infinity);
+				        return (!category || $(this).is(category)) && price >= pointsBound(Cookies.get('dashboard_filter_from'), -Infinity) && price <= pointsBound(Cookies.get('dashboard_filter_to'), Infinity);
 				      } 
 				  });
 		  } 
@@ -56,9 +65,9 @@ $(document).ready(function(){
 		    var max = pointsBound($('#max').val(), Infinity);
 		    
 		    var category = $('.button-group-cats').find('.active').data('filter');
-		    Cookies.set('filter_category', category, { secure: true });
-		    Cookies.set('filter_points_from', $('#min').val(), { secure: true });
-		    Cookies.set('filter_points_to', $('#max').val(), { secure: true });
+		    Cookies.set('dashboard_filter_category', category, { secure: true });
+		    Cookies.set('dashboard_filter_from', $('#min').val(), { secure: true });
+		    Cookies.set('dashboard_filter_to', $('#max').val(), { secure: true });
 		
 		    $grid.isotope({
 		      filter: function() {
@@ -73,9 +82,9 @@ $(document).ready(function(){
 			      var min = pointsBound($('#min').val(), -Infinity);
 		    	  var max = pointsBound($('#max').val(), Infinity);
 		    	  
-		    	  Cookies.set('filter_category', single_category, { secure: true });
-		    	  Cookies.set('filter_points_from', $('#min').val(), { secure: true });
-		          Cookies.set('filter_points_to', $('#max').val(), { secure: true });
+		    	  Cookies.set('dashboard_filter_category', single_category, { secure: true });
+		    	  Cookies.set('dashboard_filter_from', $('#min').val(), { secure: true });
+		          Cookies.set('dashboard_filter_to', $('#max').val(), { secure: true });
 		    
 				  $grid.isotope({
 				      filter: function() {
@@ -114,8 +123,7 @@ $(document).ready(function(){
 
 // A bound of the points filter, read from its box or from the
 // cookie that keeps the box's text: anything but a number —
-// an emptied box, or the "NaN" an emptied box once left in
-// the cookie — is no bound, given back as none
+// an emptied box, say — is no bound, given back as none
 function pointsBound(value, none){
 	var bound = parseInt(value, 10);
 	return isNaN(bound) ? none : bound;
@@ -208,15 +216,28 @@ function Post_Link(URL){
 // forms, which carry data-recaptcha-action — fetches its token
 // as it is sent rather than as the page loads: a token is good
 // for two minutes only, so a form filled in more slowly would
-// be refused. Should the reCAPTCHA script be missing or fail,
-// the form goes without a token, and the server refuses it
-// with the reCAPTCHA message
+// be refused. A second press while the token is on its way
+// sends nothing more, as a double press would register twice
+// or mail two reminder links — for fifteen seconds, after
+// which a press sends again: a send cancelled in the browser,
+// or a token that never comes, would otherwise leave the form
+// dead until a reload. Should the reCAPTCHA script be missing
+// or fail, the form goes without a token, and the server
+// refuses it with the reCAPTCHA message
 $(document).on('submit', 'form[data-recaptcha-action]', function(event){
 	var form = this;
 	if (typeof grecaptcha === 'undefined') {
 		return;
 	}
 	event.preventDefault();
+
+	if (form.getAttribute('data-sending') === '1') {
+		return;
+	}
+	form.setAttribute('data-sending', '1');
+	setTimeout(function() {
+		form.removeAttribute('data-sending');
+	}, 15000);
 
 	// The form's own submit, which no submit handler sees again
 	var send = function() {
@@ -229,4 +250,11 @@ $(document).on('submit', 'form[data-recaptcha-action]', function(event){
 			send();
 		}, send);
 	});
+});
+
+// A page the browser brings back from its history keeps the
+// mark of a form already sent, which would ignore every later
+// press of it
+$(window).on('pageshow', function(){
+	$('form[data-recaptcha-action]').removeAttr('data-sending');
 });

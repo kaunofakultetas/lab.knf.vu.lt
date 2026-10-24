@@ -533,4 +533,54 @@ final class ApacheTest extends TestCase
         $this->assertSame(400, $response->status());
         $this->assertStringNotContainsString('APP_KEY', $response->body());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_php_keeps_a_vu_sign_on_as_long_as_a_lab_session
+    // -----------------------------------------------------------
+    //
+    // SimpleSAMLphp keeps the VU login in a PHP session file,
+    // and a sign-out reaches sso.vu.lt only while that file is
+    // there. The image's PHP settings, which Apache's PHP
+    // reads as well, keep a session file for 36 hours, a lab
+    // session's length, where PHP's default deletes one 24
+    // minutes after its last write, so a student's sign-out
+    // after a long lab session still ends the single sign-on.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_php_keeps_a_vu_sign_on_as_long_as_a_lab_session(): void
+    {
+        $this->assertGreaterThanOrEqual(36 * 3600, (int) ini_get('session.gc_maxlifetime'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_image_has_a_folder_for_simplesamlphps_sessions
+    // -----------------------------------------------------------
+    //
+    // The image carries the folder docker-compose mounts
+    // SimpleSAMLphp's sessions into from the host, owned by
+    // the app's user, so that a redeploy keeps the VU logins a
+    // sign-out needs.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_image_has_a_folder_for_simplesamlphps_sessions(): void
+    {
+        $this->assertDirectoryExists('/var/www/simplesamlphp-sessions');
+        $this->assertSame(1000, fileowner('/var/www/simplesamlphp-sessions'));
+    }
 }

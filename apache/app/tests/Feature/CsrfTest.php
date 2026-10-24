@@ -19,7 +19,7 @@
 namespace Tests\Feature;
 
 use App\Models\Feedback;
-use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -279,7 +279,7 @@ final class CsrfTest extends TestCase
 
         $this->post("/user/challenge/vote/up/{$challenge->public_id}", ['_token' => $meta[1] ?? 'none'])->assertOk();
 
-        $this->assertSame('1', Redis::get("ThumbsUp_{$challenge->public_id}"));
+        $this->assertSame(1, DB::table('cyber_challenges_votes')->where(['challenge_id' => $challenge->id, 'vote' => 'up'])->count());
     }
 
 

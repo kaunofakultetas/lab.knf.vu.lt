@@ -87,11 +87,13 @@ class LeaderboardController extends BaseController
     // rows of ranking_table with ordinal ranks and how long
     // ago each last solve was, and the fifteen latest solves
     // with player, challenge and the challenge's points as
-    // they stand now. The players with a solve and the latest
-    // solves count only accounts and challenges that still
-    // exist, so solves left behind by an account deleted
-    // before its solves went with it count for no one. The
-    // view never shows the count of team accounts it is
+    // they stand now. Both times are counted from Unix
+    // seconds, as the local times repeat an hour when the
+    // clocks go back in October. The players with a solve and
+    // the latest solves count only accounts and challenges
+    // that still exist, so solves left behind by an account
+    // deleted before its solves went with it count for no one.
+    // The view never shows the count of team accounts it is
     // handed, and a standings list of every ranked player is
     // built too, and thrown away.
     //
@@ -115,7 +117,7 @@ class LeaderboardController extends BaseController
         if(!is_array($th)){ $th = array(); }
 
         $th = collect($th)->map(function($user) {
-            $user['created'] = $this->time_elapsed_string($user['created']);
+            $user['created'] = $this->time_elapsed_string('@' . $user['created_time']);
             return $user;
         });
 
@@ -134,8 +136,12 @@ class LeaderboardController extends BaseController
             return $user;
         });
 
-        $ordinalUsers = collect($ordinalUsers)->map(function($user) {
-            $user['last_challenge'] = $this->time_elapsed_string($user['last_challenge']);
+        $last_times = ChallengesHistory::lastTimes();
+
+        // Every answer books a history row; a solve without one
+        // falls back to its local time
+        $ordinalUsers = collect($ordinalUsers)->map(function($user) use ($last_times) {
+            $user['last_challenge'] = $this->time_elapsed_string(isset($last_times[$user['user_id']]) ? '@' . $last_times[$user['user_id']] : $user['last_challenge']);
             return $user;
         });
 

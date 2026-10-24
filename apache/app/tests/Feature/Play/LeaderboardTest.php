@@ -20,6 +20,10 @@
 
 namespace Tests\Feature\Play;
 
+use App\Http\Controllers\Users\SettingsController;
+use App\Models\ChallengesHistory;
+use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Redis;
 use Tests\TestCase;
 
@@ -239,7 +243,7 @@ final class LeaderboardTest extends TestCase
 
     public function test_the_time_of_the_last_solve_is_shown(): void
     {
-        $this->recordSolve($this->makePlayer(), $this->makeChallenge(), date('Y-m-d H:i:s', strtotime('-3 days')));
+        $this->recordSolveSecondsAgo($this->makePlayer(), $this->makeChallenge(), 3 * 86400);
         $this->signIn($this->makePlayer());
 
         $this->get('/user/leaderboard')->assertSeeInOrder(['Last challenge solved', '3 days ago']);
@@ -368,6 +372,60 @@ final class LeaderboardTest extends TestCase
 
 
     // -----------------------------------------------------------
+    // test_the_last_solve_is_counted_from_its_unix_time
+    // -----------------------------------------------------------
+    //
+    // How long ago the last solve was is counted from its Unix
+    // time, which stays right in the hour the clocks repeat in
+    // October, not from its local time, which then reads an
+    // hour early.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_last_solve_is_counted_from_its_unix_time(): void
+    {
+        $this->recordSolveInTheRepeatedHour($this->makePlayer(), $this->makeChallenge());
+
+        $response = $this->signIn($this->makePlayer())->get('/user/leaderboard');
+
+        $this->assertStringContainsString('<h3 class="h6 fw-normal text-dark">10 minutes ago</h3>', $this->pageContent($response));
+        $this->assertStringNotContainsString('3 hours ago', $this->pageContent($response));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_sidebar_counts_a_solve_from_its_unix_time
+    // -----------------------------------------------------------
+    //
+    // The feed of the sidebar counts how long ago a solve was
+    // from its Unix time too.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_sidebar_counts_a_solve_from_its_unix_time(): void
+    {
+        $this->recordSolveInTheRepeatedHour($this->makePlayer(), $this->makeChallenge());
+
+        $response = $this->signIn($this->makePlayer())->get('/user/leaderboard');
+
+        $response->assertSee('<span class="timestamp text-muted">10 minutes ago</span>', false);
+        $response->assertDontSee('<span class="timestamp text-muted">3 hours ago</span>', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
     // test_a_tie_goes_to_who_got_there_first
     // -----------------------------------------------------------
     //
@@ -420,5 +478,69 @@ final class LeaderboardTest extends TestCase
         $this->signIn($this->makePlayer())
             ->get('/user/leaderboard')
             ->assertSee('/assets/js/app.min.js?' . filemtime(public_path('assets/js/app.min.js')), false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_ranking_copy_reads_no_history
+    // -----------------------------------------------------------
+    //
+    // The ranking copy UpdateRankingTable rebuilds before
+    // every request reads no history: the history table has no
+    // index on the player, so grouping it would read all of it
+    // on every request. The leaderboards look up the times
+    // they show themselves.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_ranking_copy_reads_no_history(): void
+    {
+        $this->recordSolve($this->makePlayer(), $this->makeChallenge());
+        $queries = [];
+        DB::listen(function (QueryExecuted $query) use (&$queries) {
+            $queries[] = $query->sql;
+        });
+
+        SettingsController::update_rank_table();
+
+        $this->assertNotEmpty($queries);
+        foreach ($queries as $sql) {
+            $this->assertStringNotContainsString('cyber_challenges_history', $sql);
+        }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_solve_without_history_shows_its_local_time
+    // -----------------------------------------------------------
+    //
+    // A solve without a history row — which no answer leaves,
+    // but older data may — shows how long ago it was by its
+    // local time, rather than breaking the page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_solve_without_history_shows_its_local_time(): void
+    {
+        $player = $this->makePlayer();
+        $this->recordSolve($player, $this->makeChallenge(), date('Y-m-d H:i:s', time() - 7200));
+        ChallengesHistory::where(['user_id' => $player->id])->delete();
+
+        $response = $this->signIn($this->makePlayer())->get('/user/leaderboard');
+
+        $response->assertOk();
+        $this->assertStringContainsString('<h3 class="h6 fw-normal text-dark">2 hours ago</h3>', $this->pageContent($response));
     }
 }

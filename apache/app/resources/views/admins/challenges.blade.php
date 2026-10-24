@@ -41,13 +41,13 @@
             <div class="col-lg-5">   
              {{ Form::open(['method' => 'GET', 'class' => 'd-flex align-items-center']) }}
                   <div class="form-group flex-grow-1">  
-                    {{ Form::text('q', request()->query('q'), ['class' => 'form-control form-control-xs float-right', 'placeholder' => 'Search by challenge name or description']) }}
+                    {{ Form::text('q', $search, ['class' => 'form-control form-control-xs float-right', 'placeholder' => 'Search by challenge name or description']) }}
                   </div>
                   {{ Form::button('Search', ['class' => 'btn btn-primary ml-2', 'type' => 'submit']) }}
                 {{ Form::close() }}
              </div>
              </div>
-                  @if(request()->query('q') !='')
+                  @if($search !== '')
                     <a href="{{ env('APP_URL') }}/control-panel/challenges" class="float-right"><small><b>&#xD7; Clear all</b></small></a>
                     <div class="clear"></div>
                   @endif

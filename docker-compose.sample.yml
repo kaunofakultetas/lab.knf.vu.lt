@@ -64,6 +64,7 @@ services:
       - ./_SSO/simplesaml/config/:/var/www/html/vendor/simplesamlphp/simplesamlphp/config/:ro
       - ./_SSO/simplesaml/metadata/:/var/www/html/vendor/simplesamlphp/simplesamlphp/metadata/:ro
       - ./_SSO/simplesaml/cert/:/var/www/html/cert/:ro
+      - ./_DATA/apache/simplesamlphp-sessions:/var/www/simplesamlphp-sessions
 
       # Logs
       - ./_LOGS/apache/laravel_logs:/var/www/html/storage/logs
