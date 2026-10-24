@@ -41,6 +41,7 @@ use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
+use Illuminate\Testing\TestResponse;
 use Lunaweb\RecaptchaV3\Facades\RecaptchaV3;
 
 
@@ -69,6 +70,7 @@ use Lunaweb\RecaptchaV3\Facades\RecaptchaV3;
 //   fakeRecaptcha — the reCAPTCHA verdict
 //   setRegistrationOpen, setEventRange — the settings rows
 //   assertErrorFlashed — the error toast of the next page
+//   pageContent — a player page past its sidebar
 //
 // Used by:
 //   - every Feature, Http and Defects test class
@@ -573,5 +575,28 @@ abstract class TestCase extends BaseTestCase
         $errors = session('errors');
         $this->assertNotNull($errors, "No error was flashed; expected '{$message}'");
         $this->assertContains($message, $errors->all());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // pageContent
+    // -----------------------------------------------------------
+    //
+    // A player page's HTML after its sidebar, whose feed lists
+    // the latest solves of every player with their names and
+    // times: a test that checks what the page's own content
+    // leaves out reads past it.
+    //
+    // Used by:
+    //   - Play\LeaderboardTest and Play\GroupTest
+    // -----------------------------------------------------------
+
+    protected function pageContent(TestResponse $response): string
+    {
+        return Str::after(Str::after($response->getContent(), 'class="side-navbar'), '</nav>');
     }
 }

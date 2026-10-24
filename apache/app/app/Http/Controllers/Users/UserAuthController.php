@@ -26,6 +26,7 @@ namespace App\Http\Controllers\Users;
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Users\SettingsController;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -105,14 +106,14 @@ class UserAuthController extends BaseController
     // form comes back with the e-mail refilled; the password
     // is left out, so it never sits in the session.
     //
+    // Never verified means a verification token and no login
+    // ever: an account switched off before 2026-10-23, when
+    // the control panel's switch still left the token in
+    // place, holds one too, and a fresh link would let its
+    // owner switch it back on.
+    //
     // By design the form takes any number of wrong passwords:
     // the route has no rate limit, no lockout and no reCAPTCHA.
-    //
-    // Known bug LAB-43 (low): an account switched off before
-    // 2026-10-23, when the status switch still kept
-    // verify_token, reads as never verified, gets a fresh link
-    // and switches itself back on. Fix: mail a fresh link only
-    // to an account that has never signed in.
     //
     // Used by:
     //   - the login form of users/login.blade.php
@@ -139,7 +140,7 @@ class UserAuthController extends BaseController
             } else {
                 Auth::guard('users')->logout();
 
-                if (! empty($user->verify_token)) {
+                if (! empty($user->verify_token) && empty($user->last_login)) {
                     RegisterController::send_verification($user);
 
                     return redirect()->route('login_users')->withErrors(['Your account is not verified yet. We sent you a new verification link.']);
@@ -232,12 +233,13 @@ class UserAuthController extends BaseController
     // recorded — as the login form refuses an inactive local
     // account.
     //
-    // Known bug LAB-52 (low): the count, the username search
-    // and the insert are not kept apart from a second request,
-    // and vu_id has no unique key, so two first logins at once
-    // create a second account or end one in a server error.
-    // Fix: a unique key on vu_id, taking the existing account
-    // when the insert finds it taken.
+    // A first login creates the account under a MySQL named
+    // lock, counting the VU user's accounts again once it
+    // holds it, as vu_id has no unique key: the same first
+    // login sent twice at once — two tabs, a double click on
+    // the login button — waits for the other one, then finds
+    // the account it made, so the student gets one account
+    // and no clash over the username.
     //
     // Used by:
     //   - SamlAuth::handle (Http/Middleware/) — the SSO login
@@ -248,24 +250,34 @@ class UserAuthController extends BaseController
         $exists = User::where(['vu_id'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0]])->where('vu_id','!=', NULL)->count();
 
         if($exists == 0){
-            $name = $memberarr['urn:oid:2.5.4.42'][0].' '.$memberarr['urn:oid:2.5.4.4'][0];
+            // Should the lock not come within 10 seconds, the
+            // login goes on without it
+            DB::select('SELECT GET_LOCK(?, 10)', ['cyber_users_first_vu_login']);
 
-            // The username must be free: a local player may have
-            // registered the VU user id as one
-            $username = $memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0];
-            for ($n = 2; User::where(['username' => $username])->exists(); $n++) {
-                $username = $memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0] . '_' . $n;
+            try {
+                if (User::where(['vu_id'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0]])->where('vu_id','!=', NULL)->doesntExist()) {
+                    $name = $memberarr['urn:oid:2.5.4.42'][0].' '.$memberarr['urn:oid:2.5.4.4'][0];
+
+                    // The username must be free: a local player may have
+                    // registered the VU user id as one
+                    $username = $memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0];
+                    for ($n = 2; User::where(['username' => $username])->exists(); $n++) {
+                        $username = $memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0] . '_' . $n;
+                    }
+
+                    // The SSO's affiliation and group attributes are not
+                    // stored; the fields that kept them are switched off
+                    User::create([
+                        'username'=>$username,
+                        'vu_id'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0],
+                        'email'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.3'][0],
+                        'display_name'=>$name,
+                        'status'=>1,
+                    ]);
+                }
+            } finally {
+                DB::select('SELECT RELEASE_LOCK(?)', ['cyber_users_first_vu_login']);
             }
-
-            // The SSO's affiliation and group attributes are not
-            // stored; the fields that kept them are switched off
-            User::create([
-                'username'=>$username,
-                'vu_id'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0],
-                'email'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.3'][0],
-                'display_name'=>$name,
-                'status'=>1,
-            ]);
         }
 
         $id = User::where(['vu_id'=>$memberarr['urn:oid:0.9.2342.19200300.100.1.1'][0]])->get()->pluck('id')->first();

@@ -992,4 +992,107 @@ final class GroupsTest extends TestCase
         $response->assertSee('/assets/js/app_admin.min.js', false);
         $response->assertDontSee('/assets/js/app.min.js', false);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_group_deleted_meanwhile_takes_no_new_member
+    // -----------------------------------------------------------
+    //
+    // Another admin deletes the group after the ownership
+    // check has found it and before the member is added. The
+    // add's locked read finds no group, so it goes back with
+    // "No group!" and stores no row of a group that no longer
+    // exists.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_group_deleted_meanwhile_takes_no_new_member(): void
+    {
+        $group = $this->makeGroup();
+        $this->signInAdmin($this->makeAdmin(true))->from("/control-panel/users/vu-groups/users_list/{$group->id}");
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($group, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_groups`')) {
+                $interleaved = true;
+                app(UsersGroupsController::class)->destroy($group->id);
+            }
+        });
+
+        $this->post('/control-panel/dialog/users/vu-groups/users_store', ['uid' => $group->id, 'vu_id' => 's1234567']);
+
+        $this->assertTrue($interleaved);
+        $this->assertNull(Groups::find($group->id));
+        $this->assertSame(0, GroupsUsers::where('group_id', $group->id)->count());
+        $this->assertErrorFlashed('No group!');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_group_deleted_meanwhile_takes_no_new_challenge
+    // -----------------------------------------------------------
+    //
+    // As for a member, a challenge added to a group another
+    // admin deletes meanwhile goes back with "No group!" and
+    // stores no row.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_group_deleted_meanwhile_takes_no_new_challenge(): void
+    {
+        $group = $this->makeGroup();
+        $challenge = $this->makeChallenge();
+        $this->signInAdmin($this->makeAdmin(true))->from("/control-panel/users/vu-groups/challenges_list/{$group->id}");
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($group, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_groups`')) {
+                $interleaved = true;
+                app(UsersGroupsController::class)->destroy($group->id);
+            }
+        });
+
+        $this->post('/control-panel/dialog/users/vu-groups/challenges_store', ['uid' => $group->id, 'challenge_id' => $challenge->id]);
+
+        $this->assertTrue($interleaved);
+        $this->assertNull(Groups::find($group->id));
+        $this->assertSame(0, GroupsChallenges::where('group_id', $group->id)->count());
+        $this->assertErrorFlashed('No group!');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_id_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // A VU id put into the member form's address is passed
+    // over: the group gets the member the form names.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_id_in_the_address_never_replaces_the_forms(): void
+    {
+        $group = $this->makeGroup();
+        $this->signInAdmin($this->makeAdmin(true))->from("/control-panel/users/vu-groups/users_list/{$group->id}");
+
+        $this->post('/control-panel/dialog/users/vu-groups/users_store?vu_id=s2222222', ['uid' => $group->id, 'vu_id' => 's1111111']);
+
+        $this->assertSame(['s1111111'], GroupsUsers::where('group_id', $group->id)->pluck('vu_id')->all());
+    }
 }

@@ -158,7 +158,7 @@ class CategoriesController extends BaseController
             return back()->withErrors($validator);
         }
 
-        Categories::create(['name' => $request->get('name')]);
+        Categories::create(['name' => $request->input('name')]);
 
         session()->flash('success', 'Created!');
 
@@ -224,11 +224,11 @@ class CategoriesController extends BaseController
             return back()->withErrors($validator);
         }
 
-        if (Categories::whereKey($request->get('uid'))->doesntExist()) {
+        if (Categories::whereKey($request->input('uid'))->doesntExist()) {
             return back()->withErrors(['No category!']);
         }
 
-        Categories::where(['id' => $request->get('uid')])->update(['name' => $request->get('name')]);
+        Categories::where(['id' => $request->input('uid')])->update(['name' => $request->input('name')]);
 
         session()->flash('success', 'Updated!');
 

@@ -492,4 +492,33 @@ final class ChallengeFilesTest extends TestCase
         $this->post('/control-panel/challenges_file/update' . $sneaked, ['uid' => $file->id, 'name' => 'capture.pcap', 'file_url' => 'https://files.test/v2.pcap']);
         $this->assertSame('https://files.test/v2.pcap', $file->refresh()->file_url);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_link_goes_to_the_challenge_the_form_names
+    // -----------------------------------------------------------
+    //
+    // A uid put into the form's address is passed over: the
+    // link goes to the challenge the form names, the one the
+    // ownership check read.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_link_goes_to_the_challenge_the_form_names(): void
+    {
+        $named = $this->makeChallenge();
+        $other = $this->makeChallenge();
+        $this->signInAdmin($this->makeAdmin(true))->from("/control-panel/challenges/files/{$named->id}");
+
+        $this->post("/control-panel/challenges_file/store?uid={$other->id}", ['uid' => $named->id, 'name' => 'capture.pcap', 'file_url' => 'https://files.test/capture.pcap']);
+
+        $this->assertSame(1, ChallengesFiles::where('challenge_id', $named->id)->count());
+        $this->assertSame(0, ChallengesFiles::where('challenge_id', $other->id)->count());
+    }
 }

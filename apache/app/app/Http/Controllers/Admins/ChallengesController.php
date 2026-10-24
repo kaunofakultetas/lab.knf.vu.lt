@@ -260,14 +260,14 @@ class ChallengesController extends BaseController
         }
 
         Challenges::create([
-            'name' => $request->get('name'),
+            'name' => $request->input('name'),
             'public_id'=>Str::uuid(),
-            'partner_id' => $request->get('partner_id'),
+            'partner_id' => $request->input('partner_id'),
             'created_by'=>Auth::guard('admins')->id(),
-            'descr' => $request->get('descr'),
-            'content' => $this->clean_content($request->get('content')),
-            'answer' => trim($request->get('answer')),
-            'points' => $request->get('points'),
+            'descr' => $request->input('descr'),
+            'content' => $this->clean_content($request->input('content')),
+            'answer' => trim($request->input('answer')),
+            'points' => $request->input('points'),
             'hidden' => $hidden
         ]);
 
@@ -336,8 +336,7 @@ class ChallengesController extends BaseController
     // to 255 characters, as in store, a form that fails going
     // back with the errors and what was typed — with the
     // content through clean_content, then goes to the list
-    // with "Updated!", and rebuilds the players' solve feed,
-    // which shows the name. The hidden switch and the author
+    // with "Updated!". The hidden switch and the author
     // stay as they were, so a lab admin keeps a challenge a
     // main admin corrected. New points count for later solves
     // only: a solve keeps the points it gave, kept with it as
@@ -362,16 +361,14 @@ class ChallengesController extends BaseController
             return back()->withErrors($validator)->withInput();
         }
 
-        Challenges::where(['id' => $request->get('uid')])->update([
-            'name' => $request->get('name'),
-            'partner_id' => $request->get('partner_id'),
-            'descr' => $request->get('descr'),
-            'content' => $this->clean_content($request->get('content')),
-            'answer' => $request->get('answer'),
-            'points' => $request->get('points')
+        Challenges::where(['id' => $request->input('uid')])->update([
+            'name' => $request->input('name'),
+            'partner_id' => $request->input('partner_id'),
+            'descr' => $request->input('descr'),
+            'content' => $this->clean_content($request->input('content')),
+            'answer' => $request->input('answer'),
+            'points' => $request->input('points')
         ]);
-
-        ChallengesHistory::refreshFeed();
 
         session()->flash('success', 'Updated!');
 
@@ -390,8 +387,8 @@ class ChallengesController extends BaseController
     // POST /control-panel/challenges/delete/{uid}
     //
     // Deletes the challenge with its feed rows, file links,
-    // solves, categories and group places, rebuilds the
-    // players' solve feed, then goes back with "Deleted!".
+    // solves, categories and group places, then goes back
+    // with "Deleted!".
     // The points its solves gave come off the solvers' totals
     // first, as a total is the sum of the player's solves. It
     // all runs in one transaction that first locks the
@@ -437,8 +434,6 @@ class ChallengesController extends BaseController
         if (! $deleted) {
             return back()->withErrors(['No challenge!']);
         }
-
-        ChallengesHistory::refreshFeed();
 
         session()->flash('success', 'Deleted!');
 
@@ -494,15 +489,15 @@ class ChallengesController extends BaseController
     // uid by the ticked ones — the keys of the item field —
     // then goes back, with "Categoried updated!" when any was
     // ticked. With every box unticked the form sends no item
-    // field at all, and the challenge is left with none.
-    //
-    // Known bug LAB-49 (low): the categories are deleted
-    // before item is checked, and an item sent as a single
-    // value throws a TypeError, a server error after the
-    // delete. Known bug LAB-50 (low): the delete and the
-    // inserts run without a transaction or lock, so a double
-    // click stores each category twice. Fix: check item first,
-    // and lock the challenge's row around the replacement.
+    // field at all, and the challenge is left with none. An
+    // item field that is not a list — only a hand-made request
+    // sends one — goes back with the error and changes
+    // nothing, and a key that names no category is passed
+    // over. The replacement runs in a transaction that first
+    // locks the challenge's row, so a save sent twice at once
+    // — a double click — waits for the other and stores each
+    // category once, and a challenge deleted meanwhile goes
+    // back with "No challenge!".
     //
     // Used by:
     //   - the categories dialog's form
@@ -510,18 +505,41 @@ class ChallengesController extends BaseController
 
     public function categories_store(Request $request)
     {
-        ChallengesCategories::where(['challenge_id'=>$request->get('uid')])->delete();
+        $validator = Validator::make($request->all(), [
+            'item' => 'nullable|array'
+        ]);
 
-        $items = $request->get('item', []);
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
 
-        if(count($items)>0){
-            foreach($items as $k => $v){
-                ChallengesCategories::create([
-                    'cat_id' => $k,
-                    'challenge_id' => $request->get('uid')
-                ]);
+        $items = $request->input('item') ?? [];
+        $known = Categories::whereIn('id', array_keys($items))->pluck('id')->all();
+
+        $saved = DB::transaction(function () use ($request, $items, $known) {
+            if (Challenges::whereKey($request->input('uid'))->lockForUpdate()->first() === null) {
+                return false;
             }
 
+            ChallengesCategories::where(['challenge_id'=>$request->input('uid')])->delete();
+
+            foreach($items as $k => $v){
+                if (in_array($k, $known)) {
+                    ChallengesCategories::create([
+                        'cat_id' => $k,
+                        'challenge_id' => $request->input('uid')
+                    ]);
+                }
+            }
+
+            return true;
+        });
+
+        if (! $saved) {
+            return back()->withErrors(['No challenge!']);
+        }
+
+        if(count($items)>0){
             session()->flash('success', 'Categoried updated!');
         }
 
@@ -541,14 +559,9 @@ class ChallengesController extends BaseController
     //
     // The admins.challenges_files view: the challenge's file
     // links, 50 to a page of the list, under the challenge's
-    // name.
-    //
-    // Known bug LAB-37 (high): the page prints the id from the
-    // address into its add button's onClick, and r_exists lets
-    // through any text MySQL casts to that id, a number
-    // followed by script, so a crafted address runs its script
-    // with the admin's session once the button is clicked.
-    // Fix: let the route take digits only (whereNumber).
+    // name. The page prints the id into its add button's
+    // script, which is safe as the route takes digits only
+    // (RouteServiceProvider::boot).
     //
     // Used by:
     //   - the files links of the challenges list
@@ -689,10 +702,7 @@ class ChallengesController extends BaseController
     // of Laravel 10.6 ignores its protocol list, so starts_with
     // is what keeps ftp, smb, file and the other schemes the
     // url rule knows out. The name and address stored are the
-    // ones the rules checked, which validate() hands back: get()
-    // reads the form's address before its body, so a second
-    // file_url in the address would otherwise be stored
-    // unchecked.
+    // ones the rules checked, which validate() hands back.
     //
     // Used by:
     //   - the link dialog, for a new link
@@ -706,7 +716,7 @@ class ChallengesController extends BaseController
         ]);
 
         ChallengesFiles::create([
-            'challenge_id'=>$request->get('uid'),
+            'challenge_id'=>$request->input('uid'),
             'name'=>$checked['name'],
             'file_url'=>$checked['file_url']
         ]);
@@ -746,11 +756,11 @@ class ChallengesController extends BaseController
             'file_url' => 'required|url:http,https|starts_with:http://,https://|max:2048',
         ]);
 
-        if (ChallengesFiles::whereKey($request->get('uid'))->doesntExist()) {
+        if (ChallengesFiles::whereKey($request->input('uid'))->doesntExist()) {
             return back()->withErrors(['No file!']);
         }
 
-        ChallengesFiles::where(['id'=>$request->get('uid')])->update([
+        ChallengesFiles::where(['id'=>$request->input('uid')])->update([
             'name'=>$checked['name'],
             'file_url'=>$checked['file_url']]);
 
@@ -801,9 +811,9 @@ class ChallengesController extends BaseController
     //
     // Writes the status from the address into the challenge's
     // hidden column — 1 hides it from the main dashboard, 0
-    // shows it, any other value is a 404 — rebuilds the
-    // players' solve feed, which lists visible challenges
-    // only, and goes back. Main-only.
+    // shows it, any other value is a 404 — and goes back; the
+    // players' solve feed lists visible challenges only.
+    // Main-only.
     //
     // Used by:
     //   - Post_Link() of custom_admin.js — the Visible and
@@ -817,8 +827,6 @@ class ChallengesController extends BaseController
         }
 
         Challenges::where(['id'=>$challenge_id])->update(['hidden'=>$status]);
-
-        ChallengesHistory::refreshFeed();
 
         return back();
     }

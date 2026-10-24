@@ -34,8 +34,8 @@ use App\Models\ChallengesHistory;
 use App\Models\ChallengesSubmitted;
 use App\Models\GroupsChallenges;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Redis;
 use Tests\TestCase;
 
 
@@ -1030,9 +1030,8 @@ final class ChallengesTest extends TestCase
     // test_deleting_a_challenge_takes_it_out_of_the_shared_history
     // -----------------------------------------------------------
     //
-    // The shared history in the players' sidebar is rebuilt when
-    // a challenge is deleted, so it no longer lists the deleted
-    // challenge's solves.
+    // Once a challenge is deleted, the shared history in the
+    // players' sidebar no longer lists its solves.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -1042,11 +1041,11 @@ final class ChallengesTest extends TestCase
     {
         $challenge = $this->makeChallenge(['name' => 'Doomed Task']);
         $this->signIn($this->makePlayer())->post("/user/challenge/{$challenge->public_id}", ['answer' => $challenge->answer]);
-        $this->assertStringContainsString('Doomed Task', (string) Redis::get('tasks_history'));
+        $this->assertStringContainsString('Doomed Task', json_encode(ChallengesHistory::feed()));
 
         $this->signInAdmin($this->makeAdmin(true))->post("/control-panel/challenges/delete/{$challenge->id}");
 
-        $this->assertStringNotContainsString('Doomed Task', (string) Redis::get('tasks_history'));
+        $this->assertStringNotContainsString('Doomed Task', json_encode(ChallengesHistory::feed()));
     }
 
 
@@ -1073,12 +1072,12 @@ final class ChallengesTest extends TestCase
         $this->signIn($this->makePlayer())->post("/user/challenge/{$challenge->public_id}", ['answer' => 'packet_wizard']);
 
         $this->signInAdmin($admin)->post('/control-panel/challenges/update', $this->challengeForm(['uid' => $challenge->id, 'name' => 'New Name']));
-        $history = (string) Redis::get('tasks_history');
+        $history = json_encode(ChallengesHistory::feed());
         $this->assertStringContainsString('New Name', $history);
         $this->assertStringNotContainsString('Old Name', $history);
 
         $this->post("/control-panel/challenges/status/1/{$challenge->id}");
-        $this->assertStringNotContainsString('New Name', (string) Redis::get('tasks_history'));
+        $this->assertStringNotContainsString('New Name', json_encode(ChallengesHistory::feed()));
     }
 
 
@@ -1215,5 +1214,128 @@ final class ChallengesTest extends TestCase
 
         $response->assertSee('<td>Port 80 Scan</td>', false);
         $response->assertDontSee('<td>Hidden Flag</td>', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_challenge_field_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // A name put into the form's address, however long, is
+    // passed over: the challenge is stored with the name of
+    // the form, the one the rules checked.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_challenge_field_in_the_address_never_replaces_the_forms(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/challenges/create');
+
+        $this->post('/control-panel/challenges/store?name=' . str_repeat('n', 300), $this->challengeForm());
+
+        $this->assertTrue(Challenges::where('name', 'Packet Detective')->exists());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_category_save_without_a_list_keeps_the_categories
+    // -----------------------------------------------------------
+    //
+    // An item field sent as a single value rather than the
+    // list of ticked boxes, which only a hand-made request
+    // does, goes back with the error and leaves the
+    // challenge's categories as they were.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_category_save_without_a_list_keeps_the_categories(): void
+    {
+        $challenge = $this->makeChallenge();
+        ChallengesCategories::create(['challenge_id' => $challenge->id, 'cat_id' => 1]);
+
+        $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/challenges')
+            ->post('/control-panel/challenges/categories/store', ['uid' => $challenge->id, 'item' => 'x'])
+            ->assertRedirect('/control-panel/challenges');
+
+        $this->assertSame(1, ChallengesCategories::where('challenge_id', $challenge->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_category_save_passes_over_unknown_categories
+    // -----------------------------------------------------------
+    //
+    // A ticked key that names no category is passed over, so
+    // the challenge gets only categories that exist.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_category_save_passes_over_unknown_categories(): void
+    {
+        $challenge = $this->makeChallenge();
+
+        $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/challenges')
+            ->post('/control-panel/challenges/categories/store', ['uid' => $challenge->id, 'item' => [4 => 4, 987654321 => 987654321]]);
+
+        $this->assertEquals([4], ChallengesCategories::where('challenge_id', $challenge->id)->pluck('cat_id')->all());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_double_clicked_category_save_stores_each_category_once
+    // -----------------------------------------------------------
+    //
+    // The save replaces the categories in a transaction that
+    // first locks the challenge's row. Here the second save of
+    // a double click runs in full where it would wait, at the
+    // first one's lock, and the challenge still ends with each
+    // category once.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_double_clicked_category_save_stores_each_category_once(): void
+    {
+        $challenge = $this->makeChallenge();
+        $form = ['uid' => $challenge->id, 'item' => [4 => 4]];
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/challenges');
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($form, &$interleaved) {
+            $sql = strtolower($query->sql);
+            if (!$interleaved && (str_contains($sql, 'for update') || str_starts_with($sql, 'delete from `cyber_challenges_categories`'))) {
+                $interleaved = true;
+                app(ChallengesController::class)->categories_store(Request::create('/', 'POST', $form));
+            }
+        });
+
+        $this->post('/control-panel/challenges/categories/store', $form);
+
+        $this->assertTrue($interleaved);
+        $this->assertSame(1, ChallengesCategories::where('challenge_id', $challenge->id)->count());
     }
 }

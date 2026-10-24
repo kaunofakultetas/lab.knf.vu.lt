@@ -207,9 +207,9 @@ class EmailsController extends BaseController
         }
 
         Emails::create([
-            'name' => $request->get('name'),
-            'content' => $request->get('content'),
-            'subject' => $request->get('subject'),
+            'name' => $request->input('name'),
+            'content' => $request->input('content'),
+            'subject' => $request->input('subject'),
             'sent' => 0
         ]);
 
@@ -281,14 +281,14 @@ class EmailsController extends BaseController
             return back()->withErrors($validator)->withInput();
         }
 
-        if (Emails::whereKey($request->get('uid'))->doesntExist()) {
+        if (Emails::whereKey($request->input('uid'))->doesntExist()) {
             return redirect(route('admin.emails'))->withErrors(['No email!']);
         }
 
-        Emails::where(['id' => $request->get('uid')])->update([
-            'name' => $request->get('name'),
-            'content' => $request->get('content'),
-            'subject' => $request->get('subject')
+        Emails::where(['id' => $request->input('uid')])->update([
+            'name' => $request->input('name'),
+            'content' => $request->input('content'),
+            'subject' => $request->input('subject')
         ]);
 
         session()->flash('success', 'Updated!');
@@ -382,7 +382,7 @@ class EmailsController extends BaseController
             return back()->withErrors($validator);
         }
 
-        Mail::to($request->get('email'))->send(new SendMail(Emails::findOrFail($email_id)->subject, Emails::findOrFail($email_id)->content));
+        Mail::to($request->input('email'))->send(new SendMail(Emails::findOrFail($email_id)->subject, Emails::findOrFail($email_id)->content));
 
         session()->flash('success', 'Test email sent!');
 

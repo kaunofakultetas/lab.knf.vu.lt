@@ -70,13 +70,9 @@ class Controller extends BaseController
     // redirect finds it, and a page of the other side, or of
     // another site, is never resumed: for a refused POST
     // Laravel keeps the address the visitor came from, which
-    // may be anywhere.
-    //
-    // Known bug LAB-41 (low): a dialog the panel or the player
-    // side loads into a modal is kept as the page asked for
-    // when a guest is bounced from it, and this resumes it:
-    // the visitor lands on a bare form. Fix: never resume an
-    // address under /dialog/.
+    // may be anywhere. Nor is a dialog: the panel and the
+    // player side load those into a modal, and one a guest
+    // was bounced from would come back as a bare form.
     //
     // Used by:
     //   - Users\UserAuthController — login and cp
@@ -87,7 +83,7 @@ class Controller extends BaseController
     {
         $intended = session()->pull('url.intended');
 
-        if (is_string($intended) && str_starts_with($intended, url($path) . '/')) {
+        if (is_string($intended) && str_starts_with($intended, url($path) . '/') && ! str_contains($intended, '/dialog/')) {
             return redirect($intended);
         }
 

@@ -416,4 +416,34 @@ final class SsoLoginTest extends TestCase
 
         $this->assertNull(session('url.intended'));
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_login_never_resumes_a_dialog
+    // -----------------------------------------------------------
+    //
+    // A guest bounced from a dialog the panel loads into its
+    // modal has the dialog's address kept as the page asked
+    // for, as jQuery's request accepts HTML first. The admin's
+    // VU login goes on to the dashboard instead of that
+    // address, which would show a bare form without layout or
+    // menu.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_login_never_resumes_a_dialog(): void
+    {
+        $this->get('/control-panel/dialog/category/new', ['X-Requested-With' => 'XMLHttpRequest', 'Accept' => 'text/html, */*; q=0.01'])
+            ->assertRedirect('/control-panel');
+        $admin = $this->makeAdmin(true);
+        $this->fakeIdentityProvider($admin->vu_id, $admin->email);
+
+        $this->get('/control-panel/login')->assertRedirect('/control-panel/dashboard');
+    }
 }

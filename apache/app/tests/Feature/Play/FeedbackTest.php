@@ -154,4 +154,33 @@ final class FeedbackTest extends TestCase
         $response->assertSessionHasErrors('feedback');
         $this->assertSame(0, Feedback::where('user_id', $player->id)->count());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_feedback_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // Feedback put into the form's address as a list is passed
+    // over: the text stored is the form's, the one the rule
+    // checked, and the player goes back as after any feedback.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_feedback_in_the_address_never_replaces_the_forms(): void
+    {
+        $player = $this->makePlayer();
+
+        $this->signIn($player)
+            ->from('/user/leaderboard')
+            ->post('/user/feedback?feedback[]=x', ['feedback' => 'Great lab'])
+            ->assertRedirect('/user/leaderboard');
+
+        $this->assertSame('Great lab', Feedback::where('user_id', $player->id)->value('feedback'));
+    }
 }

@@ -26,7 +26,9 @@ namespace Tests\Feature\Auth;
 use App\Http\Controllers\Admins\AdminAuthController;
 use App\Http\Controllers\Users\UserAuthController;
 use App\Models\User;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 
@@ -271,5 +273,48 @@ final class SsoProvisioningTest extends TestCase
         $this->assertNull($id);
         $this->assertNull(session('main'));
         $this->assertDatabaseMissing('cyber_admins', ['vu_id' => $player->vu_id]);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_two_first_vu_logins_at_once_make_one_account
+    // -----------------------------------------------------------
+    //
+    // A student's first VU login reaching the lab twice at
+    // once, from two tabs or a double click, makes one
+    // account. Here the second login runs in full right after
+    // the first one has counted the student's accounts and
+    // found none; the first then counts again under its lock,
+    // finds the second one's account and signs into it.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_two_first_vu_logins_at_once_make_one_account(): void
+    {
+        $attributes = [
+            'urn:oid:0.9.2342.19200300.100.1.1' => ['s7654321'],
+            'urn:oid:0.9.2342.19200300.100.1.3' => ['ona@stud.vu.lt'],
+            'urn:oid:2.5.4.42'                  => ['Ona'],
+            'urn:oid:2.5.4.4'                   => ['Onaitė'],
+        ];
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($attributes, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as aggregate from `cyber_users` where (`vu_id` = ?)')) {
+                $interleaved = true;
+                UserAuthController::check_member($attributes);
+            }
+        });
+
+        $id = UserAuthController::check_member($attributes);
+
+        $this->assertTrue($interleaved);
+        $this->assertSame(1, User::where('vu_id', 's7654321')->count());
+        $this->assertSame(User::where('vu_id', 's7654321')->value('id'), $id);
     }
 }

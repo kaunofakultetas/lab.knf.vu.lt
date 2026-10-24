@@ -358,8 +358,8 @@ final class LeaderboardTest extends TestCase
         $response = $this->signIn($this->makePlayer())->get('/user/leaderboard');
 
         $response->assertSeeInOrder(['Last challenge solved', '2 hours ago']);
-        $response->assertDontSee('5 days ago');
-        $response->assertDontSee('1 week ago');
+        $this->assertStringNotContainsString('5 days ago', $this->pageContent($response));
+        $this->assertStringNotContainsString('1 week ago', $this->pageContent($response));
     }
 
 
@@ -395,5 +395,30 @@ final class LeaderboardTest extends TestCase
         $ranking = json_decode(Redis::get('ranking_table'), true);
         $this->assertSame(1, $ranking[$early->id]['user_rank']);
         $this->assertSame(2, $ranking[$late->id]['user_rank']);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_player_pages_let_the_browser_keep_the_script
+    // -----------------------------------------------------------
+    //
+    // The player layout links its script bundle with the
+    // file's time in the address, which changes only when the
+    // file does, so the browser keeps the bundle from page to
+    // page instead of fetching it again each time.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_player_pages_let_the_browser_keep_the_script(): void
+    {
+        $this->signIn($this->makePlayer())
+            ->get('/user/leaderboard')
+            ->assertSee('/assets/js/app.min.js?' . filemtime(public_path('assets/js/app.min.js')), false);
     }
 }

@@ -413,4 +413,30 @@ final class CategoriesTest extends TestCase
         $this->assertErrorFlashed('No category!');
         $response->assertSessionMissing('success');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_category_name_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // A name put into the form's address, however long, is
+    // passed over: the category is stored with the name of the
+    // form, the one the rules checked.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_category_name_in_the_address_never_replaces_the_forms(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))
+            ->from('/control-panel/categories')
+            ->post('/control-panel/dialog/category/store?name=' . str_repeat('n', 300), ['name' => 'Hardware Hacking']);
+
+        $this->assertTrue(Categories::where('name', 'Hardware Hacking')->exists());
+    }
 }

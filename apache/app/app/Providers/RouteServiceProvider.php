@@ -57,7 +57,13 @@ class RouteServiceProvider extends ServiceProvider
     //
     // Defines the rate limiter, then loads the API routes
     // under /api with the api group and the site's routes
-    // with the web group — sessions, cookies and CSRF.
+    // with the web group — sessions, cookies and CSRF. A
+    // route parameter that carries a record's id — uid,
+    // email_id, challenge_id or user_id — takes digits only,
+    // and other text in its place is a 404: MySQL reads text
+    // that starts with a number as that number, so it would
+    // pass the routes' r_exists checks and reach pages that
+    // print the id into their scripts.
     //
     // Used by:
     //   - Laravel, once every provider is registered
@@ -66,6 +72,8 @@ class RouteServiceProvider extends ServiceProvider
     public function boot()
     {
         $this->configureRateLimiting();
+
+        Route::patterns(['uid' => '[0-9]+', 'email_id' => '[0-9]+', 'challenge_id' => '[0-9]+', 'user_id' => '[0-9]+']);
 
         $this->routes(function () {
             Route::middleware('api')

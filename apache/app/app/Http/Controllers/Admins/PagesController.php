@@ -189,9 +189,9 @@ class PagesController extends BaseController
         }
 
         Pages::create([
-            'name' => $request->get('name'),
-            'content' => $request->get('content'),
-            'alias' => $request->get('alias')
+            'name' => $request->input('name'),
+            'content' => $request->input('content'),
+            'alias' => $request->input('alias')
         ]);
 
         session()->flash('success', 'Created!');
@@ -257,21 +257,21 @@ class PagesController extends BaseController
         $validator = Validator::make($request->all(), [
             'name' => ['required', 'max:255'],
             'content' => ['required'],
-            'alias' => ['required', 'max:50', 'unique:cyber_pages,alias,' . (int) $request->get('uid')]
+            'alias' => ['required', 'max:50', 'unique:cyber_pages,alias,' . (int) $request->input('uid')]
         ]);
 
         if ($validator->fails()) {
             return back()->withErrors($validator)->withInput();
         }
 
-        if (Pages::whereKey($request->get('uid'))->doesntExist()) {
+        if (Pages::whereKey($request->input('uid'))->doesntExist()) {
             return redirect(route('admin.pages'))->withErrors(['No page!']);
         }
 
-        Pages::where(['id' => $request->get('uid')])->update([
-            'name' => $request->get('name'),
-            'content' => $request->get('content'),
-            'alias' => $request->get('alias')
+        Pages::where(['id' => $request->input('uid')])->update([
+            'name' => $request->input('name'),
+            'content' => $request->input('content'),
+            'alias' => $request->input('alias')
         ]);
 
         session()->flash('success', 'Updated!');

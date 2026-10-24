@@ -14,8 +14,6 @@
 //  Python suites of the other house stacks follow.
 //
 //  Used by:
-//    - Defects\AdminDefectsTest
-//    - Defects\PlayerDefectsTest
 //    - Defects\DashboardDefectsTest
 //    - Defects\AccountDefectsTest
 //    - Defects\SsoDefectsTest
@@ -46,8 +44,6 @@ use PHPUnit\Framework\AssertionFailedError;
 // turned into a failure by the test itself.
 //
 // Used by:
-//   - Defects\AdminDefectsTest
-//   - Defects\PlayerDefectsTest
 //   - Defects\DashboardDefectsTest
 //   - Defects\AccountDefectsTest
 //   - Defects\SsoDefectsTest
@@ -71,8 +67,6 @@ trait KnownDefects
     // fixed and the test now belongs in its home file.
     //
     // Used by:
-    //   - Defects\AdminDefectsTest
-    //   - Defects\PlayerDefectsTest
     //   - Defects\DashboardDefectsTest
     //   - Defects\AccountDefectsTest
     //   - Defects\SsoDefectsTest

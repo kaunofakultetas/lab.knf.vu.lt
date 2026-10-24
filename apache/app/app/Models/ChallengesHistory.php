@@ -8,26 +8,25 @@
 //  date. submit_answer also hands it a content line, which
 //  is neither fillable nor a column, so it is dropped. The
 //  latest six rows of challenges every player may see, with
-//  the player's username and the challenge's name, are kept
-//  in Redis as tasks_history for the player sidebar's feed
-//  (refreshFeed).
+//  the player's username and the challenge's name, are the
+//  player sidebar's feed (feed), read on every player page.
 //
 //  Used by:
 //    - Users\ChallengesController::submit_answer — writes a
-//      row and refreshes tasks_history
+//      row
+//    - Users\BaseController — the sidebar's feed
 //    - Admins\LeaderboardController::dashboard — the latest
 //      solves of the control panel
-//    - Admins\ChallengesController — update, status and
-//      destroy refresh tasks_history, destroy deletes rows
+//    - Admins\ChallengesController::destroy — deletes a
+//      challenge's rows
 //    - Admins\UsersController::destroy — deletes an
-//      account's rows and refreshes tasks_history
+//      account's rows
 // -----------------------------------------------------------
 
 
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Redis;
 
 
 
@@ -42,10 +41,11 @@ use Illuminate\Support\Facades\Redis;
 //
 // Columns: created_time, created, user_id and challenge_id.
 //
-//   refreshFeed — rebuilds tasks_history
+//   feed — the sidebar's six latest solves
 //
 // Used by:
-//   - Users\ChallengesController::submit_answer
+//   - Users\ChallengesController::submit_answer and
+//     Users\BaseController
 //   - Admins\LeaderboardController, Admins\ChallengesController
 //     and Admins\UsersController
 // -----------------------------------------------------------
@@ -85,45 +85,34 @@ class ChallengesHistory extends Model
 
 
     // -----------------------------------------------------------
-    // refreshFeed
+    // feed
     // -----------------------------------------------------------
     //
-    // Rebuilds tasks_history, the sidebar's feed: the six
-    // latest solves, newest first, each row with the player's
-    // username and the challenge's name. Only solves of
-    // challenges on the main dashboard (hidden 0) by accounts
-    // that still exist are listed, so a hidden challenge's
-    // name never reaches players outside its groups, and no
-    // row is left without its player or its challenge. It
-    // runs after every change the feed shows: a solve, and a
-    // challenge renamed, hidden, shown or deleted, or an
-    // account deleted.
-    //
-    // Known bug LAB-46 (low): nothing rebuilds the feed when
-    // the key is missing, so it stays empty after Redis starts
-    // empty, until the next solve. Known bug LAB-47 (low): the
-    // read and the write are not ordered between two rebuilds,
-    // so the one that read first may write last and drop the
-    // other solve. Fix: build the feed from the database when
-    // it is read.
+    // The sidebar's feed: the six latest solves, newest first,
+    // each row with the player's username and the challenge's
+    // name. Only solves of challenges on the main dashboard
+    // (hidden 0) by accounts that still exist are listed, so
+    // a hidden challenge's name never reaches players outside
+    // its groups, and no row is left without its player or
+    // its challenge. It is read from the database on every
+    // player page, so it always shows the solves and names as
+    // they are: a copy kept in Redis was empty after Redis
+    // restarted, and of two solves at once, the rebuild that
+    // read first could write last and drop the other.
     //
     // Used by:
-    //   - Users\ChallengesController::submit_answer
-    //   - Admins\ChallengesController — update, status and
-    //     destroy
-    //   - Admins\UsersController::destroy
+    //   - Users\BaseController — the player layout's sidebar
     // -----------------------------------------------------------
 
-    public static function refreshFeed(): void
+    public static function feed(): array
     {
-        Redis::set('tasks_history', json_encode(
-            self::selectRaw("cyber_challenges_history.*, cyber_users.username, cyber_challenges.name")
+        return self::selectRaw("cyber_challenges_history.*, cyber_users.username, cyber_challenges.name")
             ->join('cyber_users', 'cyber_users.id', 'cyber_challenges_history.user_id')
             ->join('cyber_challenges', 'cyber_challenges.id', 'cyber_challenges_history.challenge_id')
             ->where('cyber_challenges.hidden', 0)
             ->orderBy('cyber_challenges_history.id', 'desc')
             ->take(6)
             ->get()
-            ->toArray()));
+            ->toArray();
     }
 }

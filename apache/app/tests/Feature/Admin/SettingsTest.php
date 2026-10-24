@@ -156,4 +156,27 @@ final class SettingsTest extends TestCase
         $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD])->assertRedirect('/user/dashboard');
         $this->get('/user/leaderboard')->assertOk();
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_setting_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // A value put into the switch's address is passed over:
+    // registration takes the value the form sends.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_setting_in_the_address_never_replaces_the_forms(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/settings/reg_open?reg_open=1', ['reg_open' => '0']);
+
+        $this->assertSame('0', (string) Settings::find(2)->val1);
+    }
 }

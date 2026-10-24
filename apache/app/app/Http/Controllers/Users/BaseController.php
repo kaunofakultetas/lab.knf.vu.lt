@@ -69,10 +69,10 @@ class BaseController extends Controller
     // from ranking_table, the Redis copy UpdateRankingTable
     // refreshes on every request; a player without a solve has
     // neither, and then no username either. The groups are the
-    // player's memberships by VU id, the feed is tasks_history
-    // — the six latest solves of challenges every player may
-    // see (ChallengesHistory::refreshFeed) — with how long ago
-    // each was.
+    // player's memberships by VU id, the feed is the six
+    // latest solves of challenges every player may see, read
+    // from the database (ChallengesHistory::feed), with how
+    // long ago each was.
     //
     // Used by:
     //   - Laravel, when it builds a player controller for a
@@ -117,9 +117,7 @@ class BaseController extends Controller
             // STEP 3: the feed of recent solves, each with how long
             // ago it was
             // =====================================================
-            $task_history = json_decode(Redis::get('tasks_history'), 1);
-
-            if(!is_array($task_history)){ $task_history = array(); }
+            $task_history = ChallengesHistory::feed();
 
             if(count($task_history)>0){
                 foreach ($task_history as $kk => $vv) {

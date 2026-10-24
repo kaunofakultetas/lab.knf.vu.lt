@@ -28,6 +28,7 @@ use App\Mail\SendNewPass;
 use App\Mail\SendRemindLink;
 use App\Models\User;
 use Illuminate\Database\Events\QueryExecuted;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
@@ -782,5 +783,91 @@ final class PasswordResetTest extends TestCase
         $link = $this->mailedLink($this->makePlayer());
 
         $this->withSession(['url.intended' => 'https://lab.knf.vu.lt/user/leaderboard'])->post("/reset/{$link}")->assertRedirect('/');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_reset_lets_other_accounts_be_written_while_it_mails
+    // -----------------------------------------------------------
+    //
+    // The reset claims the link by the account's id, so while
+    // its mail goes out only that account's row is locked. A
+    // second connection adds an account right after the claim,
+    // inside the transaction that also sends the mail, and
+    // gets through at once; a claim that searched
+    // remember_token, which has no index, would lock every row
+    // of cyber_users until the mail server answered.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_reset_lets_other_accounts_be_written_while_it_mails(): void
+    {
+        $player = $this->makePlayer();
+        $token = Str::random(50) . '-' . now()->getTimestamp();
+        $player->update(['remember_token' => hash('sha256', $token)]);
+        config(['database.connections.probe' => config('database.connections.mysql')]);
+        $blocked = null;
+        DB::listen(function (QueryExecuted $query) use (&$blocked) {
+            if ($blocked !== null || ! str_starts_with($query->sql, 'update `cyber_users` set `password`')) {
+                return;
+            }
+            $probe = DB::connection('probe');
+            $probe->statement('SET SESSION innodb_lock_wait_timeout = 1');
+            $probe->beginTransaction();
+            try {
+                $probe->table('cyber_users')->insert(['username' => 'probe_' . Str::random(10), 'email' => 'probe@players.test', 'password' => 'x']);
+                $blocked = false;
+            } catch (QueryException $e) {
+                $blocked = true;
+            } finally {
+                $probe->rollBack();
+            }
+        });
+
+        $this->post("/reset/{$token}")->assertRedirect('/');
+        DB::purge('probe');
+
+        $this->assertNotNull($blocked, 'the reset claimed nothing');
+        $this->assertFalse($blocked, 'no account could be written while the reset held its claim');
+        Mail::assertSent(SendNewPass::class);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_reminder_goes_to_the_stored_address
+    // -----------------------------------------------------------
+    //
+    // The e-mail column's collation matches addresses ignoring
+    // case and accents, so a look-alike address finds the
+    // account. The reminder then goes to the address stored
+    // with the account, never to the one typed.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_reminder_goes_to_the_stored_address(): void
+    {
+        Mail::fake();
+        $this->fakeRecaptcha('forgotpass', 0.9);
+        $this->makePlayer(['email' => 'jonas@gmail.com']);
+
+        $this->from('/forgot-password')->post('/forgot-password', [
+            'email'                => 'jonas@gmáil.com',
+            'g-recaptcha-response' => self::RECAPTCHA_TOKEN,
+        ]);
+
+        Mail::assertSent(SendRemindLink::class, fn (SendRemindLink $mail) => $mail->hasTo('jonas@gmail.com'));
+        Mail::assertNotSent(SendRemindLink::class, fn (SendRemindLink $mail) => ! $mail->hasTo('jonas@gmail.com'));
     }
 }

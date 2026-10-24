@@ -170,7 +170,7 @@ class PartnersController extends BaseController
         $file->move(storage_path('app/public'), $file_name);
 
         $addPartner = new Partners();
-        $addPartner->name = $request->get('name');
+        $addPartner->name = $request->input('name');
         $addPartner->picture = $file_name;
         $addPartner->save();
 
@@ -242,12 +242,12 @@ class PartnersController extends BaseController
         $file->move(storage_path('app/public'), $file_name);
 
         $update = array(
-            'name' => $request->get('name'),
+            'name' => $request->input('name'),
             'picture' => $file_name
         );
 
         Partners::where([
-            'id' => $request->get('uid')
+            'id' => $request->input('uid')
         ])->update($update);
 
         session()->flash('success', 'Updated!');

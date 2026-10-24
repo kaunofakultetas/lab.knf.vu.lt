@@ -33,7 +33,9 @@ use App\Http\Controllers\Admins\BaseController;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Redis;
 use Illuminate\Http\Request;
+use App\Models\Challenges;
 use App\Models\GroupsUsers;
 use App\Models\User;
 use App\Models\ChallengesSubmitted;
@@ -223,17 +225,17 @@ class UsersController extends BaseController
             return back()->withErrors($validator);
         }
 
-        if (User::where(array('email' => $request->get('email')))->count() == 0) {
-            if (User::where(array('username' =>$request->get('username')))->count() == 0) {
+        if (User::where(array('email' => $request->input('email')))->count() == 0) {
+            if (User::where(array('username' =>$request->input('username')))->count() == 0) {
                 $addMember = new User();
-                $addMember->username = $request->get('username');
-                $addMember->email = $request->get('email');
-                $addMember->password = Hash::make($request->get('password'));
+                $addMember->username = $request->input('username');
+                $addMember->email = $request->input('email');
+                $addMember->password = Hash::make($request->input('password'));
                 $addMember->status = 1;
                 $addMember->save();
 
-                if($request->get('notif') == 1) {
-                    Mail::to($request->get('email'))->send(new SendNewPass(['email'=>$request->get('email'), 'new_pass'=>$request->get('password')]));
+                if($request->input('notif') == 1) {
+                    Mail::to($request->input('email'))->send(new SendNewPass(['email'=>$request->input('email'), 'new_pass'=>$request->input('password')]));
                 }
 
                 return redirect(route('admin.users'))->withSuccess("User created!");
@@ -308,18 +310,18 @@ class UsersController extends BaseController
             return back()->withErrors($validator);
         }
 
-        $user = User::find($request->get('uid'));
+        $user = User::find($request->input('uid'));
 
         if ($user === null) {
             return back()->withErrors(['No user!']);
         }
 
-        User::where(['id' => $request->get('uid')])->update([
-            'password' => Hash::make($request->get('password'))
+        User::where(['id' => $request->input('uid')])->update([
+            'password' => Hash::make($request->input('password'))
         ]);
 
-        if($request->get('notif') == 1) {
-            Mail::to($user->email)->send(new SendNewPass(['new_pass'=>$request->get('password'), 'email'=>$user->email]));
+        if($request->input('notif') == 1) {
+            Mail::to($user->email)->send(new SendNewPass(['new_pass'=>$request->input('password'), 'email'=>$user->email]));
         }
 
         session()->flash('success', 'Updated!');
@@ -388,13 +390,13 @@ class UsersController extends BaseController
     // Deletes the account and, for a VU account, its group
     // memberships, which are kept by VU id, and its solves and
     // feed rows, so no count, list or leaderboard keeps a
-    // player who no longer exists; the players' solve feed is
-    // rebuilt without them. The feedback of the account stays.
-    //
-    // Known bug LAB-48 (low): the account's votes stay in the
-    // challenges' thumbs counts, with their Vote_ marks, which
-    // hold no direction to take back. Fix: store the direction
-    // in the mark and take the votes off here.
+    // player who no longer exists. Its votes come off the
+    // challenges' thumbs counts too: the player's mark on a
+    // challenge holds the vote's direction, and deleting the
+    // mark claims it, so a delete sent twice at once takes a
+    // vote off once. A mark from before the direction was
+    // kept holds 1 and is only deleted. The feedback of the
+    // account stays.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -413,7 +415,15 @@ class UsersController extends BaseController
 
         ChallengesSubmitted::where(['user_id' => $user_id])->delete();
         ChallengesHistory::where(['user_id' => $user_id])->delete();
-        ChallengesHistory::refreshFeed();
+
+        foreach (Challenges::pluck('public_id') as $public_id) {
+            $mark = 'Vote_'.$public_id.'_'.$user_id;
+            $vote = Redis::get($mark);
+
+            if (Redis::del($mark) === 1 && in_array($vote, ['up', 'down'], true)) {
+                Redis::decr(($vote === 'up' ? 'ThumbsUp_' : 'ThumbsDown_').$public_id);
+            }
+        }
 
         session()->flash('success', 'User deleted!');
 

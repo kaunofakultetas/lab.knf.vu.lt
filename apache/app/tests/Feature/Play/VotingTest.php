@@ -5,13 +5,14 @@
 //
 //  The vote route counts one thumb per player and challenge
 //  in Redis — ThumbsUp_ and ThumbsDown_ keys per challenge,
-//  and a Vote_ key per challenge and player that locks the
-//  player's buttons. It is a POST the page's script sends
-//  with the CSRF token of the page's csrf-token meta tag,
-//  answers with an empty body, and asks for a session but
-//  not for a solve: the buttons sit on the challenge page
-//  too, before the answer. Only up and down are votes, and
-//  only for a challenge the player may open.
+//  and a Vote_ key per challenge and player, holding the
+//  vote's direction, that locks the player's buttons. It is
+//  a POST the page's script sends with the CSRF token of
+//  the page's csrf-token meta tag, answers with an empty
+//  body, and asks for a session but not for a solve: the
+//  buttons sit on the challenge page too, before the
+//  answer. Only up and down are votes, and only for a
+//  challenge the player may open.
 //
 //  Used by:
 //    - PHPUnit — the Feature suite (runTests.sh)
@@ -102,8 +103,8 @@ final class VotingTest extends TestCase
     // -----------------------------------------------------------
     //
     // An up vote raises the challenge's up count, marks the
-    // player as having voted, and the route answers 200 with
-    // nothing in the body.
+    // player as having voted up, and the route answers 200
+    // with nothing in the body.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -120,7 +121,7 @@ final class VotingTest extends TestCase
         $this->assertSame('', $response->getContent());
         $this->assertSame(1, $this->counter('ThumbsUp', $challenge));
         $this->assertSame(0, $this->counter('ThumbsDown', $challenge));
-        $this->assertSame('1', Redis::get("Vote_{$challenge->public_id}_{$player->id}"));
+        $this->assertSame('up', Redis::get("Vote_{$challenge->public_id}_{$player->id}"));
     }
 
 

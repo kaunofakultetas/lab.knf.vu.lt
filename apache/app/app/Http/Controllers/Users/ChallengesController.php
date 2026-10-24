@@ -282,9 +282,8 @@ class ChallengesController extends BaseController
     //
     // Checks an answer and books a right one: the solve with
     // its points and address, the points added to the player,
-    // a row of the solve feed and a fresh tasks_history in
-    // Redis (ChallengesHistory::refreshFeed); then back to the
-    // dashboard — or the group's page — with the points won.
+    // and a row of the solve feed; then back to the dashboard
+    // — or the group's page — with the points won.
     // Every "VU{" and "}" is removed from the answer and from
     // the stored flag alike before the compare, so a flag
     // matches with or without its wrapper, however it was
@@ -339,7 +338,7 @@ class ChallengesController extends BaseController
         // =======================================================
         // An answer that is not text — only a hand-made request
         // sends one — counts as no answer
-        $answer = $request->get('answer');
+        $answer = $request->input('answer');
         $answer = is_string($answer) ? trim(str_replace("VU{","",str_replace("}","",$answer))) : '';
 
         $challenge_id = Challenges::getIdByPublicId($public_id);
@@ -352,9 +351,9 @@ class ChallengesController extends BaseController
         $solved = ChallengesSubmitted::where('user_id', '=', Auth::guard('users')->id())->where('challenge_id', '=', $challenge_id)->count();
 
 
-        // STEP 3: a right answer books the solve, the points, the
-        // feed row and the cached feed
-        // =======================================================
+        // STEP 3: a right answer books the solve, the points and
+        // the feed row
+        // ======================================================
         if ($solved == 0) {
             if ($answer !== '' && $challenge_answer === $answer) {
                 $booked = DB::transaction(function () use ($challenge_id, $challenge_points) {
@@ -411,8 +410,6 @@ class ChallengesController extends BaseController
                     return back()->withErrors(['Already solved']);
                 }
 
-                ChallengesHistory::refreshFeed();
-
                 if($public_group_id == NULL){
                     return redirect(route('user_dashboard'))->withSuccess("Your answer is correct! You received $challenge_points points");
                 } else {
@@ -442,10 +439,13 @@ class ChallengesController extends BaseController
     // Redis — INCR, so votes cast at the same moment all
     // count — once the player's mark is claimed with SETNX,
     // which sets it only when it is unset, so a player's two
-    // votes sent at once count once. Any other type, a
-    // challenge that does not exist and a hidden one the
-    // player may not open (hiddenFromPlayer) are a 404 and
-    // count nothing. The answer is an empty page.
+    // votes sent at once count once. The mark holds the
+    // vote's direction, so deleting the account can take the
+    // vote back (Admins\UsersController::destroy); marks set
+    // before it did hold 1. Any other type, a challenge that
+    // does not exist and a hidden one the player may not open
+    // (hiddenFromPlayer) are a 404 and count nothing. The
+    // answer is an empty page.
     //
     // Used by:
     //   - thumbs() and thumbs_list() of custom.js — the vote
@@ -459,7 +459,7 @@ class ChallengesController extends BaseController
         }
 
         // The mark is checked and set in one command
-        if(Redis::setnx('Vote_'.$public_id.'_'.Auth::guard('users')->id(), 1)){
+        if(Redis::setnx('Vote_'.$public_id.'_'.Auth::guard('users')->id(), $type)){
             if($type == 'up'){
                 Redis::incr('ThumbsUp_'.$public_id);
             }
@@ -508,13 +508,9 @@ class ChallengesController extends BaseController
     // "Thank you for your feedback!". The text may be empty;
     // a field that is not text — only a hand-made request
     // sends one — goes back with the error and stores
-    // nothing.
-    //
-    // Known bug LAB-44 (low): the rule checks the body but the
-    // save reads get(), which takes the address first, so
-    // feedback sent there as a list ends in a server error;
-    // the admin forms read the same way. Fix: save what the
-    // validator checked.
+    // nothing. The text is read as the rule reads it, the
+    // form's body before the address, so the text stored is
+    // always the one checked.
     //
     // Used by:
     //   - the form of the feedback dialog
@@ -532,7 +528,7 @@ class ChallengesController extends BaseController
 
         Feedback::create([
             'user_id'=>Auth::guard('users')->id(),
-            'feedback'=>$req->get('feedback'),
+            'feedback'=>$req->input('feedback'),
             'created'=>date("Y-m-d H:i:s")
         ]);
 

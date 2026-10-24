@@ -4,7 +4,7 @@
 //  [*] SsoDefectsTest — open defects of the VU single sign-on
 //
 //  Each test states the behaviour the lab wants where the
-//  SSO login or logout falls short today, under a LAB-nn id;
+//  SSO logout falls short today, under a LAB-nn id;
 //  KnownDefects reports it incomplete while the defect is
 //  open and fails it once a fix lands. The tests replace the
 //  SimpleSAMLphp client with a Mockery overload, as
@@ -35,7 +35,7 @@ use Tests\TestCase;
 // SsoDefectsTest
 // -----------------------------------------------------------
 //
-// LAB-41 and LAB-42.
+// LAB-42.
 //
 // Used by:
 //   - PHPUnit — the Defects suite (runTests.sh)
@@ -49,52 +49,6 @@ final class SsoDefectsTest extends TestCase
     // assertDefectStillOpen, which reports a test incomplete
     // while its defect is open
     use KnownDefects;
-
-
-
-
-
-
-    // -----------------------------------------------------------
-    // test_lab_41_a_vu_login_never_resumes_a_dialog
-    // -----------------------------------------------------------
-    //
-    // Known bug LAB-41 (low): a guest bounced from a dialog
-    // the panel loads into its modal (dialogs.js, jQuery's
-    // load) has the dialog's address kept as the page asked
-    // for, as jQuery's request accepts HTML first and so does
-    // not count as a JSON one. The VU login then resumes it,
-    // as Controller::intendedWithin checks only that the
-    // address lies under /control-panel or /user: an admin
-    // whose session ran out, and who opened a dialog, lands on
-    // a bare form without layout or menu. The same holds for
-    // the player's feedback dialog. Fix: never resume an
-    // address under /dialog/.
-    //
-    // Used by:
-    //   - PHPUnit — the Defects suite (runTests.sh)
-    // -----------------------------------------------------------
-
-    public function test_lab_41_a_vu_login_never_resumes_a_dialog(): void
-    {
-        $this->get('/control-panel/dialog/category/new', ['X-Requested-With' => 'XMLHttpRequest', 'Accept' => 'text/html, */*; q=0.01'])
-            ->assertRedirect('/control-panel');
-        $admin = $this->makeAdmin(true);
-        $client = Mockery::mock('overload:SimpleSAML\Auth\Simple');
-        $client->shouldReceive('requireAuth')->once();
-        $client->shouldReceive('getAttributes')->andReturn([
-            'urn:oid:0.9.2342.19200300.100.1.1' => [$admin->vu_id],
-            'urn:oid:0.9.2342.19200300.100.1.3' => [$admin->email],
-            'urn:oid:2.5.4.42'                  => ['Ona'],
-            'urn:oid:2.5.4.4'                   => ['Onaitė'],
-        ]);
-
-        $response = $this->get('/control-panel/login');
-
-        $this->assertDefectStillOpen('LAB-41', function () use ($response) {
-            $response->assertRedirect('/control-panel/dashboard');
-        });
-    }
 
 
 

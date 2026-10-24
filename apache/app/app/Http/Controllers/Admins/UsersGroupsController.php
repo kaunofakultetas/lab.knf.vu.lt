@@ -221,7 +221,7 @@ class UsersGroupsController extends BaseController
             return back()->withErrors($validator);
         }
 
-        Groups::create(['name' => $request->get('name'), 'created_by'=>Auth::guard('admins')->id(), 'created'=>date("Y-m-d H:i:s"), 'public_id'=>Str::uuid()]);
+        Groups::create(['name' => $request->input('name'), 'created_by'=>Auth::guard('admins')->id(), 'created'=>date("Y-m-d H:i:s"), 'public_id'=>Str::uuid()]);
 
         session()->flash('success', 'Created!');
 
@@ -283,7 +283,7 @@ class UsersGroupsController extends BaseController
             return back()->withErrors($validator);
         }
 
-        Groups::where(['id' => $request->get('uid')])->update(['name' => $request->get('name')]);
+        Groups::where(['id' => $request->input('uid')])->update(['name' => $request->input('name')]);
 
         session()->flash('success', 'Updated!');
 
@@ -302,12 +302,11 @@ class UsersGroupsController extends BaseController
     // POST /control-panel/users/vu-groups/delete/{uid}
     //
     // Deletes the group with its challenge places and
-    // memberships, then goes back with "Deleted!".
-    //
-    // Known bug LAB-51 (low): the deletes run with no lock and
-    // no transaction, so an add in flight can insert a row of
-    // the group after its rows are gone. Fix: lock the group's
-    // row in a transaction around the deletes.
+    // memberships, then goes back with "Deleted!". The deletes
+    // run in a transaction that first locks the group's row,
+    // as the adds do, so an add in flight either finishes
+    // first and its row goes with the group, or waits and
+    // then finds no group.
     //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
@@ -318,9 +317,13 @@ class UsersGroupsController extends BaseController
     {
         session()->flash('success', 'Deleted!');
 
-        GroupsChallenges::where(['group_id'=>$uid])->delete();
-        GroupsUsers::where(['group_id'=>$uid])->delete();
-        Groups::destroy($uid);
+        DB::transaction(function () use ($uid) {
+            Groups::whereKey($uid)->lockForUpdate()->first();
+
+            GroupsChallenges::where(['group_id'=>$uid])->delete();
+            GroupsUsers::where(['group_id'=>$uid])->delete();
+            Groups::destroy($uid);
+        });
 
         return back();
     }
@@ -339,14 +342,9 @@ class UsersGroupsController extends BaseController
     // The admins.users-groups-userlist view: the group's
     // members by VU id, the latest added first like every
     // list of the panel, 50 to a page of the list, under the
-    // group's name.
-    //
-    // Known bug LAB-37 (high): the page prints the id from the
-    // address into its add button's onClick, and r_exists lets
-    // through any text MySQL casts to that id, a number
-    // followed by script, so a crafted address runs its script
-    // with the admin's session once the button is clicked.
-    // Fix: let the route take digits only (whereNumber).
+    // group's name. The page prints the id into its add
+    // button's script, which is safe as the route takes
+    // digits only (RouteServiceProvider::boot).
     //
     // Used by:
     //   - the members buttons of the groups list
@@ -431,13 +429,9 @@ class UsersGroupsController extends BaseController
     // The check and the insert run in a transaction that
     // first locks the group's row, so an add sent twice at
     // once — a double click — waits, then finds the member
-    // there, and stores it once.
-    //
-    // Known bug LAB-51 (low): the lock's read is ignored, so a
-    // group another admin deleted after r_exists' check still
-    // gets the row, which nothing removes. Fix: refuse with
-    // "No group!" when the locked read finds no group, and
-    // lock the group in destroy too.
+    // there, and stores it once; a group another admin
+    // deleted meanwhile goes back with "No group!" and gets
+    // no row.
     //
     // Used by:
     //   - the member dialog's form
@@ -453,18 +447,26 @@ class UsersGroupsController extends BaseController
             return back()->withErrors($validator);
         }
 
-        DB::transaction(function () use ($request) {
-            Groups::whereKey($request->get('uid'))->lockForUpdate()->first();
+        $found = DB::transaction(function () use ($request) {
+            if (Groups::whereKey($request->input('uid'))->lockForUpdate()->first() === null) {
+                return false;
+            }
 
-            $num = GroupsUsers::where(['vu_id' => $request->get('vu_id'), 'group_id' => $request->get('uid')])->get()->count();
+            $num = GroupsUsers::where(['vu_id' => $request->input('vu_id'), 'group_id' => $request->input('uid')])->get()->count();
 
             if($num == 0){
-                GroupsUsers::create(['vu_id' => $request->get('vu_id'), 'group_id' => $request->get('uid')]);
+                GroupsUsers::create(['vu_id' => $request->input('vu_id'), 'group_id' => $request->input('uid')]);
                 session()->flash('success', 'Added!');
             } else {
                 session()->flash('danger', 'User already added!');
             }
+
+            return true;
         });
+
+        if (! $found) {
+            return back()->withErrors(['No group!']);
+        }
 
         return back();
     }
@@ -512,14 +514,9 @@ class UsersGroupsController extends BaseController
     //
     // The admins.users-groups-challengeslist view: the group's
     // challenges by name, newest first, 50 to a page of the
-    // list, under the group's name.
-    //
-    // Known bug LAB-37 (high): the page prints the id from the
-    // address into its add button's onClick, and r_exists lets
-    // through any text MySQL casts to that id, a number
-    // followed by script, so a crafted address runs its script
-    // with the admin's session once the button is clicked.
-    // Fix: let the route take digits only (whereNumber).
+    // list, under the group's name. The page prints the id
+    // into its add button's script, which is safe as the
+    // route takes digits only (RouteServiceProvider::boot).
     //
     // Used by:
     //   - the challenges buttons of the groups list
@@ -643,13 +640,8 @@ class UsersGroupsController extends BaseController
     // challenge, or naming one that does not exist, goes back
     // with the error. As in users_store, the group's row is
     // locked around the check and the insert, so a double
-    // click stores the challenge once.
-    //
-    // Known bug LAB-51 (low): the lock's read is ignored, so a
-    // group another admin deleted after r_exists' check still
-    // gets the row, which nothing removes. Fix: refuse with
-    // "No group!" when the locked read finds no group, and
-    // lock the group in destroy too.
+    // click stores the challenge once, and a group deleted
+    // meanwhile goes back with "No group!" and gets no row.
     //
     // Used by:
     //   - the challenge dialog's form
@@ -665,18 +657,26 @@ class UsersGroupsController extends BaseController
             return back()->withErrors($validator);
         }
 
-        DB::transaction(function () use ($request) {
-            Groups::whereKey($request->get('uid'))->lockForUpdate()->first();
+        $found = DB::transaction(function () use ($request) {
+            if (Groups::whereKey($request->input('uid'))->lockForUpdate()->first() === null) {
+                return false;
+            }
 
-            $num = GroupsChallenges::where(['group_id' => $request->get('uid'), 'challenge_id' => $request->get('challenge_id')])->get()->count();
+            $num = GroupsChallenges::where(['group_id' => $request->input('uid'), 'challenge_id' => $request->input('challenge_id')])->get()->count();
 
             if($num == 0){
-                GroupsChallenges::create(['challenge_id' => $request->get('challenge_id'), 'group_id' => $request->get('uid')]);
+                GroupsChallenges::create(['challenge_id' => $request->input('challenge_id'), 'group_id' => $request->input('uid')]);
                 session()->flash('success', 'Added!');
             } else {
                 session()->flash('danger', 'Challenge already added!');
             }
+
+            return true;
         });
+
+        if (! $found) {
+            return back()->withErrors(['No group!']);
+        }
 
         return back();
     }

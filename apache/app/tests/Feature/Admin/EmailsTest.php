@@ -647,4 +647,35 @@ final class EmailsTest extends TestCase
         $this->withSession($stale)->post("/control-panel/emails/send/{$template->id}")
             ->assertRedirect('/control-panel/emails');
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_template_field_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // A subject put into the edit form's address is passed
+    // over: the template keeps the subject of the form.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_template_field_in_the_address_never_replaces_the_forms(): void
+    {
+        $template = $this->makeTemplate();
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->post('/control-panel/emails/update?subject=Hijacked', [
+            'uid'     => $template->id,
+            'name'    => 'Autumn reminder',
+            'subject' => 'Autumn',
+            'content' => '<p>Autumn.</p>',
+        ]);
+
+        $this->assertSame('Autumn', $template->refresh()->subject);
+    }
 }

@@ -66,15 +66,18 @@ class R_Exists
     //
     // group_owned and challenge_owned read the id from the
     // route's uid, the _uid types from the uid field the forms
-    // post; membership_owned and group_challenge_owned read a
-    // member's or a group challenge's row id from the route's
-    // uid and check the group the row belongs to, and
-    // file_owned and file_owned_uid read a file link's id and
-    // check the challenge the link belongs to. Whether the
-    // admin is a main admin is read from the account on every
-    // request, as in Perms. A type other than the eight falls
-    // through and returns nothing, which Laravel answers with
-    // an empty page; every route names one of the eight.
+    // post — from the form's body first, as the controllers
+    // read it, so a uid added to the address cannot have one
+    // record checked and another changed; membership_owned and
+    // group_challenge_owned read a member's or a group
+    // challenge's row id from the route's uid and check the
+    // group the row belongs to, and file_owned and
+    // file_owned_uid read a file link's id and check the
+    // challenge the link belongs to. Whether the admin is a
+    // main admin is read from the account on every request, as
+    // in Perms. A type other than the eight falls through and
+    // returns nothing, which Laravel answers with an empty
+    // page; every route names one of the eight.
     //
     // Used by:
     //   - the r_exists alias — the group and challenge routes
@@ -99,7 +102,7 @@ class R_Exists
 
         // The group whose id the form posts as uid
         if($type =='group_owned_uid'){
-            $uid = $request->get('uid');
+            $uid = $request->input('uid');
 
             if(Groups::where(['id'=>$uid])->count() == 1) {
                 if(Auth::guard('admins')->user()?->main == 1 || Groups::where(['id'=>$uid, 'created_by'=>Auth::guard('admins')->id()])->count() == 1){
@@ -129,7 +132,7 @@ class R_Exists
 
         // The challenge whose id the form posts as uid
         if($type =='challenge_owned_uid'){
-            $uid = $request->get('uid');
+            $uid = $request->input('uid');
 
             if(Challenges::where(['id'=>$uid])->count() == 1) {
                 if(Auth::guard('admins')->user()?->main == 1 || Challenges::where(['id'=>$uid, 'created_by'=>Auth::guard('admins')->id()])->count() == 1){
@@ -183,7 +186,7 @@ class R_Exists
 
         // The same, by the link's id the form posts as uid
         if($type =='file_owned_uid'){
-            $challenge_id = ChallengesFiles::where(['id'=>$request->get('uid')])->value('challenge_id');
+            $challenge_id = ChallengesFiles::where(['id'=>$request->input('uid')])->value('challenge_id');
 
             if($challenge_id === null || Auth::guard('admins')->user()?->main == 1 || Challenges::where(['id'=>$challenge_id, 'created_by'=>Auth::guard('admins')->id()])->count() == 1){
                 return $next($request);

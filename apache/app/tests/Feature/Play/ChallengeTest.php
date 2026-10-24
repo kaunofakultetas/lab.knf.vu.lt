@@ -34,7 +34,6 @@ use App\Models\User;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -692,9 +691,9 @@ final class ChallengeTest extends TestCase
     // test_a_solve_is_announced_in_the_shared_history
     // -----------------------------------------------------------
     //
-    // The solve history every player sees in the sidebar is
-    // rewritten in Redis on each solve, newest first, naming
-    // the player and the challenge.
+    // The solve history every player sees in the sidebar
+    // lists the solve, newest first, naming the player and the
+    // challenge.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -706,7 +705,7 @@ final class ChallengeTest extends TestCase
 
         $this->answer($challenge, $challenge->answer);
 
-        $history = json_decode(Redis::get('tasks_history'), true);
+        $history = ChallengesHistory::feed();
         $this->assertSame($this->player->username, $history[0]['username']);
         $this->assertSame('Packet Detective', $history[0]['name']);
         $this->assertSame($this->player->id, $history[0]['user_id']);
@@ -737,7 +736,7 @@ final class ChallengeTest extends TestCase
             $names[] = $challenge->name;
         }
 
-        $history = json_decode(Redis::get('tasks_history'), true);
+        $history = ChallengesHistory::feed();
         $this->assertSame(array_reverse(array_slice($names, 1)), array_column($history, 'name'));
     }
 
@@ -961,7 +960,7 @@ final class ChallengeTest extends TestCase
         $this->answer($challenge, $challenge->answer, $group->public_id)->assertSessionHas('success');
 
         $this->assertSame(1, ChallengesSubmitted::where('user_id', $member->id)->count());
-        $this->assertStringNotContainsString('Secret Lab Task', (string) Redis::get('tasks_history'));
+        $this->assertStringNotContainsString('Secret Lab Task', json_encode(ChallengesHistory::feed()));
     }
 
 
@@ -1083,5 +1082,96 @@ final class ChallengeTest extends TestCase
 
         $response->assertRedirect('/user/dashboard');
         $response->assertSessionHas('success', 'Your answer is correct! You received 25 points');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_shared_history_survives_an_empty_redis
+    // -----------------------------------------------------------
+    //
+    // The sidebar's history is read from the database, so a
+    // solve shows at once even when Redis holds nothing — as
+    // after a stack update, which starts Redis afresh — rather
+    // than when the next solve comes in.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_shared_history_survives_an_empty_redis(): void
+    {
+        $this->recordSolve($this->makePlayer(['username' => 'FastSolver']), $this->makeChallenge(['name' => 'Packet Detective']));
+
+        $this->get('/user/leaderboard')->assertSee('<strong>FastSolver</strong> solved Packet Detective challenge', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_solve_booked_meanwhile_reaches_the_shared_history
+    // -----------------------------------------------------------
+    //
+    // Another player's solve is booked while this player's
+    // right answer is being handled, at the moment the history
+    // is read. Both solves show on the next page: the history
+    // is never a copy that the slower of two solves could
+    // overwrite.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_solve_booked_meanwhile_reaches_the_shared_history(): void
+    {
+        $first = $this->makeChallenge(['name' => 'First Task']);
+        $second = $this->makeChallenge(['name' => 'Second Task']);
+        $other = $this->makePlayer(['username' => 'OtherSolver']);
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($second, $other, &$interleaved) {
+            if (!$interleaved && str_contains($query->sql, 'from `cyber_challenges_history` inner join')) {
+                $interleaved = true;
+                $this->recordSolve($other, $second);
+            }
+        });
+
+        $this->answer($first, $first->answer);
+
+        $this->assertTrue($interleaved);
+        $this->get('/user/leaderboard')
+            ->assertSee('<strong>OtherSolver</strong> solved Second Task challenge', false)
+            ->assertSee('solved First Task challenge', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_answer_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // The answer is read from the form before the address, so
+    // a right flag put into the address beside a wrong answer
+    // in the form books nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_answer_in_the_address_never_replaces_the_forms(): void
+    {
+        $challenge = $this->makeChallenge(['answer' => 'packet_wizard']);
+
+        $this->post("/user/challenge/{$challenge->public_id}?answer=packet_wizard", ['answer' => 'wrong guess']);
+
+        $this->assertSame(0, ChallengesSubmitted::where('challenge_id', $challenge->id)->count());
     }
 }

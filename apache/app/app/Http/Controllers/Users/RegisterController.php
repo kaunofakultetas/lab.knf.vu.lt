@@ -274,8 +274,11 @@ class RegisterController extends Controller
     // token, so the users table alone resets no password.
     // The hash goes to that local account alone: a VU account
     // created later with the same e-mail is left out, as the
-    // link must name exactly one account. ValidateReset reads
-    // the time back to refuse a link
+    // link must name exactly one account. The link goes to
+    // the address stored with the account, not the one typed:
+    // the column's collation matches the two ignoring case
+    // and accents, so a look-alike domain would match too.
+    // ValidateReset reads the time back to refuse a link
     // older than an hour; as the hash covers the time too, it
     // cannot be moved on. The answer is the same whether or
     // not the account exists, so the form tells no one which
@@ -283,11 +286,7 @@ class RegisterController extends Controller
     //
     // Known bug LAB-40 (low): the recaptchav3 refusal shows
     // its raw key and the token expires two minutes after the
-    // page loads, as in store. Known bug LAB-45 (low): the
-    // link is mailed to the address as typed, which the
-    // collation matches to the stored one ignoring case and
-    // accents, so a look-alike domain receives another
-    // player's reminder. Fix: mail the stored address.
+    // page loads, as in store.
     //
     // Used by:
     //   - the form of users/forgot-password.blade.php
@@ -307,7 +306,7 @@ class RegisterController extends Controller
         if ($local->count() == 1) {
             $uid = Str::random(50) . '-' . now()->getTimestamp();
 
-            Mail::to($request->input('email'))->send(new SendRemindLink(['uid'=>$uid]));
+            Mail::to($local->value('email'))->send(new SendRemindLink(['uid'=>$uid]));
 
             $local->update(['remember_token'=>hash('sha256', $uid)]);
         }
@@ -359,18 +358,16 @@ class RegisterController extends Controller
     // 12-character password, mails it, stores its hash and
     // empties the token, then goes to the login page. The
     // validate.reset middleware has refused unknown and
-    // expired tokens already. The token is emptied and the
-    // password set in one statement before the mail goes out,
-    // so of two presses at once only the one that empties it
-    // mails a password, the one stored; the transaction
-    // around them puts both back should the mail fail.
-    //
-    // Known bug LAB-38 (medium): the claim finds the account
-    // by remember_token, which has no index, so the UPDATE
-    // locks every row of cyber_users, and the transaction
-    // holds those locks while the mail is sent: no account can
-    // be written until the mail server answers. Fix: read the
-    // id first, without locking, and claim by id.
+    // expired tokens already. The account is found by the
+    // hash without a lock, then claimed by its id: the token
+    // is emptied and the password set in one statement before
+    // the mail goes out, so of two presses at once only the
+    // one that empties it mails a password, the one stored;
+    // the transaction around them puts both back should the
+    // mail fail. Claimed by id, the account's row is the only
+    // one locked while the mail is sent — remember_token has
+    // no index, and a statement searching it would lock every
+    // row of cyber_users until the mail server answered.
     //
     // Used by:
     //   - the button of users/reset-password.blade.php
@@ -380,15 +377,17 @@ class RegisterController extends Controller
     {
         $new_pass = Str::random(12);
 
-        $user_email = User::select('email')->where('remember_token', '=', hash('sha256', $reset_token))->get()->pluck('email')->first();
+        $user = User::select('id', 'email')->where('remember_token', '=', hash('sha256', $reset_token))->first();
 
-        DB::transaction(function () use ($reset_token, $user_email, $new_pass) {
-            $claimed = User::where('remember_token', '=', hash('sha256', $reset_token))->update(['password'=>Hash::make($new_pass), 'remember_token'=>'']);
+        if ($user !== null) {
+            DB::transaction(function () use ($reset_token, $user, $new_pass) {
+                $claimed = User::whereKey($user->id)->where('remember_token', '=', hash('sha256', $reset_token))->update(['password'=>Hash::make($new_pass), 'remember_token'=>'']);
 
-            if ($claimed === 1) {
-                Mail::to($user_email)->send(new SendNewPass(['email'=>$user_email, 'new_pass'=>$new_pass]));
-            }
-        });
+                if ($claimed === 1) {
+                    Mail::to($user->email)->send(new SendNewPass(['email'=>$user->email, 'new_pass'=>$new_pass]));
+                }
+            });
+        }
 
         session()->flash('success', 'We just emailed you new password');
 

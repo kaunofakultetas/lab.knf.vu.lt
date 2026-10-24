@@ -19,11 +19,14 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Http\Controllers\Admins\UsersController;
 use App\Mail\SendNewPass;
 use App\Models\ChallengesHistory;
 use App\Models\ChallengesSubmitted;
 use App\Models\GroupsUsers;
 use App\Models\User;
+use Illuminate\Redis\Events\CommandExecuted;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Redis;
@@ -623,8 +626,8 @@ final class UsersTest extends TestCase
     // -----------------------------------------------------------
     //
     // The account's solves and its history rows go with it, and
-    // the shared history in the players' sidebar is rebuilt
-    // without them.
+    // the shared history in the players' sidebar no longer
+    // lists them.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -635,13 +638,13 @@ final class UsersTest extends TestCase
         $player = $this->makePlayer(['username' => 'Departed']);
         $challenge = $this->makeChallenge();
         $this->signIn($player)->post("/user/challenge/{$challenge->public_id}", ['answer' => $challenge->answer]);
-        $this->assertStringContainsString('Departed', (string) Redis::get('tasks_history'));
+        $this->assertStringContainsString('Departed', json_encode(ChallengesHistory::feed()));
 
         $this->signInAdmin($this->makeAdmin(true))->post("/control-panel/users/delete/{$player->id}");
 
         $this->assertSame(0, ChallengesSubmitted::where('user_id', $player->id)->count());
         $this->assertSame(0, ChallengesHistory::where('user_id', $player->id)->count());
-        $this->assertStringNotContainsString('Departed', (string) Redis::get('tasks_history'));
+        $this->assertStringNotContainsString('Departed', json_encode(ChallengesHistory::feed()));
     }
 
 
@@ -728,5 +731,116 @@ final class UsersTest extends TestCase
 
         $this->withSession($stale)->post("/control-panel/users/status/{$player->id}/1")->assertRedirect('/control-panel/users');
         $this->withSession($stale)->post("/control-panel/users/delete/{$player->id}")->assertRedirect('/control-panel/users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_deleting_an_account_takes_its_votes_back
+    // -----------------------------------------------------------
+    //
+    // The deleted accounts' votes come off the challenge's
+    // thumbs counts, in the direction each was cast, and their
+    // marks go; the vote of a player who stays is left as it
+    // was.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_deleting_an_account_takes_its_votes_back(): void
+    {
+        $challenge = $this->makeChallenge();
+        $up = $this->makePlayer();
+        $down = $this->makePlayer();
+        $stays = $this->makePlayer();
+        $this->signIn($up)->post("/user/challenge/vote/up/{$challenge->public_id}");
+        $this->signIn($down)->post("/user/challenge/vote/down/{$challenge->public_id}");
+        $this->signIn($stays)->post("/user/challenge/vote/up/{$challenge->public_id}");
+
+        $this->signInAdmin($this->makeAdmin(true));
+        $this->post("/control-panel/users/delete/{$up->id}");
+        $this->post("/control-panel/users/delete/{$down->id}");
+
+        $this->assertSame(1, (int) Redis::get("ThumbsUp_{$challenge->public_id}"));
+        $this->assertSame(0, (int) Redis::get("ThumbsDown_{$challenge->public_id}"));
+        $this->assertNull(Redis::get("Vote_{$challenge->public_id}_{$up->id}"));
+        $this->assertNull(Redis::get("Vote_{$challenge->public_id}_{$down->id}"));
+        $this->assertSame('up', Redis::get("Vote_{$challenge->public_id}_{$stays->id}"));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_account_deleted_twice_at_once_takes_its_vote_back_once
+    // -----------------------------------------------------------
+    //
+    // A delete sent twice at once, a double click, takes the
+    // account's vote off once: deleting the mark claims it.
+    // Here the second delete runs in full while the first one
+    // reads the mark, so both read the vote, and only the one
+    // that deletes the mark takes the vote off.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_account_deleted_twice_at_once_takes_its_vote_back_once(): void
+    {
+        $challenge = $this->makeChallenge();
+        $voter = $this->makePlayer();
+        $this->signIn($voter)->post("/user/challenge/vote/down/{$challenge->public_id}");
+        $this->signIn($this->makePlayer())->post("/user/challenge/vote/down/{$challenge->public_id}");
+        $this->signInAdmin($this->makeAdmin(true));
+        $mark = "Vote_{$challenge->public_id}_{$voter->id}";
+        $interleaved = false;
+        Redis::enableEvents();
+        Redis::purge();
+        Event::listen(CommandExecuted::class, function (CommandExecuted $event) use ($mark, $voter, &$interleaved) {
+            if (!$interleaved && strtolower($event->command) === 'get' && ($event->parameters[0] ?? null) === $mark) {
+                $interleaved = true;
+                app(UsersController::class)->destroy($voter->id);
+            }
+        });
+
+        $this->post("/control-panel/users/delete/{$voter->id}");
+
+        $this->assertTrue($interleaved);
+        $this->assertSame(1, (int) Redis::get("ThumbsDown_{$challenge->public_id}"));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_account_field_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // An e-mail address put into the create form's address is
+    // passed over: the account is checked and created with the
+    // form's own.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_account_field_in_the_address_never_replaces_the_forms(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->post('/control-panel/dialog/users/store?email=hijacked@players.test', [
+            'username' => 'Newcomer',
+            'email'    => 'newcomer@players.test',
+            'password' => 'p-1234567',
+        ]);
+
+        $this->assertSame('newcomer@players.test', User::where('username', 'Newcomer')->value('email'));
+        $this->assertFalse(User::where('email', 'hijacked@players.test')->exists());
     }
 }

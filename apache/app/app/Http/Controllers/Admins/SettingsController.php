@@ -119,7 +119,7 @@ class SettingsController extends BaseController
 
     public function reg_open(Request $req)
     {
-        Settings::where(['id' => 2])->update(['val1'=>$req->get('reg_open')]);
+        Settings::where(['id' => 2])->update(['val1'=>$req->input('reg_open')]);
 
         session()->flash('success', 'Updated!');
 

@@ -629,4 +629,29 @@ final class PartnersTest extends TestCase
     {
         $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/dialog/partners/edit/987654321')->assertNotFound();
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_partner_name_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // A name put into the form's address is passed over: the
+    // partner is stored with the name of the form.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_partner_name_in_the_address_never_replaces_the_forms(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))
+            ->post('/control-panel/dialog/partners/store?name=Hijacked', ['name' => 'CERT-LT', 'picture' => $this->upload('logo.png', self::png())]);
+
+        $this->assertTrue(Partners::where('name', 'CERT-LT')->exists());
+        $this->assertFalse(Partners::where('name', 'Hijacked')->exists());
+    }
 }

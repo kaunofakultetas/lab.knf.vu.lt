@@ -16,6 +16,8 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Mail\UserVerifyMail;
+use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -667,5 +669,68 @@ final class LoginTest extends TestCase
         $this->get('/user/leaderboard')->assertRedirect('/');
         $this->assertErrorFlashed('Your account is not active');
         $this->assertGuest('users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_account_switched_off_gets_no_verification_link
+    // -----------------------------------------------------------
+    //
+    // Before 2026-10-23 the control panel's status switch left
+    // verify_token in place, so an account that was signed up,
+    // switched on and later switched off still holds one. As
+    // it has signed in before, its login reads as switched
+    // off, not as never verified: it gets "Your account is not
+    // active" and no fresh link that would switch it back on.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_account_switched_off_gets_no_verification_link(): void
+    {
+        Mail::fake();
+        $player = $this->makePlayer([
+            'status'       => 0,
+            'verify_token' => hash('sha256', 'left-by-the-old-switch'),
+            'last_login'   => '2026-09-01 10:00:00',
+        ]);
+
+        $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD])->assertRedirect('/');
+
+        Mail::assertNotSent(UserVerifyMail::class);
+        $this->assertErrorFlashed('Your account is not active');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_login_never_resumes_a_dialog
+    // -----------------------------------------------------------
+    //
+    // A guest bounced from the feedback dialog, which the
+    // player pages load into a modal, has the dialog's address
+    // kept as the page asked for. The login goes on to the
+    // dashboard instead, as the dialog alone would be a bare
+    // form.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_login_never_resumes_a_dialog(): void
+    {
+        $player = $this->makePlayer();
+        $this->get('/user/dialog/feedback', ['X-Requested-With' => 'XMLHttpRequest', 'Accept' => 'text/html, */*; q=0.01'])
+            ->assertRedirect('/');
+
+        $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD])->assertRedirect('/user/dashboard');
     }
 }

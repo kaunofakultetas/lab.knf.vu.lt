@@ -191,7 +191,7 @@ final class GroupTest extends TestCase
 
         $response->assertSeeInOrder(['1st place', 'Steady', '<b>30</b> points', '2nd place', 'Strong', '<b>10</b> points'], false);
         $response->assertDontSee('<b>110</b>', false);
-        $response->assertDontSee('Elsewhere');
+        $this->assertStringNotContainsString('Elsewhere', $this->pageContent($response));
     }
 
 
@@ -282,9 +282,9 @@ final class GroupTest extends TestCase
 
         $response = $this->signIn($member)->get("/user/group/leaderboard/{$group->public_id}");
 
-        $response->assertSee('2 hours ago');
-        $response->assertDontSee('5 days ago');
-        $response->assertDontSee('1 week ago');
+        $this->assertStringContainsString('2 hours ago', $this->pageContent($response));
+        $this->assertStringNotContainsString('5 days ago', $this->pageContent($response));
+        $this->assertStringNotContainsString('1 week ago', $this->pageContent($response));
     }
 
 

@@ -424,4 +424,31 @@ final class PagesTest extends TestCase
         $response->assertSessionMissing('success');
         $this->assertSame(0, Pages::where('alias', 'saved')->count());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_page_field_in_the_address_never_replaces_the_forms
+    // -----------------------------------------------------------
+    //
+    // An alias put into the edit form's address is passed
+    // over: the page keeps the alias of the form, the one the
+    // rules checked against the other pages.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_page_field_in_the_address_never_replaces_the_forms(): void
+    {
+        $page = Pages::create(['name' => 'Rules of Play', 'content' => '<p>Old rules</p>', 'alias' => 'rules']);
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $this->post('/control-panel/pages/update?alias=hijacked', ['uid' => $page->id, 'name' => 'Rules', 'content' => '<p>New rules</p>', 'alias' => 'rules']);
+
+        $this->assertSame('rules', $page->refresh()->alias);
+    }
 }

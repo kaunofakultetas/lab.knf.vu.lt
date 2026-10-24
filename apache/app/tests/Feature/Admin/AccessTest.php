@@ -21,6 +21,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Models\GroupsUsers;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -434,5 +435,75 @@ final class AccessTest extends TestCase
             'group challenges' => ['/control-panel/users/vu-groups/challenges_list/{group}'],
             'mail templates'   => ['/control-panel/emails'],
         ];
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_panel_page_puts_no_address_text_into_its_scripts
+    // -----------------------------------------------------------
+    //
+    // The members, group challenges and challenge files pages
+    // print the id from their address into their add buttons'
+    // scripts. An id followed by script, which MySQL would
+    // read as the id alone, is a 404 rather than the page, so
+    // no link sent to an admin can run its script there.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_panel_page_puts_no_address_text_into_its_scripts(): void
+    {
+        $group = $this->makeGroup();
+        $challenge = $this->makeChallenge();
+        $payload = ');alert(1);x(';
+        $this->signInAdmin($this->makeAdmin(true));
+
+        foreach ([
+            "/control-panel/users/vu-groups/users_list/{$group->id}{$payload}",
+            "/control-panel/users/vu-groups/challenges_list/{$group->id}{$payload}",
+            "/control-panel/challenges/files/{$challenge->id}{$payload}",
+        ] as $page) {
+            $response = $this->get($page);
+
+            $response->assertNotFound();
+            $this->assertStringNotContainsString($payload, $response->getContent(), $page);
+        }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_ownership_check_reads_the_uid_the_form_saves
+    // -----------------------------------------------------------
+    //
+    // A lab admin's form names a group of its own in the
+    // address and another admin's group in its body. The
+    // ownership check (r_exists) reads the uid as the save
+    // does, the body first, so the other admin's group gets
+    // nothing: were the check to read one and the save the
+    // other, a lab admin could change every group.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_ownership_check_reads_the_uid_the_form_saves(): void
+    {
+        $admin = $this->makeAdmin();
+        $own = $this->makeGroup($admin);
+        $other = $this->makeGroup($this->makeAdmin());
+        $this->signInAdmin($admin)->from("/control-panel/users/vu-groups/users_list/{$own->id}");
+
+        $this->post("/control-panel/dialog/users/vu-groups/users_store?uid={$own->id}", ['uid' => $other->id, 'vu_id' => 's1234567']);
+
+        $this->assertSame(0, GroupsUsers::where('group_id', $other->id)->count());
     }
 }
