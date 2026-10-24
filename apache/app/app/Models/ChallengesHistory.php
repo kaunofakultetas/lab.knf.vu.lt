@@ -99,6 +99,14 @@ class ChallengesHistory extends Model
     // challenge renamed, hidden, shown or deleted, or an
     // account deleted.
     //
+    // Known bug LAB-46 (low): nothing rebuilds the feed when
+    // the key is missing, so it stays empty after Redis starts
+    // empty, until the next solve. Known bug LAB-47 (low): the
+    // read and the write are not ordered between two rebuilds,
+    // so the one that read first may write last and drop the
+    // other solve. Fix: build the feed from the database when
+    // it is read.
+    //
     // Used by:
     //   - Users\ChallengesController::submit_answer
     //   - Admins\ChallengesController — update, status and

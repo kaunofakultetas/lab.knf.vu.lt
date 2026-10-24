@@ -304,6 +304,11 @@ class UsersGroupsController extends BaseController
     // Deletes the group with its challenge places and
     // memberships, then goes back with "Deleted!".
     //
+    // Known bug LAB-51 (low): the deletes run with no lock and
+    // no transaction, so an add in flight can insert a row of
+    // the group after its rows are gone. Fix: lock the group's
+    // row in a transaction around the deletes.
+    //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
     //     buttons of the groups list
@@ -335,6 +340,13 @@ class UsersGroupsController extends BaseController
     // members by VU id, the latest added first like every
     // list of the panel, 50 to a page of the list, under the
     // group's name.
+    //
+    // Known bug LAB-37 (high): the page prints the id from the
+    // address into its add button's onClick, and r_exists lets
+    // through any text MySQL casts to that id, a number
+    // followed by script, so a crafted address runs its script
+    // with the admin's session once the button is clicked.
+    // Fix: let the route take digits only (whereNumber).
     //
     // Used by:
     //   - the members buttons of the groups list
@@ -421,6 +433,12 @@ class UsersGroupsController extends BaseController
     // once — a double click — waits, then finds the member
     // there, and stores it once.
     //
+    // Known bug LAB-51 (low): the lock's read is ignored, so a
+    // group another admin deleted after r_exists' check still
+    // gets the row, which nothing removes. Fix: refuse with
+    // "No group!" when the locked read finds no group, and
+    // lock the group in destroy too.
+    //
     // Used by:
     //   - the member dialog's form
     // -----------------------------------------------------------
@@ -495,6 +513,13 @@ class UsersGroupsController extends BaseController
     // The admins.users-groups-challengeslist view: the group's
     // challenges by name, newest first, 50 to a page of the
     // list, under the group's name.
+    //
+    // Known bug LAB-37 (high): the page prints the id from the
+    // address into its add button's onClick, and r_exists lets
+    // through any text MySQL casts to that id, a number
+    // followed by script, so a crafted address runs its script
+    // with the admin's session once the button is clicked.
+    // Fix: let the route take digits only (whereNumber).
     //
     // Used by:
     //   - the challenges buttons of the groups list
@@ -619,6 +644,12 @@ class UsersGroupsController extends BaseController
     // with the error. As in users_store, the group's row is
     // locked around the check and the insert, so a double
     // click stores the challenge once.
+    //
+    // Known bug LAB-51 (low): the lock's read is ignored, so a
+    // group another admin deleted after r_exists' check still
+    // gets the row, which nothing removes. Fix: refuse with
+    // "No group!" when the locked read finds no group, and
+    // lock the group in destroy too.
     //
     // Used by:
     //   - the challenge dialog's form

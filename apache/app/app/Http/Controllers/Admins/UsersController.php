@@ -391,6 +391,11 @@ class UsersController extends BaseController
     // player who no longer exists; the players' solve feed is
     // rebuilt without them. The feedback of the account stays.
     //
+    // Known bug LAB-48 (low): the account's votes stay in the
+    // challenges' thumbs counts, with their Vote_ marks, which
+    // hold no direction to take back. Fix: store the direction
+    // in the mark and take the votes off here.
+    //
     // Used by:
     //   - Confirm_Dialog() of custom_admin.js — the delete
     //     buttons of the accounts page

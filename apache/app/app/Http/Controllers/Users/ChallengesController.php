@@ -116,6 +116,15 @@ class ChallengesController extends BaseController
     // process: Apache serves each request afresh, and the
     // tests render these pages in separate processes.
     //
+    // Known bug LAB-39 (medium): the dashboard's points filter
+    // is prefilled with 5 and 250 whatever the challenges are
+    // worth, so the first filter or category click hides those
+    // worth less or more; and a bound the player clears is
+    // saved as NaN (custom.js), which hides every card, on
+    // later visits too. Fix: prefill the bounds from the
+    // prices on the page and treat a non-numeric bound as no
+    // bound.
+    //
     // Used by:
     //   - the Home link of the player sidebar
     //     (users/partials/sidebar.blade.php), the end of every
@@ -500,6 +509,12 @@ class ChallengesController extends BaseController
     // a field that is not text — only a hand-made request
     // sends one — goes back with the error and stores
     // nothing.
+    //
+    // Known bug LAB-44 (low): the rule checks the body but the
+    // save reads get(), which takes the address first, so
+    // feedback sent there as a list ends in a server error;
+    // the admin forms read the same way. Fix: save what the
+    // validator checked.
     //
     // Used by:
     //   - the form of the feedback dialog

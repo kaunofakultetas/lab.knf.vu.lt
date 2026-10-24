@@ -115,6 +115,12 @@ class RegisterController extends Controller
     // refused form comes back refilled but for both passwords,
     // which never sit in the session.
     //
+    // Known bug LAB-40 (low): the recaptchav3 rule has no
+    // message, so a refusal shows "validation.recaptchav3",
+    // and the form's token, fetched as the page loads, expires
+    // after two minutes. Fix: give the rule a message and
+    // fetch the token on submit.
+    //
     // Used by:
     //   - the registration form of users/register.blade.php
     // -----------------------------------------------------------
@@ -275,6 +281,14 @@ class RegisterController extends Controller
     // not the account exists, so the form tells no one which
     // addresses are registered.
     //
+    // Known bug LAB-40 (low): the recaptchav3 refusal shows
+    // its raw key and the token expires two minutes after the
+    // page loads, as in store. Known bug LAB-45 (low): the
+    // link is mailed to the address as typed, which the
+    // collation matches to the stored one ignoring case and
+    // accents, so a look-alike domain receives another
+    // player's reminder. Fix: mail the stored address.
+    //
     // Used by:
     //   - the form of users/forgot-password.blade.php
     // -----------------------------------------------------------
@@ -350,6 +364,13 @@ class RegisterController extends Controller
     // so of two presses at once only the one that empties it
     // mails a password, the one stored; the transaction
     // around them puts both back should the mail fail.
+    //
+    // Known bug LAB-38 (medium): the claim finds the account
+    // by remember_token, which has no index, so the UPDATE
+    // locks every row of cyber_users, and the transaction
+    // holds those locks while the mail is sent: no account can
+    // be written until the mail server answers. Fix: read the
+    // id first, without locking, and claim by id.
     //
     // Used by:
     //   - the button of users/reset-password.blade.php

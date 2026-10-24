@@ -104,6 +104,11 @@ class AdminAuthController extends Controller
     // sign-out form on its way to the identity provider. The
     // session — and its main flag — stays.
     //
+    // Known bug LAB-42 (low): the CSRF check runs first, so a
+    // panel page whose session has ended gets "Page Expired"
+    // and the VU single sign-on stays open, as at the player's
+    // sign-out (UserAuthController::logout_saml).
+    //
     // Used by:
     //   - Post_Link() of custom_admin.js — the sign-out link of
     //     the panel's top bar (admins/partials/topnav.blade.php)

@@ -72,6 +72,12 @@ class Controller extends BaseController
     // Laravel keeps the address the visitor came from, which
     // may be anywhere.
     //
+    // Known bug LAB-41 (low): a dialog the panel or the player
+    // side loads into a modal is kept as the page asked for
+    // when a guest is bounced from it, and this resumes it:
+    // the visitor lands on a bare form. Fix: never resume an
+    // address under /dialog/.
+    //
     // Used by:
     //   - Users\UserAuthController — login and cp
     //   - Admins\AdminAuthController::cp_login

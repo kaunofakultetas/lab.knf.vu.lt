@@ -108,6 +108,12 @@ class UserAuthController extends BaseController
     // By design the form takes any number of wrong passwords:
     // the route has no rate limit, no lockout and no reCAPTCHA.
     //
+    // Known bug LAB-43 (low): an account switched off before
+    // 2026-10-23, when the status switch still kept
+    // verify_token, reads as never verified, gets a fresh link
+    // and switches itself back on. Fix: mail a fresh link only
+    // to an account that has never signed in.
+    //
     // Used by:
     //   - the login form of users/login.blade.php
     // -----------------------------------------------------------
@@ -226,6 +232,13 @@ class UserAuthController extends BaseController
     // recorded — as the login form refuses an inactive local
     // account.
     //
+    // Known bug LAB-52 (low): the count, the username search
+    // and the insert are not kept apart from a second request,
+    // and vu_id has no unique key, so two first logins at once
+    // create a second account or end one in a server error.
+    // Fix: a unique key on vu_id, taking the existing account
+    // when the insert finds it taken.
+    //
     // Used by:
     //   - SamlAuth::handle (Http/Middleware/) — the SSO login
     // -----------------------------------------------------------
@@ -284,6 +297,13 @@ class UserAuthController extends BaseController
     // moves on by itself: a redirect of the sign-out form to
     // the identity provider would be stopped by the site's
     // CSP, which lets a form's navigation reach the site only.
+    //
+    // Known bug LAB-42 (low): like the other sign-outs this
+    // POST goes through the CSRF check first, so a page whose
+    // lab session has ended gets "Page Expired" and the VU
+    // single sign-on stays open. Fix: answer such a sign-out
+    // with a page that offers it again under a fresh token, or
+    // carries on.
     //
     // Used by:
     //   - Post_Link() of custom.js — the sign-out link of the

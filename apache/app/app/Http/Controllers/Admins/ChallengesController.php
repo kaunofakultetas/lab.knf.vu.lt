@@ -496,6 +496,14 @@ class ChallengesController extends BaseController
     // ticked. With every box unticked the form sends no item
     // field at all, and the challenge is left with none.
     //
+    // Known bug LAB-49 (low): the categories are deleted
+    // before item is checked, and an item sent as a single
+    // value throws a TypeError, a server error after the
+    // delete. Known bug LAB-50 (low): the delete and the
+    // inserts run without a transaction or lock, so a double
+    // click stores each category twice. Fix: check item first,
+    // and lock the challenge's row around the replacement.
+    //
     // Used by:
     //   - the categories dialog's form
     // -----------------------------------------------------------
@@ -534,6 +542,13 @@ class ChallengesController extends BaseController
     // The admins.challenges_files view: the challenge's file
     // links, 50 to a page of the list, under the challenge's
     // name.
+    //
+    // Known bug LAB-37 (high): the page prints the id from the
+    // address into its add button's onClick, and r_exists lets
+    // through any text MySQL casts to that id, a number
+    // followed by script, so a crafted address runs its script
+    // with the admin's session once the button is clicked.
+    // Fix: let the route take digits only (whereNumber).
     //
     // Used by:
     //   - the files links of the challenges list
