@@ -308,7 +308,8 @@ final class ChallengeTest extends TestCase
     // -----------------------------------------------------------
     //
     // Opened through a group id that names no group, the page
-    // goes back where the player came from with an error.
+    // goes to the dashboard with an error, wherever the player
+    // came from.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -320,7 +321,7 @@ final class ChallengeTest extends TestCase
 
         $this->from('/user/leaderboard')
             ->get("/user/challenge/{$challenge->public_id}/" . Str::uuid())
-            ->assertRedirect('/user/leaderboard');
+            ->assertRedirect('/user/dashboard');
 
         $this->assertErrorFlashed('Error!');
     }
@@ -364,7 +365,9 @@ final class ChallengeTest extends TestCase
     // The right answer leads to the dashboard with the points
     // in the message, and books a submission worth the
     // challenge's points, the points on the account and a
-    // history row.
+    // history row. The test runs in UTC (inUtc), as a local
+    // time the app stored, read back the night the clocks go
+    // back, may be an hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -372,6 +375,7 @@ final class ChallengeTest extends TestCase
 
     public function test_a_correct_answer_books_the_solve(): void
     {
+        $this->inUtc();
         $challenge = $this->makeChallenge(['points' => 25]);
 
         $response = $this->answer($challenge, $challenge->answer);
@@ -1241,5 +1245,40 @@ final class ChallengeTest extends TestCase
 
         $response->assertRedirect('/user/dashboard');
         $response->assertSessionHas('success', 'Your answer is correct! You received 15 points');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_page_whose_group_is_gone_never_redirects_to_itself
+    // -----------------------------------------------------------
+    //
+    // A challenge page opened through a group deleted since —
+    // opened from the page itself, as after an answer sent
+    // from it, or a reload — goes to the dashboard, never back
+    // to itself, which would redirect until the browser gave
+    // up; an answer sent through it goes there too.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_page_whose_group_is_gone_never_redirects_to_itself(): void
+    {
+        $challenge = $this->makeChallenge();
+        $group = $this->makeGroup();
+        $this->assignToGroup($group, $challenge);
+        $player = $this->makeSsoPlayer();
+        $this->joinGroup($group, $player);
+        $page = "/user/challenge/{$challenge->public_id}/{$group->public_id}";
+        $group->delete();
+
+        $this->signIn($player)->from($page)->get($page)->assertRedirect('/user/dashboard');
+        $this->from($page)->post($page, ['answer' => 'VU{wrong}'])->assertRedirect('/user/dashboard');
+
+        $this->assertErrorFlashed('Error!');
     }
 }

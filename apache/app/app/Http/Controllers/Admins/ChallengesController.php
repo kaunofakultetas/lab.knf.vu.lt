@@ -138,10 +138,6 @@ class ChallengesController extends BaseController
     // links, which a lab admin gets on its own challenges
     // only.
     //
-    // Known bug LAB-82 (low): the words go into the LIKE
-    // pattern as typed, so _ and % in them match any one
-    // character and any text. Fix: escape \, % and _.
-    //
     // Used by:
     //   - the All challenges link of the panel's sidebar
     //   - the list's own search form and its Clear all link
@@ -157,8 +153,8 @@ class ChallengesController extends BaseController
             $challenges = Challenges::all()->toArray();
             $challenges_sort = Challenges::all()->sortByDesc('id')->toArray();
         } else {
-            $challenges = Challenges::where('name', 'like', '%'.$q.'%')->orWhere('descr', 'like', '%'.$q.'%')->orWhere('content', 'like', '%'.$q.'%')->get()->toArray();
-            $challenges_sort = Challenges::where('name', 'like', '%'.$q.'%')->orWhere('descr', 'like', '%'.$q.'%')->orWhere('content', 'like', '%'.$q.'%')->get()->sortByDesc('id')->toArray();
+            $challenges = Challenges::where('name', 'like', $this->containing($q))->orWhere('descr', 'like', $this->containing($q))->orWhere('content', 'like', $this->containing($q))->get()->toArray();
+            $challenges_sort = Challenges::where('name', 'like', $this->containing($q))->orWhere('descr', 'like', $this->containing($q))->orWhere('content', 'like', $this->containing($q))->get()->sortByDesc('id')->toArray();
         }
 
         if (count($challenges) > 0) {
@@ -236,9 +232,11 @@ class ChallengesController extends BaseController
     //
     // Adds a challenge owned by the signed-in admin, with a
     // fresh UUID as its public id, the flag trimmed and the
-    // content through clean_content; hidden unless the
-    // admin's account is a main admin's. Then to the list
-    // with "Created!". A form missing a field, with a name or
+    // content through clean_content; hidden unless the admin's
+    // account is a main admin's. Then to the list with
+    // "Created!". A form missing a field, with a field that is
+    // not text — a list, which only a hand-made request sends
+    // — or a partner that is no whole number, with a name or
     // flag longer than the 255 characters their columns hold,
     // or with points other than a whole number from 0 to
     // 100000 goes back with the errors and what was typed:
@@ -253,11 +251,11 @@ class ChallengesController extends BaseController
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|max:255',
-            'partner_id' => 'required',
-            'descr' => 'required',
-            'content' => 'required',
-            'answer' => 'required|max:255',
+            'name' => 'required|string|max:255',
+            'partner_id' => 'required|integer',
+            'descr' => 'required|string',
+            'content' => 'required|string',
+            'answer' => 'required|string|max:255',
             'points' => 'required|integer|min:0|max:100000'
         ]);
 
@@ -344,16 +342,16 @@ class ChallengesController extends BaseController
     // POST /control-panel/challenges/update
     //
     // Changes the challenge with the posted uid to the form's
-    // fields — every one required, the name and flag held to
-    // 255 characters and the points to a whole number from 0
-    // to 100000, as in store, a form that fails going back
-    // with the errors and what was typed — with the
-    // content through clean_content, then goes to the list
-    // with "Updated!". The hidden switch and the author
-    // stay as they were, so a lab admin keeps a challenge a
-    // main admin corrected. New points count for later solves
-    // only: a solve keeps the points it gave, kept with it as
-    // points_given.
+    // fields — every one required and checked as in store, the
+    // name and flag held to 255 characters and the points to a
+    // whole number from 0 to 100000, the uid a whole number
+    // too, a form that fails going back with the errors and
+    // what was typed — with the content through clean_content,
+    // then goes to the list with "Updated!". The hidden switch
+    // and the author stay as they were, so a lab admin keeps a
+    // challenge a main admin corrected. New points count for
+    // later solves only: a solve keeps the points it gave,
+    // kept with it as points_given.
     //
     // Used by:
     //   - the challenge form, for an existing challenge
@@ -362,11 +360,12 @@ class ChallengesController extends BaseController
     public function update(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|max:255',
-            'partner_id' => 'required',
-            'descr' => 'required',
-            'content' => 'required',
-            'answer' => 'required|max:255',
+            'uid' => 'required|integer',
+            'name' => 'required|string|max:255',
+            'partner_id' => 'required|integer',
+            'descr' => 'required|string',
+            'content' => 'required|string',
+            'answer' => 'required|string|max:255',
             'points' => 'required|integer|min:0|max:100000'
         ]);
 
@@ -503,14 +502,15 @@ class ChallengesController extends BaseController
     // then goes back, with "Categoried updated!" when any was
     // ticked. With every box unticked the form sends no item
     // field at all, and the challenge is left with none. An
-    // item field that is not a list — only a hand-made request
-    // sends one — goes back with the error and changes
-    // nothing, and a key that names no category is passed
-    // over. The replacement runs in a transaction that first
-    // locks the challenge's row, so a save sent twice at once
-    // — a double click — waits for the other and stores each
-    // category once, and a challenge deleted meanwhile goes
-    // back with "No challenge!".
+    // item field that is not a list, or a uid that is no whole
+    // number — only a hand-made request sends either — goes
+    // back with the error and changes nothing, and a key that
+    // names no category is passed over. The replacement runs
+    // in a transaction that first locks the challenge's row,
+    // so a save sent twice at once — a double click — waits
+    // for the other and stores each category once, and a
+    // challenge deleted meanwhile goes back with "No
+    // challenge!".
     //
     // Used by:
     //   - the categories dialog's form
@@ -519,6 +519,7 @@ class ChallengesController extends BaseController
     public function categories_store(Request $request)
     {
         $validator = Validator::make($request->all(), [
+            'uid' => 'required|integer',
             'item' => 'nullable|array'
         ]);
 
@@ -672,10 +673,11 @@ class ChallengesController extends BaseController
     // an empty link of the challenge uid, posting to
     // file_store; for edit, the link uid, posting to
     // file_update — a link that does not exist is a 404, and a
-    // link of a challenge the admin may not change goes back
-    // with "You don't have permissions to do this!", as the
-    // route's check lets a missing link through and another
-    // admin may create it in the meantime.
+    // link of a challenge the admin may not change answers
+    // with "You don't have permissions to do this!" in the
+    // dialog, the admins.dialogs.refused view, as the route's
+    // check lets a missing link through and another admin may
+    // create it in the meantime.
     //
     // Used by:
     //   - file_form_new and file_form_edit (above)
@@ -693,7 +695,7 @@ class ChallengesController extends BaseController
             // The route's check let a missing link through, which
             // another admin may have created since
             if (! $this->mayChangeChallenge($file->challenge_id)) {
-                return back()->withErrors(['You don\'t have permissions to do this!']);
+                return view('admins.dialogs.refused', ['error' => 'You don\'t have permissions to do this!']);
             }
 
             $url = env('APP_URL')."/control-panel/challenges_file/update";

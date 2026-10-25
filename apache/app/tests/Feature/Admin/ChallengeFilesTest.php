@@ -376,9 +376,9 @@ final class ChallengeFilesTest extends TestCase
     // -----------------------------------------------------------
     //
     // A lab admin opens the new-link and edit-link dialogs of
-    // its own challenges, and is sent back with the
-    // permissions error from another admin's, whose links it
-    // never sees.
+    // its own challenges, while those of another admin's show
+    // the permissions error in their place, and never its
+    // links.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -396,10 +396,10 @@ final class ChallengeFilesTest extends TestCase
         $this->get("/control-panel/dialog/challenge_file/new/{$own->id}")->assertOk();
         $this->get("/control-panel/dialog/challenge_file/edit/{$ownLink->id}")->assertOk()->assertSee('own.pcap');
 
-        $this->get("/control-panel/dialog/challenge_file/new/{$other->id}")->assertRedirect('/control-panel/challenges');
-        $this->assertErrorFlashed("You don't have permissions to do this!");
-        $this->get("/control-panel/dialog/challenge_file/edit/{$otherLink->id}")->assertRedirect('/control-panel/challenges');
-        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->assertDialogRefused($this->get("/control-panel/dialog/challenge_file/new/{$other->id}"), "You don't have permissions to do this!");
+        $edit = $this->get("/control-panel/dialog/challenge_file/edit/{$otherLink->id}");
+        $this->assertDialogRefused($edit, "You don't have permissions to do this!");
+        $edit->assertDontSee('secret.pcap');
     }
 
 
@@ -694,9 +694,8 @@ final class ChallengeFilesTest extends TestCase
     // passes the ownership check, which lets a missing link
     // through. Another admin then creates a link with that id
     // on a challenge of their own, here right after the check,
-    // and the dialog sends the lab admin back with the
-    // permissions error instead of showing the link's name and
-    // address.
+    // and the dialog shows the lab admin the permissions error
+    // instead of the link's name and address.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -718,8 +717,8 @@ final class ChallengeFilesTest extends TestCase
         $response = $this->get("/control-panel/dialog/challenge_file/edit/{$id}");
 
         $this->assertTrue($interleaved);
-        $response->assertRedirect('/control-panel/challenges');
-        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->assertDialogRefused($response, "You don't have permissions to do this!");
         $response->assertDontSee('https://files.test/theirs');
+        $response->assertDontSee('their-capture.pcap');
     }
 }

@@ -5,15 +5,19 @@
 //
 //  The life of a local account outside the lab: the
 //  registration, behind reCAPTCHA v3 and the registration
-//  switch; the verification link — good for a day — that
-//  activates it; and the forgotten-password reminder, whose
-//  link — good for an hour — opens a page whose button sets
-//  and mails a new password. VU accounts never come here —
-//  the SSO creates them, and the reminder skips them.
+//  switch; the verification link — good for a day — whose
+//  page has the button that activates the account; and the
+//  forgotten-password reminder, whose link — good for an
+//  hour — opens a page whose button sets and mails a new
+//  password. Neither link changes anything when it is only
+//  opened, as mail scanners open links before the reader
+//  does. VU accounts never come here — the SSO creates
+//  them, and the reminder skips them.
 //
 //    GET  /register              — the registration form
 //    POST /register              — registers an account
-//    GET  /verify/{verify_token} — activates it
+//    GET  /verify/{verify_token} — the activation button
+//    POST /verify/{verify_token} — activates it
 //    GET  /forgot-password       — the reminder form
 //    POST /forgot-password       — mails a reminder link
 //    GET  /reset/{reset_token}   — the new-password button
@@ -33,8 +37,10 @@ use App\Mail\UserVerifyMail;
 use App\Mail\SendRemindLink;
 use App\Mail\SendNewPass;
 use App\Http\Controllers\Controller;
+use App\Rules\MailableAddress;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use ReCaptcha\ReCaptcha;
@@ -57,6 +63,7 @@ use Illuminate\Database\QueryException;
 //
 //   create             — the registration form
 //   store              — registers an account
+//   verify_form        — the activation button
 //   verify             — activates it
 //   send_verification  — mails a verification link
 //   ForgotPasswordForm — the reminder form
@@ -85,11 +92,6 @@ class RegisterController extends Controller
     // The users.register view, told whether registration is
     // open (the reg_open setting).
     //
-    // Known bug LAB-85 (low): the view's Confirm Password
-    // label points at the password box (for="login-password"),
-    // so a click on its words types into the password. Fix:
-    // point it at the confirmation box.
-    //
     // Used by:
     //   - the registration links of the login and reminder
     //     pages
@@ -113,16 +115,20 @@ class RegisterController extends Controller
     //
     // Registers a local account: a username of letters,
     // digits, blanks and . , _ - that is still free, an e-mail
-    // still free, a confirmed password of 8 or more, and a
-    // reCAPTCHA v3 score of at least 0.6 for the register
-    // action. The account starts inactive and is mailed its
-    // verification link (send_verification); tags are
-    // stripped from the username and e-mail first. A
-    // refused form comes back refilled but for both passwords,
-    // which never sit in the session. The form fetches its
-    // reCAPTCHA token as it is sent (custom.js), as a token is
-    // good for two minutes only, and a refused score says so
-    // in words (lang/en/validation.php).
+    // still free that the mailer takes too (MailableAddress —
+    // the RFC allows forms it refuses, and such an account
+    // would never get its mail), a confirmed password of 8 or
+    // more, and a reCAPTCHA v3 score of at least 0.6 for the
+    // register action. The account starts inactive and is
+    // mailed its verification link (send_verification); tags
+    // are stripped from the username and e-mail first. A
+    // refused form comes back with the username and e-mail
+    // refilled (refill), so neither password, nor anything
+    // else a hand-made request adds, sits in the session. The
+    // form fetches its reCAPTCHA token as it is sent
+    // (custom.js), as a token is good for two minutes only,
+    // and a refused score says so in words
+    // (lang/en/validation.php).
     //
     // Two registrations sent at once — a double press — both
     // pass the check that the username is free, and the later
@@ -130,17 +136,6 @@ class RegisterController extends Controller
     // the taken username it is, not as a server error. The
     // form's script also ignores a second press while it
     // fetches the token.
-    //
-    // Known bug LAB-74 (medium): a refused form flashes every
-    // field but the passwords, a made-up one of up to PHP's 8
-    // MB included, into a Redis session kept 36 hours. Known
-    // bug LAB-79 (low): the email rule lets through addresses
-    // Symfony's mailer refuses — a comment in the local part,
-    // an address literal — and the account is made before its
-    // mail fails: a 500, and an account that can never be
-    // verified. Fix: flash the username and e-mail alone;
-    // check the address as the mailer does, or with the rule's
-    // strict mode.
     //
     // Used by:
     //   - the registration form of users/register.blade.php
@@ -152,13 +147,13 @@ class RegisterController extends Controller
         // off; the recaptchav3 rule below replaced it
         $validator = Validator::make($request->all(), [
             'username' => ['required', 'string', 'min:4', 'max:255', 'regex:/^[\pL\pN\.\,\s_-]+$/u', 'unique:cyber_users'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:cyber_users'],
+            'email' => ['required', 'string', 'email', 'max:255', 'unique:cyber_users', new MailableAddress],
             'password' => ['required', 'string', 'min:8', 'max:255', 'confirmed'],
             'g-recaptcha-response' => ['required', 'recaptchav3:register,0.6']
         ]);
 
         if ($validator->fails()) {
-            return redirect()->route('register_users')->withErrors($validator)->withInput($request->except('password', 'password_confirmation'));
+            return redirect()->route('register_users')->withErrors($validator)->withInput($this->refill($request, ['username', 'email']));
         }
 
         // MySQL's duplicate-entry error: the same registration
@@ -177,7 +172,7 @@ class RegisterController extends Controller
                 throw $e;
             }
 
-            return redirect()->route('register_users')->withErrors(['username' => __('validation.unique', ['attribute' => 'username'])])->withInput($request->except('password', 'password_confirmation'));
+            return redirect()->route('register_users')->withErrors(['username' => __('validation.unique', ['attribute' => 'username'])])->withInput($this->refill($request, ['username', 'email']));
         }
 
         self::send_verification($user);
@@ -193,10 +188,39 @@ class RegisterController extends Controller
 
 
     // -----------------------------------------------------------
-    // verify
+    // verify_form
     // -----------------------------------------------------------
     //
     // GET /verify/{verify_token}
+    //
+    // The users.verify view: one button, which posts the
+    // activation to the same address. Opening the link changes
+    // nothing — mail scanners, such as Microsoft 365's Safe
+    // Links, open the links of incoming mail before the reader
+    // does, and would use it up, leaving the player's own
+    // click a 404, and activate an account no one confirmed.
+    // The validate.verify middleware has refused unknown and
+    // expired tokens already.
+    //
+    // Used by:
+    //   - the link of the verification mail (UserVerifyMail)
+    // -----------------------------------------------------------
+
+    public function verify_form($verify_token)
+    {
+        return view('users.verify', ['verify_token' => $verify_token]);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // verify
+    // -----------------------------------------------------------
+    //
+    // POST /verify/{verify_token}
     //
     // Activates the account holding the token's hash and
     // empties it, so the link works once, then goes to the
@@ -206,14 +230,8 @@ class RegisterController extends Controller
     // expired tokens already; anything that still gets through
     // ends on the front page.
     //
-    // Known bug LAB-80 (low): a mail scanner that opens the
-    // link first uses it up, and the player's own click then
-    // ends on ValidateVerify's 404. Fix: verify with a button,
-    // as the reminder link does, or answer a used link with
-    // the login page.
-    //
     // Used by:
-    //   - the link of the verification mail (UserVerifyMail)
+    //   - the button of users/verify.blade.php
     // -----------------------------------------------------------
 
     public function verify(Request $request, $verify_token)
@@ -251,7 +269,15 @@ class RegisterController extends Controller
     // dash, by the Unix time it is mailed, which
     // ValidateVerify reads back to refuse a link older than a
     // day; as the hash covers the time too, it cannot be moved
-    // on. A newer link replaces the one before.
+    // on. A newer link replaces the one before. An account
+    // gets one link every 15 minutes at most — the cache
+    // remembers the last one — as the login mails a fresh link
+    // to an account never verified, and signing in again and
+    // again would otherwise mail any number of them to its
+    // address. A send that fails — the mail server down, say —
+    // ends the request as before but keeps no 15 minutes, so
+    // the next login tries again at once. Returns whether it
+    // mailed one.
     //
     // Used by:
     //   - store (above) — a new registration
@@ -259,13 +285,27 @@ class RegisterController extends Controller
     //     verified signing in, whose link may have expired
     // -----------------------------------------------------------
 
-    public static function send_verification(User $user)
+    public static function send_verification(User $user): bool
     {
+        $mailed = "verification_mailed.{$user->id}";
+
+        if (! Cache::add($mailed, true, now()->addMinutes(15))) {
+            return false;
+        }
+
         $uid_token = Str::random(50) . '-' . now()->getTimestamp();
 
         User::where(['id' => $user->id])->update(['verify_token' => hash('sha256', $uid_token)]);
 
-        Mail::to($user->email)->send(new UserVerifyMail(['uid' => $uid_token]));
+        // A mail that failed holds back no next one
+        try {
+            Mail::to($user->email)->send(new UserVerifyMail(['uid' => $uid_token]));
+        } catch (\Throwable $failure) {
+            Cache::forget($mailed);
+            throw $failure;
+        }
+
+        return true;
     }
 
 
@@ -320,11 +360,9 @@ class RegisterController extends Controller
     // cannot be moved on. The answer is the same whether or
     // not the account exists, so the form tells no one which
     // addresses are registered. As in store, the form fetches
-    // its reCAPTCHA token as it is sent.
-    //
-    // Known bug LAB-74 (medium): a refused form's validation
-    // flashes every field, a made-up one of up to PHP's 8 MB
-    // included, into the session. Fix: flash the e-mail alone.
+    // its reCAPTCHA token as it is sent, an address the mailer
+    // would refuse is refused (MailableAddress), and a refused
+    // form comes back with the e-mail alone refilled (refill).
     //
     // Used by:
     //   - the form of users/forgot-password.blade.php
@@ -334,10 +372,14 @@ class RegisterController extends Controller
     {
         // The reCAPTCHA v2 check (NOCAPTCHA_SECRET) is switched
         // off; the recaptchav3 rule below replaced it
-        $this->validate($request, [
-            'email' => ['required', 'email'],
+        $validator = Validator::make($request->all(), [
+            'email' => ['required', 'email', new MailableAddress],
             'g-recaptcha-response' => ['required', 'recaptchav3:forgotpass,0.6']
         ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput($this->refill($request, ['email']));
+        }
 
         $local = User::where(['email' => $request->input('email')])->where(function ($query) { $query->where('vu_id', '')->orWhereNull('vu_id'); });
 

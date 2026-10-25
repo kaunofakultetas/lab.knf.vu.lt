@@ -65,7 +65,11 @@ What goes into `.env`:
 
 `NOCAPTCHA_*` and `IPGEO_API_KEY` are not used and can stay empty. Another SMTP server works
 too: set `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME` and `MAIL_PASSWORD` on the
-`vuknflab-apache` service in `docker-compose.yml`.
+`vuknflab-apache` service in `docker-compose.yml`. The lab sends no mail in clear, so the
+server must offer TLS. Prefer TLS from the start, on port 465, which the lab uses with
+Mailjet: on 587 the mail waits for STARTTLS, and someone on the way who makes the server's
+answer to `EHLO` fail gets it in clear, as the mailer then falls back to `HELO`. For a relay
+that offers no TLS at all, set `MAIL_REQUIRE_TLS` to `false` there as well, or every mail fails.
 
 ### Signing in as an admin
 
@@ -79,10 +83,16 @@ single sign-on, the way VU staff do with VU's identity provider. To use your own
    `session.phpsession.savepath` to `/var/www/simplesamlphp-sessions`, the folder the sample
    keeps across redeploys, and `session.duration` to `36 * 60 * 60`, as long as a lab session:
    signing out ends the single sign-on at your identity provider only while SimpleSAMLphp
-   still holds its session. The image runs SimpleSAMLphp 2.5, which sends no NameID policy
-   unless asked: to request a transient NameID, as earlier versions did, add
+   still holds its session. Set `'showerrors' => false` there as well, or its error pages
+   show visitors a stack trace with the server's file paths, and `'logging.handler'` to
+   `'errorlog'`, which writes the errors to Apache's error log instead: the container has
+   no syslog. The image runs SimpleSAMLphp 2.5, which sends no NameID policy unless asked:
+   to request a transient NameID, as earlier versions did, add
    `'NameIDPolicy' => ['Format' => 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient']`
-   to `default-sp` in `authsources.php`. The lab reads only the attributes.
+   to `default-sp` in `authsources.php`. The lab reads only the attributes. Add
+   `'enable_unsolicited' => false` there too: the lab only takes logins it asked for, and
+   SimpleSAMLphp otherwise also accepts one the identity provider starts on its own, which a
+   link could use to sign a visitor into someone else's account.
 2. Allow your identity provider's address in `endpoint/Caddyfile`, where `https://sso.vu.lt`
    is now.
 3. Make yourself an admin. The database starts with one main admin whose uid is `admin`;
@@ -101,11 +111,11 @@ Players can use the same sign-on, or register with an e-mail address.
 | `vuknflab-apache` | the lab itself, a Laravel 13 app on PHP 8.4 and Apache, published as [`vuknf/vuknflab-apache`](https://hub.docker.com/r/vuknf/vuknflab-apache) |
 | `vuknflab-mysql` | MySQL, created from `mysql/init.sql` |
 | `vuknflab-redis` | Redis: the sessions and the cached leaderboard |
-| `vuknflab-static` | fonts, icons and Bootstrap, served from the lab itself rather than a CDN |
+| `vuknflab-static` | fonts, icons and two scripts for old browsers, served from the lab itself rather than a CDN; Bootstrap comes with the lab's own script bundles |
 | `vuknflab-dbgate` | DbGate, a database browser at `/dbgate` |
 
 The live lab also runs `vuknflab-exit`, which lets outgoing connections reach reCAPTCHA and
-the mail server only; the sample leaves it out.
+Mailjet's mail server, on port 465, only; the sample leaves it out.
 
 <br/>
 

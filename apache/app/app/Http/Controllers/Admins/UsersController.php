@@ -39,6 +39,7 @@ use App\Models\User;
 use App\Models\ChallengesSubmitted;
 use App\Models\ChallengesHistory;
 use App\Models\ChallengesVotes;
+use App\Rules\MailableAddress;
 
 
 
@@ -112,10 +113,6 @@ class UsersController extends BaseController
     // settled here for its search box, so a q that is not
     // text shows as no search.
     //
-    // Known bug LAB-82 (low): the words go into the LIKE
-    // pattern as typed, so _ and % in them match any one
-    // character and any text. Fix: escape \, % and _.
-    //
     // Used by:
     //   - the All users link of the panel's sidebar, and the
     //     redirects of the account actions
@@ -130,8 +127,8 @@ class UsersController extends BaseController
             $users = User::all()->toArray();
             $users_sort = User::all()->sortByDesc('id')->toArray();
         } else {
-            $users = User::where('email', 'like', '%'.$q.'%')->orWhere('username', 'like', '%'.$q.'%')->get()->toArray();
-            $users_sort = User::where('email', 'like', '%'.$q.'%')->orWhere('username', 'like', '%'.$q.'%')->get()->sortByDesc('id')->toArray();
+            $users = User::where('email', 'like', $this->containing($q))->orWhere('username', 'like', $this->containing($q))->get()->toArray();
+            $users_sort = User::where('email', 'like', $this->containing($q))->orWhere('username', 'like', $this->containing($q))->get()->sortByDesc('id')->toArray();
         }
 
         if (count($users) > 0) {
@@ -209,11 +206,13 @@ class UsersController extends BaseController
     // password to the new account (SendNewPass). Then to the
     // accounts page with "User created!", or with the error —
     // the accounts page, whatever page an earlier visit left
-    // asked for, as for the status switch and the deletion.
-    // A form missing the username, e-mail or password, or with
-    // an e-mail that is no address or a password shorter than
-    // the 8 characters the login form asks for, goes back with
-    // the errors.
+    // asked for, as for the status switch and the deletion. A
+    // form missing the username, e-mail or password, with a
+    // field that is not text — a list, which only a hand-made
+    // request sends — or with an e-mail that is no address —
+    // the mailer's check included (MailableAddress) — or a
+    // password shorter than the 8 characters the login form
+    // asks for, goes back with the errors.
     //
     // Used by:
     //   - the account dialog, for a new account
@@ -222,9 +221,9 @@ class UsersController extends BaseController
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'username' => 'required|max:255',
-            'email' => 'required|email|max:255',
-            'password' => 'required|min:8|max:255'
+            'username' => 'required|string|max:255',
+            'email' => ['required', 'email', 'max:255', new MailableAddress],
+            'password' => 'required|string|min:8|max:255'
         ]);
 
         if ($validator->fails()) {
@@ -297,13 +296,14 @@ class UsersController extends BaseController
     // sent — the only thing the dialog changes — and, with
     // notif set to 1, mails it to the account (SendNewPass).
     // Then to the accounts page with "Updated!". A password
-    // shorter than the 8 characters the login form asks for
-    // goes back with the error, and an account another admin
-    // deleted in the meantime with "No user!", having changed
-    // and mailed nothing. So does a VU account whose e-mail
-    // another account also holds: the login form signs in the
-    // first account with the e-mail, the older local one, and
-    // the password would never work.
+    // shorter than the 8 characters the login form asks for,
+    // or one that is not text, or a uid that is no whole
+    // number, goes back with the error, and an account another
+    // admin deleted in the meantime with "No user!", having
+    // changed and mailed nothing. So does a VU account whose
+    // e-mail another account also holds: the login form signs
+    // in the first account with the e-mail, the older local
+    // one, and the password would never work.
     //
     // Used by:
     //   - the account dialog, for an existing account
@@ -312,7 +312,8 @@ class UsersController extends BaseController
     public function update(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'password' => 'required|min:8|max:255'
+            'uid' => 'required|integer',
+            'password' => 'required|string|min:8|max:255'
         ]);
 
         if ($validator->fails()) {

@@ -7,7 +7,8 @@
 //  of its token matches the remember_token of exactly one
 //  account, where RegisterController::forgotpassword stores
 //  it, and the link was mailed within the last hour. Any
-//  other token is a 404.
+//  other token is a 404, but for a second press of the
+//  page's button, which goes to the login page.
 //
 //  Used by:
 //    - app/Http/Kernel.php — the validate.reset alias
@@ -64,8 +65,12 @@ class ValidateReset
     // the route's token, an empty or missing token never
     // matching, and the time the token ends with is at most
     // LIFETIME ago by Laravel's clock; answers 404 otherwise,
-    // an expired link like an unknown one. A token without a
-    // time — one mailed before links expired — reads as 1970.
+    // an expired link like an unknown one. A press of the
+    // page's button with such a token goes to the login page
+    // instead, keeping the message the session holds: a double
+    // click sends the token twice, and by the second the first
+    // press has used it. A token without a time — one mailed
+    // before links expired — reads as 1970.
     //
     // Used by:
     //   - the validate.reset alias — GET and POST
@@ -83,6 +88,14 @@ class ValidateReset
         if(now()->getTimestamp() - $mailed <= self::LIFETIME && User::where(['remember_token'=>hash('sha256', $reset_token)])->where('remember_token', '<>', '')->whereNotNull('remember_token')->count() == 1) {
             return $next($request);
         } else {
+            // A button pressed twice: the first press has used
+            // the link by now, and left its message
+            if ($request->isMethod('POST')) {
+                session()->reflash();
+
+                return redirect()->route('login_users');
+            }
+
             abort(404);
         }
     }

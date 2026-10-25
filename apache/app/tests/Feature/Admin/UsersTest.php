@@ -858,4 +858,103 @@ final class UsersTest extends TestCase
         Mail::assertSent(SendNewPass::class);
         $this->assertTrue(Auth::guard('users')->attempt(['email' => $vu->email, 'password' => 'new-pass-123']));
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_search_takes_underscores_and_percents_as_typed
+    // -----------------------------------------------------------
+    //
+    // The account search finds the words as typed: an
+    // underscore matches an underscore only, not any
+    // character, and a percent sign matches nothing but itself.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_search_takes_underscores_and_percents_as_typed(): void
+    {
+        $this->makePlayer(['username' => 'zq_search']);
+        $this->makePlayer(['username' => 'zqxsearch']);
+        $this->signInAdmin($this->makeAdmin(true));
+
+        $underscore = $this->get('/control-panel/users?q=zq_search')->getContent();
+        $percent = $this->get('/control-panel/users?q=' . urlencode('zq%search'))->getContent();
+
+        $this->assertStringContainsString('<td>zq_search</td>', $underscore);
+        $this->assertStringNotContainsString('zqxsearch', $underscore);
+        $this->assertStringNotContainsString('zqxsearch', $percent);
+        $this->assertStringNotContainsString('<td>zq_search</td>', $percent);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_address_the_mailer_refuses_is_refused
+    // -----------------------------------------------------------
+    //
+    // A new account's e-mail must be one the mailer takes: an
+    // address with a comment in the local part, which the RFC
+    // allows, goes back with the error, and no account is
+    // made whose password mail would fail.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_address_the_mailer_refuses_is_refused(): void
+    {
+        Mail::fake();
+
+        $response = $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/users')->post('/control-panel/dialog/users/store', [
+            'username' => 'Commented',
+            'email'    => 'jonas(work)@players.test',
+            'password' => 'long-enough-1',
+            'notif'    => 1,
+        ]);
+
+        $response->assertSessionHasErrors('email');
+        $this->assertSame(0, User::where('username', 'Commented')->count());
+        Mail::assertNothingSent();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_list_for_a_field_is_refused
+    // -----------------------------------------------------------
+    //
+    // The account forms take text only: a list for the
+    // username or the password, or for the uid of the account
+    // an edit names — only a hand-made request sends one —
+    // goes back with the error and changes nothing, rather
+    // than ending the save on a 500.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_list_for_a_field_is_refused(): void
+    {
+        $player = $this->makePlayer();
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/users');
+
+        $this->post('/control-panel/dialog/users/store', ['username' => ['Listed'], 'email' => 'listed@players.test', 'password' => 'long-enough-1'])->assertSessionHasErrors('username');
+        $this->post('/control-panel/dialog/users/store', ['username' => 'Listed', 'email' => 'listed@players.test', 'password' => ['long-enough-1']])->assertSessionHasErrors('password');
+        $this->post('/control-panel/dialog/users/update', ['uid' => $player->id, 'password' => ['long-enough-1']])->assertSessionHasErrors('password');
+        $this->post('/control-panel/dialog/users/update', ['uid' => [$player->id], 'password' => 'long-enough-1'])->assertSessionHasErrors('uid');
+
+        $this->assertSame(0, User::where('username', 'Listed')->count());
+        $this->assertTrue(Hash::check(self::PASSWORD, $player->refresh()->password));
+    }
 }

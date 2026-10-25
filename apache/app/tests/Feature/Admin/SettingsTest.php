@@ -179,4 +179,33 @@ final class SettingsTest extends TestCase
 
         $this->assertSame('0', (string) Settings::find(2)->val1);
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_registration_switch_takes_its_checkbox_only
+    // -----------------------------------------------------------
+    //
+    // The registration switch takes what its checkbox sends —
+    // 1, or nothing — or a 0, and refuses any other value, a
+    // list among them, with the error, leaving the setting as
+    // it was.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_registration_switch_takes_its_checkbox_only(): void
+    {
+        $this->setRegistrationOpen(true);
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/settings');
+
+        $this->post('/control-panel/settings/reg_open', ['reg_open' => ['1']])->assertSessionHasErrors('reg_open');
+        $this->post('/control-panel/settings/reg_open', ['reg_open' => 'yes'])->assertSessionHasErrors('reg_open');
+
+        $this->assertSame('1', Settings::find(2)->val1);
+    }
 }

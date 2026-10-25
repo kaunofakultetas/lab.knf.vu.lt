@@ -7,7 +7,9 @@
 //  guest who opens a page behind auth:users is sent to the
 //  player login form, or gets a 401 when the request asks
 //  for JSON. A player whose account was switched off after
-//  signing in is signed out at the next request.
+//  signing in is signed out at the next request, and so is
+//  one signed in through VU once the browser has signed out
+//  of VU (SamlAuth::signedOut).
 //
 //  Used by:
 //    - app/Http/Kernel.php — the auth alias
@@ -35,10 +37,11 @@ use Illuminate\Support\Facades\Auth;
 // -----------------------------------------------------------
 //
 // Laravel checks the guards the route names; this class
-// adds the status check of the users guard and says where a
-// refused guest goes.
+// adds the status and VU sign-out checks of the users guard
+// and says where a refused guest goes.
 //
-//   handle     — the sign-in check, and the account's status
+//   handle     — the sign-in check, the account's status
+//                and the VU sign-out
 //   redirectTo — where a refused guest goes
 //
 // Used by:
@@ -65,7 +68,11 @@ class Authenticate extends Middleware
     // signed out there and then and sent to the login page
     // with "Your account is not active", the login form's own
     // message, so the switch takes effect at once rather than
-    // when the session runs out.
+    // when the session runs out. A player signed in through
+    // VU is signed out the same way, with "Your VU sign-in has
+    // ended", once the browser has signed out of VU — at
+    // sso.vu.lt, or in another VU service (SamlAuth::
+    // signedOut).
     //
     // Used by:
     //   - the auth alias — auth:users on the player pages,
@@ -82,6 +89,13 @@ class Authenticate extends Middleware
             Auth::guard('users')->logout();
 
             return redirect()->route('login_users')->withErrors(['Your account is not active']);
+        }
+
+        if ($player !== null && SamlAuth::signedOut($request, 'users', $player->id)) {
+            Auth::guard('users')->logout();
+            SamlAuth::forgetSignOn('users');
+
+            return redirect()->route('login_users')->withErrors(['Your VU sign-in has ended']);
         }
 
         return $next($request);

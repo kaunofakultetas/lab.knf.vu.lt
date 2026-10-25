@@ -168,12 +168,13 @@ class PagesController extends BaseController
     // Adds a page with a name, content and an alias no other
     // page has, then goes to the list with "Created!". The
     // name holds up to 255 characters and the alias up to the
-    // 50 of its column, as the database would cut a longer
-    // one short, and of letters, digits, dashes and
-    // underscores only, as /page/{alias} takes one piece of an
-    // address: a slash, ? or # would make the page
-    // unreachable. A refused form goes back with the errors
-    // and what was typed.
+    // 50 of its column, as the database would cut a longer one
+    // short, and of letters, digits, dashes and underscores
+    // only, as /page/{alias} takes one piece of an address: a
+    // slash, ? or # would make the page unreachable. Each
+    // field must be text — a list, which only a hand-made
+    // request sends, is refused too — and a refused form goes
+    // back with the errors and what was typed.
     //
     // Used by:
     //   - the page form, for a new page
@@ -182,9 +183,9 @@ class PagesController extends BaseController
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => ['required', 'max:255'],
-            'content' => ['required'],
-            'alias' => ['required', 'max:50', 'alpha_dash', 'unique:cyber_pages']
+            'name' => ['required', 'string', 'max:255'],
+            'content' => ['required', 'string'],
+            'alias' => ['required', 'string', 'max:50', 'alpha_dash', 'unique:cyber_pages']
         ]);
 
         if ($validator->fails()) {
@@ -243,15 +244,16 @@ class PagesController extends BaseController
     // POST /control-panel/pages/update
     //
     // Changes the page with the posted uid to the name,
-    // content and alias — all three required and held to the
-    // lengths of store, the alias free but for the page's own,
-    // a refused form going back with the errors and what was
-    // typed — then goes to the list with "Updated!". The alias
-    // is held to store's letters, digits, dashes and
-    // underscores only when it changes: a page whose alias
-    // came before that rule, with a dot say, keeps its address
-    // when it is saved. A page another admin deleted in the
-    // meantime goes to the list with "No page!" instead.
+    // content and alias — all three required, text, and held
+    // to the lengths of store, the alias free but for the
+    // page's own, the uid a whole number, a refused form going
+    // back with the errors and what was typed — then goes to
+    // the list with "Updated!". The alias is held to store's
+    // letters, digits, dashes and underscores only when it
+    // changes: a page whose alias came before that rule, with
+    // a dot say, keeps its address when it is saved. A page
+    // another admin deleted in the meantime goes to the list
+    // with "No page!" instead.
     //
     // Used by:
     //   - the page form, for an existing page
@@ -260,7 +262,7 @@ class PagesController extends BaseController
     public function update(Request $request)
     {
         // The uid is cast, as it goes into the rule's text
-        $alias_rules = ['required', 'max:50', 'unique:cyber_pages,alias,' . (int) $request->input('uid')];
+        $alias_rules = ['required', 'string', 'max:50', 'unique:cyber_pages,alias,' . (int) $request->input('uid')];
 
         // An alias kept as it is skips the check of its
         // characters, which an older page's may fail
@@ -269,8 +271,9 @@ class PagesController extends BaseController
         }
 
         $validator = Validator::make($request->all(), [
-            'name' => ['required', 'max:255'],
-            'content' => ['required'],
+            'uid' => ['required', 'integer'],
+            'name' => ['required', 'string', 'max:255'],
+            'content' => ['required', 'string'],
             'alias' => $alias_rules
         ]);
 

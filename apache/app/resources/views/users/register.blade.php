@@ -34,7 +34,7 @@
                     <div class="input-material-group mb-3"> 
                       <input class="input-material" id="reg-email" required="required" maxlength="255" name="email" type="email" value="{{ old('email') }}">
                       
-                      <label class="label-material" for="reg-email" id="user-type-label">Email</label>
+                      <label class="label-material" for="reg-email">Email</label>
                    
                     </div>
                     
@@ -50,7 +50,7 @@
                     
                       <input class="input-material" required="required" id="password_confirmation" maxlength="255" name="password_confirmation" type="password" value="">
                       
-                      <label class="label-material" for="login-password">Confirm Password</label>
+                      <label class="label-material" for="password_confirmation">Confirm Password</label>
                   
                     </div>
                      

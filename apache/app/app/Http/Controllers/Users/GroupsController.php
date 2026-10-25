@@ -229,13 +229,17 @@ class GroupsController extends BaseController
     // The group's members, by the VU ids given, with a solve
     // of one of the given challenges, ranked by the points
     // those solves gave — the group's points, as the group
-    // page counts them — and, among equal points, by whose
-    // latest of those solves was booked first. The booking
-    // order is the solve's id, not its time, which repeats an
-    // hour when the clocks go back in October; the time of the
-    // latest is the last challenge shown, and last_time its
-    // Unix time from the history table, which the page counts
-    // how long ago from.
+    // page counts them — and, among equal points, by who got
+    // there first: whose latest of those solves that gave
+    // points was booked first, so a challenge worth nothing
+    // solved later loses no tie; a member whose solves all
+    // gave nothing goes by the first of them, when the member
+    // reached the board. The booking order is the solve's id,
+    // not its time, which repeats an hour when the clocks go
+    // back in October; the time of the latest solve is the
+    // last challenge shown, and last_time its Unix time from
+    // the history table, which the page counts how long ago
+    // from.
     //
     // Used by:
     //   - group_leaderboard (above)
@@ -261,8 +265,8 @@ class GroupsController extends BaseController
             ->whereIn('cyber_users.vu_id', $members)
             ->groupBy('cyber_users.id')
             ->orderByRaw('SUM(`cyber_challenges_submitted`.`points_given`) DESC')
-            ->orderByRaw('MAX(`cyber_challenges_submitted`.`id`)')
-            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`id`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`, MAX(`solved_at`.`created_time`) AS `last_time`')
+            ->orderByRaw('COALESCE(MAX(CASE WHEN `cyber_challenges_submitted`.`points_given` > 0 THEN `cyber_challenges_submitted`.`id` END), MIN(`cyber_challenges_submitted`.`id`))')
+            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, COALESCE(MAX(CASE WHEN `cyber_challenges_submitted`.`points_given` > 0 THEN `cyber_challenges_submitted`.`id` END), MIN(`cyber_challenges_submitted`.`id`))) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`, MAX(`solved_at`.`created_time`) AS `last_time`')
             ->get()->toArray();
 
         return $data;

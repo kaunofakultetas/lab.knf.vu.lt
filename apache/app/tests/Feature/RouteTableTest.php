@@ -31,10 +31,12 @@
 
 namespace Tests\Feature;
 
+use App\Http\Middleware\Authenticate;
 use App\Models\ChallengesFiles;
 use App\Models\Emails;
 use App\Models\GroupsUsers;
 use App\Models\Pages;
+use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Route as Router;
 use Illuminate\Support\Str;
@@ -152,6 +154,7 @@ final class RouteTableTest extends TestCase
         'GET reset/{reset_token}',
         'POST reset/{reset_token}',
         'GET verify/{verify_token}',
+        'POST verify/{verify_token}',
     ];
 
     // The routes with no guard at all, open to anyone on
@@ -272,6 +275,43 @@ final class RouteTableTest extends TestCase
             if (preg_match('#^\w+ user/#', $name) && $name !== 'POST user/logout_saml') {
                 $this->assertContains('auth:users', $middleware, $name);
             }
+        }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_only_player_routes_check_the_players_password
+    // -----------------------------------------------------------
+    //
+    // AuthenticateSession, which signs a player out once the
+    // account's password has changed elsewhere, runs after the
+    // users guard on every route that has it, and on no other,
+    // the web group included: on a route without the guard it
+    // would check whichever player is signed in on the browser,
+    // and could end the session before an admin's or a
+    // player's VU sign-out ran. Each route is read with its
+    // groups and names resolved, as the router runs it.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_only_player_routes_check_the_players_password(): void
+    {
+        foreach (Router::getRoutes()->getRoutes() as $route) {
+            if (Str::startsWith($route->uri(), '_ignition')) {
+                continue;
+            }
+            $resolved = Router::gatherRouteMiddleware($route);
+            $guard = array_search(Authenticate::class . ':users', $resolved, true);
+            $check = array_search(AuthenticateSession::class, $resolved, true);
+
+            $this->assertSame($guard !== false, $check !== false, $route->uri());
+            $this->assertTrue($check === false || $check > $guard, $route->uri());
         }
     }
 

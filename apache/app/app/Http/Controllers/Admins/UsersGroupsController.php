@@ -204,8 +204,9 @@ class UsersGroupsController extends BaseController
     //
     // Adds a group with the name as sent, owned by the
     // signed-in admin, with a fresh UUID as its public id;
-    // then back with "Created!". A form without a name goes
-    // back with the error.
+    // then back with "Created!". A form without a name, or
+    // with one that is not text — a list, which only a
+    // hand-made request sends — goes back with the error.
     //
     // Used by:
     //   - the group dialog, for a new group
@@ -214,7 +215,7 @@ class UsersGroupsController extends BaseController
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required'
+            'name' => 'required|string'
         ]);
 
         if ($validator->fails()) {
@@ -267,7 +268,8 @@ class UsersGroupsController extends BaseController
     // POST /control-panel/dialog/users/vu-groups/update
     //
     // Renames the group with the posted uid, then goes back
-    // with "Updated!"; an empty name goes back with the error.
+    // with "Updated!"; an empty name, one that is not text, or
+    // a uid that is no whole number goes back with the error.
     //
     // Used by:
     //   - the group dialog, for an existing group
@@ -276,7 +278,8 @@ class UsersGroupsController extends BaseController
     public function update(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required'
+            'uid' => 'required|integer',
+            'name' => 'required|string'
         ]);
 
         if ($validator->fails()) {
@@ -425,13 +428,14 @@ class UsersGroupsController extends BaseController
     // it is there already, then goes back with "Added!" or
     // "User already added!". The id need not belong to an
     // account yet: it becomes one at the student's first VU
-    // login. A form without a VU id goes back with the error.
-    // The check and the insert run in a transaction that
-    // first locks the group's row, so an add sent twice at
-    // once — a double click — waits, then finds the member
-    // there, and stores it once; a group another admin
-    // deleted meanwhile goes back with "No group!" and gets
-    // no row.
+    // login. A form without a VU id, with one that is not
+    // text, or with a uid that is no whole number goes back
+    // with the error. The check and the insert run in a
+    // transaction that first locks the group's row, so an add
+    // sent twice at once — a double click — waits, then finds
+    // the member there, and stores it once; a group another
+    // admin deleted meanwhile goes back with "No group!" and
+    // gets no row.
     //
     // Used by:
     //   - the member dialog's form
@@ -440,7 +444,8 @@ class UsersGroupsController extends BaseController
     public function users_store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'vu_id' => 'required|max:255'
+            'uid' => 'required|integer',
+            'vu_id' => 'required|string|max:255'
         ]);
 
         if ($validator->fails()) {
@@ -659,17 +664,17 @@ class UsersGroupsController extends BaseController
     // Adds the challenge to the group with the posted uid
     // unless it is there already, then goes back with "Added!"
     // or "Challenge already added!". A form without a
-    // challenge, or naming one that does not exist, goes back
-    // with the error. As in users_store, the group's row is
-    // locked around the check and the insert, so a double
-    // click stores the challenge once, and a group deleted
-    // meanwhile goes back with "No group!" and gets no row.
-    //
-    // Known bug LAB-83 (low): the challenge is checked before
-    // the transaction, which locks only the group, so a
-    // challenge another admin deletes in between is placed all
-    // the same, a nameless row of the group's list. Fix: lock
-    // and check the challenge's row in the transaction.
+    // challenge, naming one that does not exist, or with a
+    // challenge or uid that is no whole number, goes back with
+    // the error. As in users_store, the group's row is locked
+    // around the check and the insert, so a double click
+    // stores the challenge once, and a group deleted meanwhile
+    // goes back with "No group!" and gets no row. The
+    // challenge's row is share-locked and looked up again
+    // inside the transaction too: one another admin deleted
+    // since the form's check goes back with "No challenge!",
+    // and a delete that comes later waits for the placement
+    // and takes it away with the challenge.
     //
     // Used by:
     //   - the challenge dialog's form
@@ -678,16 +683,21 @@ class UsersGroupsController extends BaseController
     public function challenges_store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'challenge_id' => 'required|exists:cyber_challenges,id'
+            'uid' => 'required|integer',
+            'challenge_id' => 'required|integer|exists:cyber_challenges,id'
         ]);
 
         if ($validator->fails()) {
             return back()->withErrors($validator);
         }
 
-        $found = DB::transaction(function () use ($request) {
+        $refusal = DB::transaction(function () use ($request) {
             if (Groups::whereKey($request->input('uid'))->lockForUpdate()->first() === null) {
-                return false;
+                return 'No group!';
+            }
+
+            if (Challenges::whereKey($request->input('challenge_id'))->sharedLock()->first() === null) {
+                return 'No challenge!';
             }
 
             $num = GroupsChallenges::where(['group_id' => $request->input('uid'), 'challenge_id' => $request->input('challenge_id')])->get()->count();
@@ -699,11 +709,11 @@ class UsersGroupsController extends BaseController
                 session()->flash('danger', 'Challenge already added!');
             }
 
-            return true;
+            return null;
         });
 
-        if (! $found) {
-            return back()->withErrors(['No group!']);
+        if ($refusal !== null) {
+            return back()->withErrors([$refusal]);
         }
 
         return back();
@@ -770,8 +780,9 @@ class UsersGroupsController extends BaseController
     // A copy of Users\GroupsController::get_group_leaderboard:
     // the group's members ranked by the points the group's
     // challenges gave them, ties going to whose latest of
-    // those solves was booked first, with the time of that
-    // solve, local and Unix.
+    // those solves that gave points was booked first — of a
+    // member whose solves all gave nothing, the first solve —
+    // with the time of the latest solve, local and Unix.
     //
     // Used by:
     //   - group_leaderboard (above)
@@ -797,8 +808,8 @@ class UsersGroupsController extends BaseController
             ->whereIn('cyber_users.vu_id', $members)
             ->groupBy('cyber_users.id')
             ->orderByRaw('SUM(`cyber_challenges_submitted`.`points_given`) DESC')
-            ->orderByRaw('MAX(`cyber_challenges_submitted`.`id`)')
-            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, MAX(`cyber_challenges_submitted`.`id`)) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`, MAX(`solved_at`.`created_time`) AS `last_time`')
+            ->orderByRaw('COALESCE(MAX(CASE WHEN `cyber_challenges_submitted`.`points_given` > 0 THEN `cyber_challenges_submitted`.`id` END), MIN(`cyber_challenges_submitted`.`id`))')
+            ->selectRaw('row_number() OVER (ORDER BY SUM(`cyber_challenges_submitted`.`points_given`) DESC, COALESCE(MAX(CASE WHEN `cyber_challenges_submitted`.`points_given` > 0 THEN `cyber_challenges_submitted`.`id` END), MIN(`cyber_challenges_submitted`.`id`))) AS `position`, `cyber_users`.`id` AS `id`, SUM(`cyber_challenges_submitted`.`points_given`) AS `points`, `cyber_users`.`email` AS `email`, `cyber_users`.`username` AS `username`, `cyber_users`.`user_type` AS `user_type`, MAX(`cyber_challenges_submitted`.`created`) AS `last_challenge`, MAX(`solved_at`.`created_time`) AS `last_time`')
             ->get()->toArray();
 
         return $data;

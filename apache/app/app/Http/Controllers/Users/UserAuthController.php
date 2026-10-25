@@ -25,6 +25,7 @@ namespace App\Http\Controllers\Users;
 
 use App\Http\Controllers\Controller;
 use App\Http\Controllers\Users\SettingsController;
+use App\Http\Middleware\SamlAuth;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -73,15 +74,6 @@ class UserAuthController extends BaseController
     // button. Signed-in visitors never see it — the guest
     // middleware sends them to their dashboard.
     //
-    // Known bug LAB-86 (low): front.js finds a box's floating
-    // label as the last element of its group, and this page
-    // and the reminder page
-    // (RegisterController::ForgotPasswordForm) print a field's
-    // error message after the label, so with an error showing
-    // a focused or refilled box turns the message into the
-    // label. Fix: find the label by its class, or print the
-    // message first.
-    //
     // Used by:
     //   - the site's front page, and every redirect to
     //     login_users
@@ -106,14 +98,20 @@ class UserAuthController extends BaseController
     // Signs a local account in by e-mail and password. A
     // refused form, wrong credentials and an inactive account
     // — one not verified yet, or switched off in the control
-    // panel — go back to the login page with the error, an
-    // account never verified with a fresh verification link
-    // mailed, as the first may have expired; a good login
-    // records the time and address and goes on to the player
-    // page first asked for, or the dashboard (intendedWithin,
-    // which never resumes a page elsewhere). A refused
-    // form comes back with the e-mail refilled; the password
-    // is left out, so it never sits in the session.
+    // panel — go back to the login page with the error and the
+    // e-mail refilled: the e-mail alone (refill), so the
+    // password never sits in the session, nor anything else a
+    // hand-made request adds. An account never verified is
+    // mailed a fresh verification link, as the first may have
+    // expired, but no more than one every 15 minutes
+    // (RegisterController::send_verification), so signing in
+    // again and again mails no flood of links to its address.
+    // A good login records the time and address, forgets any
+    // VU sign-in noted for the session — a password sign-in is
+    // none, though a VU account an admin gave a password may
+    // make one (SamlAuth::forgetSignOn) — and goes on to the
+    // player page first asked for, or the dashboard
+    // (intendedWithin, which never resumes a page elsewhere).
     //
     // Never verified means a verification token and no login
     // ever: an account switched off before 2026-10-23, when
@@ -123,20 +121,6 @@ class UserAuthController extends BaseController
     //
     // By design the form takes any number of wrong passwords:
     // the route has no rate limit, no lockout and no reCAPTCHA.
-    //
-    // Known bug LAB-73 (medium): every sign-in to an account
-    // never verified mails another link, with nothing between
-    // two mails, so repeated logins send any number of mails
-    // to its address. Known bug LAB-74 (medium): a refused
-    // form flashes all the input but the password, so up to
-    // PHP's 8 MB a request sits in a Redis session for 36
-    // hours. Known bug LAB-78 (low): the views converted from
-    // Form:: print old() as it comes, so a field sent as a
-    // list makes the next page a 500. Known bug LAB-87 (low):
-    // wrong credentials and an inactive account go back
-    // without the e-mail typed. Fix: some minutes between two
-    // links; flash the e-mail alone, on every refusal; refill
-    // a field only from text.
     //
     // Used by:
     //   - the login form of users/login.blade.php
@@ -150,7 +134,7 @@ class UserAuthController extends BaseController
         ]);
 
         if ($validator->fails()) {
-            return redirect()->route('login_users')->withErrors($validator)->withInput($request->except('password'));
+            return redirect()->route('login_users')->withErrors($validator)->withInput($this->refill($request, ['email']));
         }
 
         if(Auth::guard('users')->attempt(['email' => $request->input('email'), 'password' => $request->input('password')])) {
@@ -158,21 +142,24 @@ class UserAuthController extends BaseController
 
             if ($user->status == 1) {
                 User::where(['id'=>Auth::guard('users')->id()])->update(['last_login'=>date("Y-m-d H:i:s"),'last_ip'=>SettingsController::getUserIP()]);
+                SamlAuth::forgetSignOn('users');
 
                 return $this->intendedWithin('/user', route('user_dashboard'));
             } else {
                 Auth::guard('users')->logout();
 
                 if (! empty($user->verify_token) && empty($user->last_login)) {
-                    RegisterController::send_verification($user);
+                    $error = RegisterController::send_verification($user)
+                        ? 'Your account is not verified yet. We sent you a new verification link.'
+                        : 'Your account is not verified yet. Use the verification link we mailed you.';
 
-                    return redirect()->route('login_users')->withErrors(['Your account is not verified yet. We sent you a new verification link.']);
+                    return redirect()->route('login_users')->withErrors([$error])->withInput($this->refill($request, ['email']));
                 }
 
-                return redirect()->route('login_users')->withErrors(['Your account is not active']);
+                return redirect()->route('login_users')->withErrors(['Your account is not active'])->withInput($this->refill($request, ['email']));
             }
         } else {
-            return redirect()->route('login_users')->withErrors(['Wrong login credentials']);
+            return redirect()->route('login_users')->withErrors(['Wrong login credentials'])->withInput($this->refill($request, ['email']));
         }
     }
 
@@ -190,9 +177,11 @@ class UserAuthController extends BaseController
     // Signs the player out of the lab and goes to the login
     // page; an SSO session at VU stays open. The page asked
     // for before a login is forgotten, so the next person to
-    // sign in on the computer is not sent there. A password
-    // reminder mailed before stays good, as the User model
-    // keeps Laravel's logout off remember_token.
+    // sign in on the computer is not sent there, and the VU
+    // sign-in noted for the session with it (SamlAuth::
+    // forgetSignOn). A password reminder mailed before stays
+    // good, as the User model keeps Laravel's logout off
+    // remember_token.
     //
     // Used by:
     //   - Post_Link() of custom.js — the sign-out link of the
@@ -203,6 +192,7 @@ class UserAuthController extends BaseController
     public function logout()
     {
         Auth::guard('users')->logout();
+        SamlAuth::forgetSignOn('users');
         session()->forget('url.intended');
 
         return redirect('/');
@@ -326,16 +316,16 @@ class UserAuthController extends BaseController
     // POST /user/logout_saml
     //
     // Signs the player out of the lab, forgets the page asked
-    // for before a login, as logout does, then hands the
-    // browser to the SSO's logout, which returns to the site's
-    // front page. The hand-over is the sso_logout page, which
-    // moves on by itself: a redirect of the sign-out form to
-    // the identity provider would be stopped by the site's
-    // CSP, which lets a form's navigation reach the site only.
-    // Sent from a page whose lab session has ended, the
-    // sign-out's token is refused, and the signout_retry page
-    // (VerifyCsrfToken) offers it again, so the VU single
-    // sign-on still ends.
+    // for before a login and the VU sign-in noted for the
+    // session, as logout does, then hands the browser to the
+    // SSO's logout, which returns to the site's front page.
+    // The hand-over is the sso_logout page, which moves on by
+    // itself: a redirect of the sign-out form to the identity
+    // provider would be stopped by the site's CSP, which lets
+    // a form's navigation reach the site only. Sent from a
+    // page whose lab session has ended, the sign-out's token
+    // is refused, and the signout_retry page (VerifyCsrfToken)
+    // offers it again, so the VU single sign-on still ends.
     //
     // SimpleSAMLphp tells sso.vu.lt about the sign-out only
     // while it still holds the VU login, a PHP session file:
@@ -354,6 +344,7 @@ class UserAuthController extends BaseController
     public function logout_saml()
     {
         Auth::guard('users')->logout();
+        SamlAuth::forgetSignOn('users');
         session()->forget('url.intended');
         $as = new \SimpleSAML\Auth\Simple('default-sp');
 

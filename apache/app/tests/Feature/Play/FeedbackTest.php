@@ -49,8 +49,9 @@ final class FeedbackTest extends TestCase
     // -----------------------------------------------------------
     //
     // The dialog is a bare form — no layout around it, as the
-    // page script drops it into a modal — with a text area
-    // posting to the feedback route.
+    // page script drops it into a modal — with a text area of
+    // up to 5000 characters, the most the route takes, posting
+    // to the feedback route.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -62,7 +63,7 @@ final class FeedbackTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('action="https://lab.knf.vu.lt/user/feedback"', false);
-        $response->assertSee('<textarea class="form-control" required="required" name="feedback"', false);
+        $response->assertSee('<textarea class="form-control" required="required" maxlength="5000" name="feedback"', false);
         $response->assertDontSee('<html', false);
     }
 
@@ -77,7 +78,9 @@ final class FeedbackTest extends TestCase
     //
     // The text is stored with the player's id and the current
     // time, and the player returns to the page the dialog was
-    // opened on with a thank-you.
+    // opened on with a thank-you. The test runs in UTC
+    // (inUtc), as a local time the app stored, read back the
+    // night the clocks go back, may be an hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -85,6 +88,7 @@ final class FeedbackTest extends TestCase
 
     public function test_feedback_is_stored_with_its_author_and_time(): void
     {
+        $this->inUtc();
         $player = $this->makePlayer();
 
         $response = $this->signIn($player)
@@ -182,5 +186,66 @@ final class FeedbackTest extends TestCase
             ->assertRedirect('/user/leaderboard');
 
         $this->assertSame('Great lab', Feedback::where('user_id', $player->id)->value('feedback'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_feedback_has_a_length_limit
+    // -----------------------------------------------------------
+    //
+    // Feedback of 5000 characters is stored; one character more
+    // goes back with the error and stores nothing, so no
+    // player can fill the database with megabyte messages.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_feedback_has_a_length_limit(): void
+    {
+        $player = $this->makePlayer();
+        $this->signIn($player)->from('/user/dashboard');
+
+        $this->post('/user/feedback', ['feedback' => str_repeat('a', 5000)])->assertSessionHasNoErrors();
+        $this->post('/user/feedback', ['feedback' => str_repeat('a', 5001)])->assertSessionHasErrors('feedback');
+        $this->post('/user/feedback', ['feedback' => str_repeat('Long feedback. ', 70000)])->assertSessionHasErrors('feedback');
+
+        $this->assertSame(1, Feedback::where('user_id', $player->id)->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_line_break_counts_once_as_the_box_counts_it
+    // -----------------------------------------------------------
+    //
+    // The box counts a line break as one character and lets
+    // 5000 through, but the form sends each break as two: 5000
+    // characters with 40 line breaks, which the form sends as
+    // 5040, are stored with their breaks as one, rather than
+    // refused and lost; a break more is too long again.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_line_break_counts_once_as_the_box_counts_it(): void
+    {
+        $player = $this->makePlayer();
+        $this->signIn($player)->from('/user/dashboard');
+        $text = str_repeat(str_repeat('a', 99) . "\n", 40) . str_repeat('a', 1000);
+
+        $this->post('/user/feedback', ['feedback' => str_replace("\n", "\r\n", $text)])->assertSessionHasNoErrors();
+        $this->post('/user/feedback', ['feedback' => str_replace("\n", "\r\n", $text) . "\r\nb"])->assertSessionHasErrors('feedback');
+
+        $this->assertSame(5000, mb_strlen($text));
+        $this->assertSame([$text], Feedback::where('user_id', $player->id)->pluck('feedback')->all());
     }
 }

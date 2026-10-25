@@ -18,6 +18,7 @@ namespace Tests\Feature\Auth;
 
 use App\Mail\UserVerifyMail;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -110,7 +111,9 @@ final class LoginTest extends TestCase
     // A successful login stamps last_login with the current
     // time and last_ip with the address Apache saw the client
     // at — the admin user list shows the time; no page shows
-    // the address.
+    // the address. The test runs in UTC (inUtc), as a local
+    // time the app stored, read back the night the clocks go
+    // back, may be an hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -118,6 +121,7 @@ final class LoginTest extends TestCase
 
     public function test_signing_in_records_the_time_and_the_client_address(): void
     {
+        $this->inUtc();
         $_SERVER['REMOTE_ADDR'] = '203.0.113.7';
         $player = $this->makePlayer();
 
@@ -834,5 +838,246 @@ final class LoginTest extends TestCase
 
         $this->assertNotNull($cookie);
         $this->assertTrue($cookie->isSecure());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_form_keeps_only_the_email
+    // -----------------------------------------------------------
+    //
+    // A refused login form refills the e-mail alone, and only
+    // as text of at most 255 characters: no field a hand-made
+    // request adds, and no megabyte-long e-mail, is kept in
+    // the session, which Redis holds for 36 hours.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_form_keeps_only_the_email(): void
+    {
+        $this->post('/login', ['email' => 'not-an-address', 'password' => 'short', 'padding' => str_repeat('x', 1000000)]);
+
+        $this->assertSame(['email' => 'not-an-address'], session()->getOldInput());
+        $this->assertLessThan(65536, strlen(serialize(session()->all())));
+
+        session()->flush();
+        $this->post('/login', ['email' => str_repeat('a', 1000000) . '@players.test', 'password' => 'short']);
+
+        $this->assertSame([], session()->getOldInput());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_form_refused_with_a_list_for_a_field_shows_again
+    // -----------------------------------------------------------
+    //
+    // A login sent with a list for the e-mail — only a
+    // hand-made request sends one — is refused, and the login
+    // page shows again with the box empty, not a 500.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_form_refused_with_a_list_for_a_field_shows_again(): void
+    {
+        $this->from('/')->post('/login', ['email' => ['jonas@players.test'], 'password' => 'long-enough-1']);
+
+        $page = $this->get('/');
+
+        $page->assertOk();
+        $page->assertSee('name="email" type="email" value=""', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_error_message_never_takes_the_place_of_its_label
+    // -----------------------------------------------------------
+    //
+    // The theme's front.js floats a box's label as the last
+    // element of the box's group, so on the login and reminder
+    // pages a field's error message comes before its label,
+    // never after it, where front.js would take the message
+    // for the label.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_error_message_never_takes_the_place_of_its_label(): void
+    {
+        $this->from('/')->post('/login', ['email' => 'jonas@players.test', 'password' => 'short']);
+        $login = $this->get('/')->getContent();
+        $this->from('/forgot-password')->post('/forgot-password', ['email' => 'not-an-address']);
+        $reminder = $this->get('/forgot-password')->getContent();
+
+        foreach (['the login page' => $login, 'the reminder page' => $reminder] as $page => $html) {
+            $this->assertStringContainsString('class="text-danger"', $html, "{$page} shows no error");
+            preg_match_all('#<div class="input-material-group[^"]*">(.*?)</div>#s', $html, $groups);
+            foreach ($groups[1] as $group) {
+                if (str_contains($group, 'class="input-material"')) {
+                    $this->assertStringEndsWith('</label>', trim($group), "on {$page} a field's error message sits where front.js looks for its label");
+                }
+            }
+        }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_wrong_password_keeps_the_email_typed
+    // -----------------------------------------------------------
+    //
+    // A login refused for its credentials comes back with the
+    // e-mail typed, so a player who mistyped the password types
+    // only the password again.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_wrong_password_keeps_the_email_typed(): void
+    {
+        $player = $this->makePlayer();
+
+        $this->from('/')->post('/login', ['email' => $player->email, 'password' => 'not-the-password-1']);
+
+        $this->assertErrorFlashed('Wrong login credentials');
+        $this->assertSame($player->email, session()->getOldInput('email'));
+        $this->assertNull(session()->getOldInput('password'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_no_other_vu_host_can_set_the_session_cookie
+    // -----------------------------------------------------------
+    //
+    // The session cookie's name carries the __Host- prefix,
+    // and the cookie is Secure, for the whole site, without a
+    // domain: a browser takes such a cookie from the lab's own
+    // host alone, so no other host under vu.lt can plant a
+    // session of its choice on a player.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_no_other_vu_host_can_set_the_session_cookie(): void
+    {
+        $cookie = $this->get('/')->getCookie(config('session.cookie'), false);
+
+        $this->assertNotNull($cookie);
+        $this->assertStringStartsWith('__Host-', $cookie->getName());
+        $this->assertTrue($cookie->isSecure());
+        $this->assertSame('/', $cookie->getPath());
+        $this->assertNull($cookie->getDomain());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_new_password_ends_the_accounts_other_sessions
+    // -----------------------------------------------------------
+    //
+    // A session signed in before the account's password
+    // changed — a reset, or a main admin's new password — is
+    // signed out at its next page and sent to the login page,
+    // so a session left open on a lab computer does not
+    // outlive the change.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_new_password_ends_the_accounts_other_sessions(): void
+    {
+        $player = $this->makePlayer();
+        $this->signIn($player)->get('/user/leaderboard')->assertOk();
+
+        $player->update(['password' => Hash::make('a-brand-new-password-1')]);
+        $response = $this->get('/user/leaderboard');
+
+        $response->assertRedirect('/');
+        $this->assertGuest('users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_session_without_a_password_change_stays
+    // -----------------------------------------------------------
+    //
+    // The check of the password ends nothing else: a session
+    // whose account keeps its password stays signed in page
+    // after page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_session_without_a_password_change_stays(): void
+    {
+        $player = $this->makePlayer();
+
+        $this->signIn($player)->get('/user/leaderboard')->assertOk();
+        $this->get('/user/leaderboard')->assertOk();
+
+        $this->assertAuthenticatedAs($player, 'users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_login_ends_on_the_dashboard_whatever_address_was_asked_for
+    // -----------------------------------------------------------
+    //
+    // A page asked for before the login whose address Symfony
+    // refuses to parse — a backslash in its path, which only a
+    // hand-made request leaves — is not resumed: the login ends
+    // on the dashboard, not on a 400.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_login_ends_on_the_dashboard_whatever_address_was_asked_for(): void
+    {
+        $player = $this->makePlayer();
+
+        $response = $this->withSession(['url.intended' => url('/user/challenge/a\\b')])
+            ->from('/')
+            ->post('/login', ['email' => $player->email, 'password' => self::PASSWORD]);
+
+        $response->assertRedirect('/user/dashboard');
+        $this->assertAuthenticatedAs($player, 'users');
     }
 }

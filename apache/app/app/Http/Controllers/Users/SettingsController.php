@@ -164,21 +164,17 @@ class SettingsController extends BaseController
     // ranking_table: JSON of every ranked player, keyed by
     // user id, best first. The view numbers players with equal
     // points in no set order, so the rows are ordered here and
-    // their user_rank numbered anew: by points, then by whose
-    // last solve was booked first — the solve's id, as the
-    // clock repeats an hour when it goes back in October.
+    // their user_rank numbered anew: by points, then by who
+    // got there first — whose latest solve that gave points
+    // was booked first, so a challenge worth nothing solved
+    // later loses no tie, and a player whose solves all gave
+    // nothing goes by the first of them, when the player
+    // reached the board. Booked first means the solve's id, as
+    // the clock repeats an hour when it goes back in October.
     // Every ranked player has a solve, so the join keeps them
     // all. It runs before every request, so it reads no
     // history: the leaderboards look up the Unix times of the
     // last solves themselves (ChallengesHistory::lastTimes).
-    //
-    // Known bug LAB-84 (low): a solve worth no points counts
-    // as the last solve, so a player who solves a 0-point
-    // challenge drops behind everyone who reached the same
-    // points in between; the get_group_leaderboard of
-    // Users\GroupsController and of
-    // Admins\UsersGroupsController the same. Fix: take the
-    // latest solve that gave points.
     //
     // Used by:
     //   - UpdateRankingTable::handle (Http/Middleware/) —
@@ -188,7 +184,7 @@ class SettingsController extends BaseController
     public static function update_rank_table()
     {
         $last_solve = DB::table('cyber_challenges_submitted')
-            ->selectRaw('`user_id`, MAX(`id`) AS `last_solve`')
+            ->selectRaw('`user_id`, COALESCE(MAX(CASE WHEN `points_given` > 0 THEN `id` END), MIN(`id`)) AS `last_solve`')
             ->groupBy('user_id');
 
         $ranked = DB::table('cyber_users_ranks')

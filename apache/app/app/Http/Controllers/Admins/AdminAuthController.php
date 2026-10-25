@@ -24,6 +24,7 @@ namespace App\Http\Controllers\Admins;
 use Session;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\SamlAuth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
 use App\Models\Admin;
@@ -97,16 +98,17 @@ class AdminAuthController extends Controller
     // POST /control-panel/logout
     //
     // Signs the admin out of the panel, forgets the page asked
-    // for before a login, then hands the browser to the SSO's
-    // logout, which returns to the control-panel login page.
-    // The hand-over is the sso_logout page, which moves on by
-    // itself, as the site's CSP would stop a redirect of the
-    // sign-out form on its way to the identity provider. The
-    // session — and its main flag — stays. The route asks for
-    // no admin session, so a panel page whose session has
-    // ended still ends the VU single sign-on: its refused
-    // token gets the signout_retry page (VerifyCsrfToken),
-    // whose button posts here again.
+    // for before a login and the VU sign-in noted for the
+    // session (SamlAuth::forgetSignOn), then hands the browser
+    // to the SSO's logout, which returns to the control-panel
+    // login page. The hand-over is the sso_logout page, which
+    // moves on by itself, as the site's CSP would stop a
+    // redirect of the sign-out form on its way to the identity
+    // provider. The session — and its main flag — stays. The
+    // route asks for no admin session, so a panel page whose
+    // session has ended still ends the VU single sign-on: its
+    // refused token gets the signout_retry page
+    // (VerifyCsrfToken), whose button posts here again.
     //
     // SimpleSAMLphp tells sso.vu.lt about the sign-out only
     // while it still holds the VU login, a PHP session file:
@@ -126,6 +128,7 @@ class AdminAuthController extends Controller
         // The plain sign-out, back to the login page without
         // leaving the SSO, is switched off
         Auth::guard('admins')->logout();
+        SamlAuth::forgetSignOn('admins');
         session()->forget('url.intended');
         $as = new \SimpleSAML\Auth\Simple('default-sp');
 

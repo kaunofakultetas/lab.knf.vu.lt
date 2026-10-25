@@ -5,9 +5,10 @@
 //
 //  Laravel's skeleton base controller: the routing
 //  controller plus the authorize, dispatch and validate
-//  helpers its traits bring, and the redirect that ends a
-//  login. Most of the app's controllers extend it through
-//  the player and control-panel bases.
+//  helpers its traits bring, the redirect that ends a
+//  login, and the refill of a refused form. Most of the
+//  app's controllers extend it through the player and
+//  control-panel bases.
 //
 //  Used by:
 //    - Users\BaseController and Admins\BaseController — the
@@ -25,6 +26,7 @@ use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Exception\RequestExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 
@@ -43,6 +45,7 @@ use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 //
 //   intendedWithin — the redirect that ends a login
 //   opensByGet     — whether a GET opens an address
+//   refill         — what a refused form shows again
 //
 // Used by:
 //   - Users\BaseController and Admins\BaseController
@@ -108,14 +111,11 @@ class Controller extends BaseController
     // sent from as the page asked for, and that may answer
     // POST alone: the sign-out offered again after a session
     // ended is served at the sign-out's own address, and
-    // resuming it would end the next login on a 405.
-    //
-    // Known bug LAB-92 (low): Symfony 7.4's Request::create
-    // throws a BadRequestException, which this does not catch,
-    // for an address with a backslash in its path, so a login
-    // whose page asked for before holds one ends on a 400.
-    // Fix: count any address Request::create refuses as one no
-    // GET opens.
+    // resuming it would end the next login on a 405. An
+    // address Request::create refuses outright — Symfony 7.4
+    // refuses a backslash in the path, which only a hand-made
+    // request leaves — opens nothing either, so such a login
+    // ends on the fallback rather than a 400.
     //
     // Used by:
     //   - intendedWithin (above)
@@ -125,10 +125,37 @@ class Controller extends BaseController
     {
         try {
             app('router')->getRoutes()->match(Request::create($url, 'GET'));
-        } catch (HttpExceptionInterface $e) {
+        } catch (HttpExceptionInterface|RequestExceptionInterface $e) {
             return false;
         }
 
         return true;
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // refill
+    // -----------------------------------------------------------
+    //
+    // The fields of a refused form to show again on the next
+    // page: of the names given, those sent as text of at most
+    // 255 characters, the longest any of these fields takes.
+    // A refused form is flashed into the session, which lives
+    // in Redis for the lab's 36 hours, so only the fields the
+    // form shows are kept — never the made-up ones a hand-made
+    // request adds, nor a field a megabyte long.
+    //
+    // Used by:
+    //   - Users\UserAuthController::login
+    //   - Users\RegisterController — store and forgotpassword
+    // -----------------------------------------------------------
+
+    protected function refill(Request $request, array $fields): array
+    {
+        return array_filter($request->only($fields), fn ($value) => is_string($value) && mb_strlen($value) <= 255);
     }
 }

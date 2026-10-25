@@ -75,6 +75,7 @@ use Lunaweb\RecaptchaV3\Facades\RecaptchaV3;
 //   fakeRecaptcha — the reCAPTCHA verdict
 //   setRegistrationOpen, setEventRange — the settings rows
 //   assertErrorFlashed — the error toast of the next page
+//   assertDialogRefused — a dialog's refusal, in its modal
 //   pageContent — a player page past its sidebar
 //
 // Used by:
@@ -477,14 +478,19 @@ abstract class TestCase extends BaseTestCase
     // included, on UTC instead of the app's Europe/Vilnius,
     // and puts the time zone back when the test ends. A local
     // time the hour the clocks go back in October comes twice,
-    // and read back it is always taken as the first, so a test
+    // and read back it can be taken for the other one: a test
     // that books a solve by its local time alone — the
     // fallback the pages take for a solve without a history
-    // row — reads an hour off that night; UTC has no such
+    // row — reads an hour off that night, and so does the
+    // clock a test travels to in that hour, which Carbon reads
+    // back as the second one, an hour on. UTC has no such
     // hour.
     //
     // Used by:
     //   - the Feature tests of the pages' local-time fallback
+    //   - the Feature tests that travel in time
+    //   - the Feature tests that read back a time the app
+    //     stored as local
     // -----------------------------------------------------------
 
     protected function inUtc(): void
@@ -504,7 +510,11 @@ abstract class TestCase extends BaseTestCase
     // -----------------------------------------------------------
     //
     // Signs the player in on the users guard, which every
-    // /user route checks.
+    // /user route checks, as a sign-in would: with no
+    // password hash of an account signed in before left in
+    // the session, where AuthenticateSession keeps the one it
+    // signs a session out by, so a test may sign in one player
+    // after another.
     //
     // Used by:
     //   - the Feature tests that need a signed-in player
@@ -512,6 +522,7 @@ abstract class TestCase extends BaseTestCase
 
     protected function signIn(User $player): static
     {
+        session()->forget('password_hash_users');
         return $this->actingAs($player, 'users');
     }
 
@@ -632,6 +643,34 @@ abstract class TestCase extends BaseTestCase
         $errors = session('errors');
         $this->assertNotNull($errors, "No error was flashed; expected '{$message}'");
         $this->assertContains($message, $errors->all());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // assertDialogRefused
+    // -----------------------------------------------------------
+    //
+    // Passes when a dialog answered with the refusal itself —
+    // the admins.dialogs.refused view with the message, which
+    // the panel shows in the modal of the page the dialog was
+    // opened from — rather than with a page, and flashed
+    // nothing, so the next page shows no toast for the same
+    // refusal.
+    //
+    // Used by:
+    //   - the Feature tests that check refused dialogs
+    // -----------------------------------------------------------
+
+    protected function assertDialogRefused(TestResponse $response, string $message): void
+    {
+        $response->assertOk();
+        $response->assertSee('<div class="alert alert-danger mb-0" role="alert">' . e($message) . '</div>', false);
+        $response->assertDontSee('<html', false);
+        $this->assertNull(session('errors'), 'The refusal was flashed for the next page as well');
     }
 
 

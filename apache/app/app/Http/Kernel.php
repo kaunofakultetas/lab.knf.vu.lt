@@ -63,13 +63,15 @@ class Kernel extends HttpKernel
 
     // The groups RouteServiceProvider loads the route files
     // under: web for routes/web.php, api for routes/api.php,
-    // whose one route is the skeleton's /api/user
+    // whose one route is the skeleton's /api/user. In web,
+    // OldInputText keeps a refused form's refill to text
     protected $middlewareGroups = [
         'web' => [
             \App\Http\Middleware\EncryptCookies::class,
             \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
             \Illuminate\Session\Middleware\StartSession::class,
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+            \App\Http\Middleware\OldInputText::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
         ],
@@ -88,15 +90,17 @@ class Kernel extends HttpKernel
     // validate.reset, saml_auth, saml_auth_admin,
     // group.exists, r_exists and perms are the app's own
     // checks; the rest are Laravel's. routes/web.php uses
-    // every app alias but signed, the api group uses throttle,
-    // and auth.session, cache.headers, can, password.confirm
-    // and verified are named by nothing.
-    // Known bug LAB-89 (low): auth.session, which signs a
-    // session out once its account's password changes, is on
-    // no route, so a new password ends no other session of the
-    // account. Fix: auth.session after auth:users on the
-    // player routes, with AuthenticateSession::redirectUsing
-    // naming the login page.
+    // every app alias but signed, and auth.session too: after
+    // auth:users on every player page, Laravel's
+    // AuthenticateSession signs a session out once its
+    // account's password has changed since — a reset, or a
+    // new password a main admin set — and leaves alone the
+    // accounts without one, VU's. It is on no other route: on
+    // a route without auth:users it would check whichever
+    // player is signed in on the browser, and could end the
+    // session before an admin's or a player's VU sign-out ran.
+    // The api group uses throttle, and cache.headers, can,
+    // password.confirm and verified are named by nothing.
     protected $middlewareAliases = [
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.admin' => \App\Http\Middleware\AuthenticateAdmin::class,

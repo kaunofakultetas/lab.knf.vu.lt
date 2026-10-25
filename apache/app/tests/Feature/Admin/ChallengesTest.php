@@ -1031,9 +1031,9 @@ final class ChallengesTest extends TestCase
     // -----------------------------------------------------------
     //
     // A lab admin opens the categories dialog of its own
-    // challenge but is sent back with the permissions error
-    // from another admin's; an unknown challenge gets "No
-    // challenge!" instead of a server error.
+    // challenge, while the dialog of another admin's shows
+    // the permissions error instead, and an unknown
+    // challenge's "No challenge!" rather than a server error.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -1047,10 +1047,8 @@ final class ChallengesTest extends TestCase
         $this->signInAdmin($admin)->from('/control-panel/challenges');
 
         $this->get("/control-panel/dialog/challenges/categories/{$own->id}")->assertOk()->assertSee('Own Task');
-        $this->get("/control-panel/dialog/challenges/categories/{$other->id}")->assertRedirect('/control-panel/challenges');
-        $this->assertErrorFlashed(self::REFUSAL);
-        $this->get('/control-panel/dialog/challenges/categories/987654321')->assertRedirect('/control-panel/challenges');
-        $this->assertErrorFlashed('No challenge!');
+        $this->assertDialogRefused($this->get("/control-panel/dialog/challenges/categories/{$other->id}"), self::REFUSAL);
+        $this->assertDialogRefused($this->get('/control-panel/dialog/challenges/categories/987654321'), 'No challenge!');
     }
 
 
@@ -1498,27 +1496,27 @@ final class ChallengesTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_a_refused_form_or_dialog_goes_back
+    // test_a_refused_form_goes_back_and_a_dialog_shows_the_refusal
     // -----------------------------------------------------------
     //
-    // A refused dialog, which opens over the page it was asked
-    // from, and a refused form go back to that page — here the
-    // dashboard, so going back is told apart from going to the
-    // list — whether the challenge is another admin's or gone.
+    // A refused form goes back to the page it was sent from —
+    // here the dashboard, so going back is told apart from
+    // going to the list — and a refused dialog, which the panel
+    // loads into the modal of the page it was opened from,
+    // shows the error there, whether the challenge is another
+    // admin's or gone.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_a_refused_form_or_dialog_goes_back(): void
+    public function test_a_refused_form_goes_back_and_a_dialog_shows_the_refusal(): void
     {
         $other = $this->makeChallenge(['name' => 'Their Task']);
         $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
 
-        $this->get("/control-panel/dialog/challenges/categories/{$other->id}")->assertRedirect('/control-panel/dashboard');
-        $this->assertErrorFlashed(self::REFUSAL);
-        $this->get('/control-panel/dialog/challenges/categories/987654321')->assertRedirect('/control-panel/dashboard');
-        $this->assertErrorFlashed('No challenge!');
+        $this->assertDialogRefused($this->get("/control-panel/dialog/challenges/categories/{$other->id}"), self::REFUSAL);
+        $this->assertDialogRefused($this->get('/control-panel/dialog/challenges/categories/987654321'), 'No challenge!');
         $this->post("/control-panel/challenges/delete/{$other->id}")->assertRedirect('/control-panel/dashboard');
         $this->assertErrorFlashed(self::REFUSAL);
         $this->post('/control-panel/challenges/delete/987654321')->assertRedirect('/control-panel/dashboard');
@@ -1561,5 +1559,96 @@ final class ChallengesTest extends TestCase
         $this->assertEquals(100000, Challenges::where('name', 'Grand task')->value('points'));
         $this->assertFalse(Challenges::where('name', 'Too grand task')->exists());
         $this->assertEquals(100000, $challenge->refresh()->points);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_search_takes_underscores_and_percents_as_typed
+    // -----------------------------------------------------------
+    //
+    // The challenge search finds the words as typed: an
+    // underscore matches an underscore only, not any character.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_search_takes_underscores_and_percents_as_typed(): void
+    {
+        $this->makeChallenge(['name' => 'Kq_search task']);
+        $this->makeChallenge(['name' => 'Kqxsearch task']);
+
+        $page = $this->signInAdmin($this->makeAdmin(true))->get('/control-panel/challenges?q=Kq_search')->getContent();
+
+        $this->assertStringContainsString('Kq_search task', $page);
+        $this->assertStringNotContainsString('Kqxsearch task', $page);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_form_refused_with_lists_for_fields_shows_again
+    // -----------------------------------------------------------
+    //
+    // A challenge form sent with lists for the name and the
+    // partner — only a hand-made request sends them — is
+    // refused, and the form shows again with those fields
+    // empty, not a 500.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_form_refused_with_lists_for_fields_shows_again(): void
+    {
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/challenges/create')
+            ->post('/control-panel/challenges/store', $this->challengeForm(['name' => ['Task'], 'partner_id' => ['1'], 'points' => 'many']));
+
+        $page = $this->get('/control-panel/challenges/create');
+
+        $page->assertOk();
+        $page->assertSee('name="name" type="text" value=""', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_list_for_a_text_field_is_refused
+    // -----------------------------------------------------------
+    //
+    // A challenge form with a list for a text field or the
+    // partner, or for the uid of the challenge it edits — only
+    // a hand-made request sends one — goes back with the error
+    // and stores nothing, rather than ending the save on a
+    // 500.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_list_for_a_text_field_is_refused(): void
+    {
+        $challenge = $this->makeChallenge(['name' => 'Kept Name']);
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/challenges/create');
+
+        foreach (['name', 'partner_id', 'descr', 'content', 'answer'] as $field) {
+            $form = $this->challengeForm();
+            $form[$field] = [$form[$field]];
+            $this->post('/control-panel/challenges/store', $form)->assertRedirect('/control-panel/challenges/create')->assertSessionHasErrors($field);
+        }
+        $this->post('/control-panel/challenges/update', $this->challengeForm(['uid' => [$challenge->id]]))->assertSessionHasErrors('uid');
+
+        $this->assertSame(1, Challenges::count());
+        $this->assertSame('Kept Name', $challenge->refresh()->name);
     }
 }

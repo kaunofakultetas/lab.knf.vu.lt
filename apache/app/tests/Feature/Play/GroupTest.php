@@ -457,4 +457,51 @@ final class GroupTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('<h3 class="h6 fw-normal text-dark">2 hours ago</h3>', $this->pageContent($response));
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_solve_worth_no_points_never_loses_a_tie
+    // -----------------------------------------------------------
+    //
+    // On the group leaderboard too, members with the same
+    // points rank by who got there first: a group challenge
+    // worth nothing solved after reaching the total loses no
+    // tie, and members whose solves all gave nothing rank by
+    // the first of them.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_solve_worth_no_points_never_loses_a_tie(): void
+    {
+        $early = $this->makeSsoPlayer(['username' => 'EarlyBird', 'display_name' => 'EarlyBird']);
+        $late = $this->makeSsoPlayer(['username' => 'LateComer', 'display_name' => 'LateComer']);
+        $zeroFirst = $this->makeSsoPlayer(['username' => 'ZeroFirst', 'display_name' => 'ZeroFirst']);
+        $zeroLater = $this->makeSsoPlayer(['username' => 'ZeroLater', 'display_name' => 'ZeroLater']);
+        $ten = $this->makeChallenge(['points' => 10]);
+        $rules = $this->makeChallenge(['points' => 0]);
+        $welcome = $this->makeChallenge(['points' => 0]);
+        $group = $this->makeGroup();
+        $this->assignToGroup($group, $ten);
+        $this->assignToGroup($group, $rules);
+        $this->assignToGroup($group, $welcome);
+        foreach ([$early, $late, $zeroFirst, $zeroLater] as $member) {
+            $this->joinGroup($group, $member);
+        }
+        $this->recordSolve($early, $ten);
+        $this->recordSolve($late, $ten);
+        $this->recordSolve($early, $rules);
+        $this->recordSolve($zeroFirst, $rules);
+        $this->recordSolve($zeroLater, $rules);
+        $this->recordSolve($zeroFirst, $welcome);
+
+        $page = $this->pageContent($this->signIn($early)->get("/user/group/leaderboard/{$group->public_id}"));
+
+        $this->assertMatchesRegularExpression('/EarlyBird.*LateComer.*ZeroFirst.*ZeroLater/s', $page);
+    }
 }

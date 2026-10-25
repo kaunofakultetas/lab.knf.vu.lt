@@ -12,7 +12,8 @@
 //  challenge sends the admin back with "No group!" or "No
 //  challenge!", someone else's with "You don't have
 //  permissions to do this!" — a page of a group or
-//  challenge to its list instead.
+//  challenge to its list instead, and a dialog answers with
+//  the error in its modal.
 //
 //  Used by:
 //    - app/Http/Kernel.php — the r_exists alias
@@ -48,8 +49,8 @@ use App\Models\GroupsUsers;
 //
 //   handle  — the check, which the alias hands one of eight
 //             types after its colon
-//   refuse  — the refusal of a group or challenge, missing
-//             or someone else's
+//   refuse  — the refusal of a group, a challenge or a file
+//             link, missing or someone else's
 //
 // Used by:
 //   - app/Http/Kernel.php — the r_exists alias
@@ -83,10 +84,11 @@ class R_Exists
     // page; every route names one of the eight.
     //
     // A refusal goes back to the page the admin came from, but
-    // a page of a group or challenge refused — one that no
-    // longer exists, or one the admin may not change — goes to
-    // its list (refuse): it is often the very page an add or
-    // an update went back to, and going back there would
+    // a dialog answers with the error in its modal, and a page
+    // of a group or challenge refused — one that no longer
+    // exists, or one the admin may not change — goes to its
+    // list (refuse): it is often the very page an add or an
+    // update went back to, and going back there would
     // redirect to itself until the browser gave up. The row
     // types let a row that does not exist through, as removing
     // it again changes nothing; the actions behind them check
@@ -194,7 +196,7 @@ class R_Exists
             if($challenge_id === null || Auth::guard('admins')->user()?->main == 1 || Challenges::where(['id'=>$challenge_id, 'created_by'=>Auth::guard('admins')->id()])->count() == 1){
                 return $next($request);
             } else {
-                return back()->withErrors(['You don\'t have permissions to do this!']);
+                return $this->refuse($request, 'You don\'t have permissions to do this!', '/control-panel/challenges');
             }
         }
 
@@ -219,21 +221,29 @@ class R_Exists
     // refuse
     // -----------------------------------------------------------
     //
-    // The refusal of a group or challenge — one that does not
-    // exist, or another admin's — with the error given: a page
-    // opened by GET goes to the list given, as going back could
-    // land on the refused page itself, the page an update went
-    // back to when its admin lost the right to it meanwhile; a
-    // dialog, which opens over the page it was asked from, and
-    // a POST go back.
+    // The refusal of a group, a challenge or a file link — one
+    // that does not exist, or another admin's — with the error
+    // given: a dialog — a GET under /dialog/ — answers with the
+    // error itself, the admins.dialogs.refused view, as the
+    // panel loads a dialog into the modal of the page it was
+    // opened from and would show there whatever page a
+    // redirect led to; another page opened by GET goes to the
+    // list given, as going back could land on the refused page
+    // itself, the page an update went back to when its admin
+    // lost the right to it meanwhile; a POST goes back.
     //
     // Used by:
-    //   - handle (above) — group_owned and challenge_owned
+    //   - handle (above) — group_owned, challenge_owned and
+    //     file_owned
     // -----------------------------------------------------------
 
     private function refuse($request, string $error, string $list)
     {
-        if ($request->isMethod('GET') && ! str_contains($request->path(), '/dialog/')) {
+        if ($request->isMethod('GET') && str_contains($request->path(), '/dialog/')) {
+            return response()->view('admins.dialogs.refused', ['error' => $error]);
+        }
+
+        if ($request->isMethod('GET')) {
             return redirect($list)->withErrors([$error]);
         }
 

@@ -23,8 +23,10 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Http\Middleware\SamlAuth;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
 use Mockery;
 use Mockery\MockInterface;
 use PHPUnit\Framework\Attributes\PreserveGlobalState;
@@ -46,6 +48,8 @@ use Tests\TestCase;
 // yet, so every test runs in a PHP process of its own.
 //
 //   fakeIdentityProvider — overloads the SimpleSAMLphp client
+//   fakeSimpleSamlSession — stands in for SimpleSAMLphp's
+//     session, where a VU sign-in registers its sign-out
 //
 // Used by:
 //   - PHPUnit — the Feature suite (runTests.sh)
@@ -55,6 +59,9 @@ use Tests\TestCase;
 #[PreserveGlobalState(false)]
 final class SsoLoginTest extends TestCase
 {
+
+    // SimpleSAMLphp's session as fakeSimpleSamlSession made it
+    private ?MockInterface $simpleSamlSession = null;
 
 
 
@@ -70,6 +77,8 @@ final class SsoLoginTest extends TestCase
     // middleware may only read attributes of an authenticated
     // visitor — and getAttributes returns the VU user id and
     // mail address given, keyed by OID like the real ones.
+    // SimpleSAMLphp's session is replaced too
+    // (fakeSimpleSamlSession).
     //
     // Used by:
     //   - the sign-in tests below
@@ -85,7 +94,39 @@ final class SsoLoginTest extends TestCase
             'urn:oid:2.5.4.42'                  => ['Ona'],
             'urn:oid:2.5.4.4'                   => ['Onaitė'],
         ]);
+        $this->fakeSimpleSamlSession();
         return $client;
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // fakeSimpleSamlSession
+    // -----------------------------------------------------------
+    //
+    // Replaces SimpleSAML\Session, whose session a VU sign-in
+    // hands SamlAuth::recordSignOut as a logout handler of
+    // default-sp: it holds no handler yet, and takes that one
+    // and no other. The session is made once a test and
+    // returned, its expectations defaults, so a test can ask
+    // how often the handler was registered.
+    //
+    // Used by:
+    //   - fakeIdentityProvider (above)
+    // -----------------------------------------------------------
+
+    private function fakeSimpleSamlSession(): MockInterface
+    {
+        if ($this->simpleSamlSession === null) {
+            $this->simpleSamlSession = Mockery::mock();
+            $this->simpleSamlSession->shouldReceive('getAuthState')->with('default-sp')->andReturn(['LogoutHandlers' => []])->byDefault();
+            $this->simpleSamlSession->shouldReceive('registerLogoutHandler')->with('default-sp', SamlAuth::class, 'recordSignOut')->byDefault();
+            Mockery::mock('alias:SimpleSAML\Session')->shouldReceive('getSessionFromRequest')->andReturn($this->simpleSamlSession);
+        }
+        return $this->simpleSamlSession;
     }
 
 
@@ -537,5 +578,386 @@ final class SsoLoginTest extends TestCase
         $this->post('/control-panel/logout', ['_token' => $token[1]])
             ->assertOk()
             ->assertSee('href="https://idp.sso.test/logout?ReturnTo=panel"', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_sign_in_registers_its_sign_out_with_simplesamlphp
+    // -----------------------------------------------------------
+    //
+    // A player's and an admin's VU sign-in each hand
+    // SimpleSAMLphp's session SamlAuth::recordSignOut as a
+    // logout handler of default-sp — a method SimpleSAMLphp
+    // can call, which it checks with is_callable — so that
+    // SimpleSAMLphp tells the lab when it signs the browser
+    // out of VU.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_sign_in_registers_its_sign_out_with_simplesamlphp(): void
+    {
+        $player = $this->makeSsoPlayer();
+        $this->makeAdmin(true, ['vu_id' => $player->vu_id]);
+        $this->fakeIdentityProvider($player->vu_id, $player->email);
+        $this->fakeSimpleSamlSession()->shouldReceive('registerLogoutHandler')->with('default-sp', SamlAuth::class, 'recordSignOut')->twice();
+
+        $this->get('/cp')->assertRedirect('/user/dashboard');
+        $this->get('/control-panel/login')->assertRedirect('/control-panel/dashboard');
+
+        $this->assertTrue(is_callable([SamlAuth::class, 'recordSignOut']));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_sign_in_registers_its_sign_out_once
+    // -----------------------------------------------------------
+    //
+    // A VU sign-on whose SimpleSAMLphp session holds the
+    // handler already — a second VU login of the browser — is
+    // not given it again, so a sign-out calls it once.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_sign_in_registers_its_sign_out_once(): void
+    {
+        $player = $this->makeSsoPlayer();
+        $this->fakeIdentityProvider($player->vu_id, $player->email);
+        $session = $this->fakeSimpleSamlSession();
+        $session->shouldReceive('getAuthState')->with('default-sp')->andReturn(['LogoutHandlers' => [[SamlAuth::class, 'recordSignOut']]]);
+        $session->shouldReceive('registerLogoutHandler')->never();
+
+        $this->get('/cp')->assertRedirect('/user/dashboard');
+
+        $this->assertAuthenticatedAs($player, 'users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_vu_sign_out_leaves_a_cookie_only_the_lab_can_set
+    // -----------------------------------------------------------
+    //
+    // The cookie recordSignOut leaves is the lab's own: its
+    // name carries the __Host- prefix and it is Secure, for
+    // the whole site, without a domain — so no other host
+    // under vu.lt can plant it to sign players out — unseen
+    // by scripts, kept as long as a lab session lasts, and
+    // allowed across sites, as SimpleSAMLphp's own cookies
+    // are. It holds the Unix time of the sign-out.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_vu_sign_out_leaves_a_cookie_only_the_lab_can_set(): void
+    {
+        $cookie = SamlAuth::signedOutCookie();
+
+        $this->assertSame(SamlAuth::SIGNED_OUT_COOKIE, $cookie->getName());
+        $this->assertStringStartsWith('__Host-', $cookie->getName());
+        $this->assertTrue($cookie->isSecure());
+        $this->assertSame('/', $cookie->getPath());
+        $this->assertNull($cookie->getDomain());
+        $this->assertTrue($cookie->isHttpOnly());
+        $this->assertSame('none', $cookie->getSameSite());
+        $this->assertGreaterThanOrEqual(36 * 3600 - 60, $cookie->getMaxAge());
+        $this->assertMatchesRegularExpression('/^[0-9]+$/', $cookie->getValue());
+        $this->assertEqualsWithDelta(time(), (int) $cookie->getValue(), 5);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_sign_out_ends_the_sessions_signed_in_through_vu
+    // -----------------------------------------------------------
+    //
+    // Once the browser has signed out of VU — at sso.vu.lt, or
+    // in another VU service, which SimpleSAMLphp's logout
+    // handler marks with its cookie, here a second after the
+    // sign-ins — the next page of either side ends the session
+    // signed in through VU there and then: the player's to the
+    // lab's login page, the admin's to the panel's, with "Your
+    // VU sign-in has ended".
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_sign_out_ends_the_sessions_signed_in_through_vu(): void
+    {
+        $player = $this->makeSsoPlayer();
+        $admin = $this->makeAdmin(true, ['vu_id' => $player->vu_id]);
+        $this->fakeIdentityProvider($player->vu_id, $player->email);
+        $this->get('/cp')->assertRedirect('/user/dashboard');
+        $this->get('/control-panel/login')->assertRedirect('/control-panel/dashboard');
+        $this->assertAuthenticatedAs($player, 'users');
+        $this->assertAuthenticatedAs($admin, 'admins');
+
+        $this->withUnencryptedCookie(SamlAuth::SIGNED_OUT_COOKIE, (string) (time() + 1));
+        $lab = $this->get('/user/dashboard');
+        $panel = $this->get('/control-panel/dashboard');
+
+        $lab->assertRedirect('/');
+        $panel->assertRedirect('/control-panel');
+        $this->assertGuest('users');
+        $this->assertGuest('admins');
+        $this->assertErrorFlashed('Your VU sign-in has ended');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_sign_out_leaves_a_local_sign_in_alone
+    // -----------------------------------------------------------
+    //
+    // The cookie of a VU sign-out ends only a session signed
+    // in through VU: a player who signed in with the login
+    // form stays signed in, though the sign-out came after.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_sign_out_leaves_a_local_sign_in_alone(): void
+    {
+        $local = $this->makePlayer();
+
+        $this->signIn($local)->withUnencryptedCookie(SamlAuth::SIGNED_OUT_COOKIE, (string) (time() + 1))->get('/user/leaderboard')->assertOk();
+
+        $this->assertAuthenticatedAs($local, 'users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_vu_sign_in_after_a_vu_sign_out_stays
+    // -----------------------------------------------------------
+    //
+    // A VU sign-in on a browser that signed out of VU a minute
+    // before is not ended by that sign-out, whose time is
+    // earlier; the sign-in leaves the cookie as it is, as a
+    // session of the other side signed in before the sign-out
+    // still has to end by it.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_vu_sign_in_after_a_vu_sign_out_stays(): void
+    {
+        $player = $this->makeSsoPlayer();
+        $this->fakeIdentityProvider($player->vu_id, $player->email);
+        $this->withUnencryptedCookie(SamlAuth::SIGNED_OUT_COOKIE, (string) (time() - 60));
+
+        $signIn = $this->get('/cp');
+        $next = $this->get('/user/leaderboard');
+
+        $signIn->assertRedirect('/user/dashboard');
+        $this->assertNull(collect($signIn->headers->getCookies())->first(fn ($cookie) => $cookie->getName() === SamlAuth::SIGNED_OUT_COOKIE));
+        $next->assertOk();
+        $this->assertAuthenticatedAs($player, 'users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_later_vu_sign_in_leaves_the_other_side_to_the_sign_out
+    // -----------------------------------------------------------
+    //
+    // A VU sign-in made after a VU sign-out keeps only its own
+    // side: the player signed in through VU two minutes ago,
+    // the browser signed out of VU a minute ago, and the
+    // admin signed in through VU now, the admin stays while
+    // the player's next page ends the player's session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_later_vu_sign_in_leaves_the_other_side_to_the_sign_out(): void
+    {
+        $player = $this->makeSsoPlayer();
+        $admin = $this->makeAdmin(true, ['vu_id' => $player->vu_id]);
+        $this->fakeIdentityProvider($player->vu_id, $player->email);
+        $this->get('/cp')->assertRedirect('/user/dashboard');
+        $this->withSession(['vu_sign_on.users.at' => time() - 120]);
+        $this->withUnencryptedCookie(SamlAuth::SIGNED_OUT_COOKIE, (string) (time() - 60));
+
+        $this->get('/control-panel/login')->assertRedirect('/control-panel/dashboard');
+        $panel = $this->get('/control-panel/dashboard');
+        $lab = $this->get('/user/leaderboard');
+
+        $panel->assertOk();
+        $this->assertAuthenticatedAs($admin, 'admins');
+        $lab->assertRedirect('/');
+        $this->assertGuest('users');
+        $this->assertErrorFlashed('Your VU sign-in has ended');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_password_sign_in_outlives_a_vu_sign_out
+    // -----------------------------------------------------------
+    //
+    // A VU account an admin gave a password, signed in with
+    // the login form, is no VU sign-in, though the session
+    // still notes the VU sign-in the account made before on
+    // the browser — here signed out of the guard alone, which
+    // forgets nothing: the login forgets it, and a VU sign-out
+    // after ends nothing.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_password_sign_in_outlives_a_vu_sign_out(): void
+    {
+        $player = $this->makeSsoPlayer();
+        $this->fakeIdentityProvider($player->vu_id, $player->email);
+        $this->get('/cp')->assertRedirect('/user/dashboard');
+        $this->app['auth']->guard('users')->logout();
+
+        $this->post('/login', ['email' => $player->email, 'password' => self::PASSWORD])->assertRedirect('/user/dashboard');
+        $this->withUnencryptedCookie(SamlAuth::SIGNED_OUT_COOKIE, (string) (time() + 1));
+
+        $this->get('/user/leaderboard')->assertOk();
+        $this->assertAuthenticatedAs($player, 'users');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_every_lab_sign_out_forgets_the_vu_sign_on
+    // -----------------------------------------------------------
+    //
+    // The player's plain and VU sign-outs and the admin's
+    // sign-out each forget the VU sign-in the session noted,
+    // so that no later sign-in of the browser is taken for
+    // one.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_every_lab_sign_out_forgets_the_vu_sign_on(): void
+    {
+        $client = Mockery::mock('overload:SimpleSAML\Auth\Simple');
+        $client->shouldReceive('getLogoutURL')->andReturn('https://idp.sso.test/logout');
+        $player = $this->makeSsoPlayer();
+        $admin = $this->makeAdmin();
+
+        foreach (['/user/logout', '/user/logout_saml'] as $signOut) {
+            $this->signIn($player)->withSession(['vu_sign_on.users' => ['id' => $player->id, 'at' => time()]]);
+            $this->post($signOut);
+            $this->assertNull(session('vu_sign_on.users'), $signOut);
+        }
+        $this->signInAdmin($admin)->withSession(['vu_sign_on.admins' => ['id' => $admin->id, 'at' => time()]]);
+        $this->post('/control-panel/logout')->assertOk();
+        $this->assertNull(session('vu_sign_on.admins'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_stale_player_session_never_blocks_the_admin_sign_out
+    // -----------------------------------------------------------
+    //
+    // A player signed in on the same browser whose password
+    // has changed since — which AuthenticateSession signs out
+    // on the next player page — does not stop the admin's
+    // sign-out: the panel's sign-out is no player page, so it
+    // still hands over to the identity provider's logout.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_stale_player_session_never_blocks_the_admin_sign_out(): void
+    {
+        $client = Mockery::mock('overload:SimpleSAML\Auth\Simple');
+        $client->shouldReceive('getLogoutURL')
+            ->with('https://lab.knf.vu.lt/control-panel')
+            ->andReturn('https://idp.sso.test/logout?ReturnTo=cp');
+        $player = $this->makePlayer();
+        $this->signInAdmin($this->makeAdmin());
+        $this->signIn($player)->get('/user/leaderboard')->assertOk();
+        $player->forceFill(['password' => Hash::make('changed-elsewhere-1')])->save();
+
+        $response = $this->post('/control-panel/logout');
+
+        $response->assertOk();
+        $response->assertSee('<meta http-equiv="refresh" content="0;url=https://idp.sso.test/logout?ReturnTo=cp">', false);
+        $this->assertGuest('admins');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_vu_login_leaves_nobody_signed_in
+    // -----------------------------------------------------------
+    //
+    // A VU login that finds no account it may use signs out
+    // whoever was signed in on the browser before: the admin,
+    // when the VU user is no admin, and the player, when the
+    // VU user's account is switched off, which then reads
+    // "Your account is not active" on the login page.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_vu_login_leaves_nobody_signed_in(): void
+    {
+        $outsider = $this->makeSsoPlayer(['status' => 0]);
+        $this->fakeIdentityProvider($outsider->vu_id, $outsider->email);
+        $this->signInAdmin($this->makeAdmin(true));
+        $this->signIn($this->makePlayer());
+
+        $this->get('/control-panel/login');
+        $this->get('/cp')->assertRedirect('/');
+
+        $this->assertGuest('admins');
+        $this->assertGuest('users');
+        $this->assertErrorFlashed('Your account is not active');
     }
 }

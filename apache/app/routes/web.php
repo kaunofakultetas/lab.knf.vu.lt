@@ -30,7 +30,7 @@
 //    GET       /
 //    POST      /login
 //    GET|POST  /register
-//    GET       /verify/{verify_token}
+//    GET|POST  /verify/{verify_token}
 //    GET|POST  /reset/{reset_token}
 //    GET|POST  /forgot-password
 //    GET       /cp
@@ -101,16 +101,19 @@ Route::post('login', [App\Http\Controllers\Users\UserAuthController::class, 'log
 
 // Registration — the form, and its POST, which the reg.status
 // switch closes — and the links the mails carry: the
-// verification link, and the password-reminder link, which
-// opens a page whose button posts the reset. validate.verify
-// answers an unknown token, or one mailed over a day ago,
-// with a 404, validate.reset an unknown one or one mailed
-// over an hour ago
+// verification link and the password-reminder link, each
+// opening a page whose button posts the activation or the
+// reset, as mail scanners open links before the reader does.
+// validate.verify answers an unknown token, or one mailed
+// over a day ago, with a 404, validate.reset an unknown one
+// or one mailed over an hour ago
 Route::get('register', [App\Http\Controllers\Users\RegisterController::class, 'create'])->name('register_users')->middleware(['guest']);
 
 Route::post('register', [App\Http\Controllers\Users\RegisterController::class, 'store'])->name('create_users')->middleware(['guest', 'reg.status']);
 
-Route::get('verify/{verify_token}', [App\Http\Controllers\Users\RegisterController::class, 'verify'])->middleware(['guest', 'validate.verify']);
+Route::get('verify/{verify_token}', [App\Http\Controllers\Users\RegisterController::class, 'verify_form'])->middleware(['guest', 'validate.verify']);
+
+Route::post('verify/{verify_token}', [App\Http\Controllers\Users\RegisterController::class, 'verify'])->middleware(['guest', 'validate.verify']);
 
 Route::get('reset/{reset_token}', [App\Http\Controllers\Users\RegisterController::class, 'reset_form'])->middleware(['guest', 'validate.reset']);
 
@@ -127,41 +130,43 @@ Route::get('cp', [App\Http\Controllers\Users\UserAuthController::class, 'cp'])->
 
 Route::get('page/{alias}', [App\Http\Controllers\Users\PageController::class, 'show']);
 
-// The player pages
+// The player pages; auth.session, after auth:users on each,
+// signs a session out once its account's password has changed
+// since it signed in
 Route::prefix('user')->group(function(){
     // The dashboard, a challenge's page and its answer form;
     // validate.ifsolved sends a solved challenge's pages to the
     // dashboard.
     //
     // The answer route has no rate limit, by design.
-    Route::get('/dashboard', [App\Http\Controllers\Users\ChallengesController::class, 'index'])->middleware(['auth:users'])->name('user_dashboard');
+    Route::get('/dashboard', [App\Http\Controllers\Users\ChallengesController::class, 'index'])->middleware(['auth:users', 'auth.session'])->name('user_dashboard');
 
-    Route::get('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'show'])->middleware(['auth:users', 'validate.ifsolved']);
+    Route::get('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'show'])->middleware(['auth:users', 'auth.session', 'validate.ifsolved']);
 
-    Route::post('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'submit_answer'])->middleware(['auth:users', 'validate.ifsolved']);
+    Route::post('/challenge/{public_id}/{public_group_id?}', [App\Http\Controllers\Users\ChallengesController::class, 'submit_answer'])->middleware(['auth:users', 'auth.session', 'validate.ifsolved']);
 
     // A vote, which the dashboard and the challenge page post by
     // script with the page's CSRF token
-    Route::post('/challenge/vote/{type}/{public_id}', [App\Http\Controllers\Users\ChallengesController::class, 'vote'])->middleware(['auth:users']);
+    Route::post('/challenge/vote/{type}/{public_id}', [App\Http\Controllers\Users\ChallengesController::class, 'vote'])->middleware(['auth:users', 'auth.session']);
 
     // Signing out, and the leaderboard
-    Route::post('/logout', [App\Http\Controllers\Users\UserAuthController::class, 'logout'])->middleware(['auth:users'])->name('user_logout');
+    Route::post('/logout', [App\Http\Controllers\Users\UserAuthController::class, 'logout'])->middleware(['auth:users', 'auth.session'])->name('user_logout');
 
-    Route::get('/leaderboard', [App\Http\Controllers\Users\LeaderboardController::class, 'index'])->middleware(['auth:users'])->name('user_leaderboard');
+    Route::get('/leaderboard', [App\Http\Controllers\Users\LeaderboardController::class, 'index'])->middleware(['auth:users', 'auth.session'])->name('user_leaderboard');
 
     // Signing out of the SSO too; open to anyone
     Route::post('/logout_saml', [App\Http\Controllers\Users\UserAuthController::class, 'logout_saml']);
 
     // A group's page and leaderboard, for its members
     // (group.exists)
-    Route::get('/group/{public_id}', [App\Http\Controllers\Users\GroupsController::class, 'index'])->middleware(['auth:users', 'group.exists']);
+    Route::get('/group/{public_id}', [App\Http\Controllers\Users\GroupsController::class, 'index'])->middleware(['auth:users', 'auth.session', 'group.exists']);
 
-    Route::get('/group/leaderboard/{public_id}', [App\Http\Controllers\Users\GroupsController::class, 'group_leaderboard'])->middleware(['auth:users', 'group.exists']);
+    Route::get('/group/leaderboard/{public_id}', [App\Http\Controllers\Users\GroupsController::class, 'group_leaderboard'])->middleware(['auth:users', 'auth.session', 'group.exists']);
 
     // The feedback dialog and its POST
-    Route::get('/dialog/feedback', [App\Http\Controllers\Users\ChallengesController::class, 'dialog_feedback'])->middleware(['auth:users']);
+    Route::get('/dialog/feedback', [App\Http\Controllers\Users\ChallengesController::class, 'dialog_feedback'])->middleware(['auth:users', 'auth.session']);
 
-    Route::post('/feedback', [App\Http\Controllers\Users\ChallengesController::class, 'feedback_save'])->middleware(['auth:users']);
+    Route::post('/feedback', [App\Http\Controllers\Users\ChallengesController::class, 'feedback_save'])->middleware(['auth:users', 'auth.session']);
 });
 
 // The control panel

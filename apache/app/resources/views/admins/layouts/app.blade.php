@@ -24,8 +24,6 @@
    
 	{{-- The file's time in the address, so browsers fetch the script anew whenever it changes --}}
 	<script src="/assets/js/app_admin.min.js?{{ filemtime(public_path('assets/js/app_admin.min.js')) }}"></script>
-    
-    <script src="/static/js/bootstrap-5.0.2.min.js"></script>
      
  @if(session('success'))
        <script>

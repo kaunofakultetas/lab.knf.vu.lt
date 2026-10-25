@@ -520,4 +520,34 @@ final class PagesTest extends TestCase
         $this->get('/page/rules-v1.2')->assertSee('<p>New rules</p>', false);
         $this->assertFalse(Pages::where('alias', 'rules-v2.0')->exists());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_list_for_a_field_is_refused
+    // -----------------------------------------------------------
+    //
+    // A page form with a list for a field, or for the uid of
+    // the page it edits — only a hand-made request sends one —
+    // goes back with the error and stores nothing, rather than
+    // ending the save on a 500.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_list_for_a_field_is_refused(): void
+    {
+        $page = Pages::create(['name' => 'Rules of Play', 'content' => '<p>Rules</p>', 'alias' => 'rules']);
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/pages/create');
+
+        $this->post('/control-panel/pages/store', ['name' => 'Listed', 'content' => ['<p>x</p>'], 'alias' => 'listed'])->assertSessionHasErrors('content');
+        $this->post('/control-panel/pages/update', ['uid' => [$page->id], 'name' => 'Listed', 'content' => '<p>x</p>', 'alias' => 'rules'])->assertSessionHasErrors('uid');
+
+        $this->assertSame(1, Pages::count());
+        $this->assertSame('Rules of Play', $page->refresh()->name);
+    }
 }

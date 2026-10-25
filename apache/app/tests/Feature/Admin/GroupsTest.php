@@ -19,7 +19,9 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Http\Controllers\Admins\ChallengesController;
 use App\Http\Controllers\Admins\UsersGroupsController;
+use App\Models\Challenges;
 use App\Models\Groups;
 use App\Models\GroupsChallenges;
 use App\Models\GroupsUsers;
@@ -146,7 +148,9 @@ final class GroupsTest extends TestCase
     //
     // The group belongs to the admin who made it, gets a fresh
     // UUID as its public id and the current time, and the
-    // admin returns to the list.
+    // admin returns to the list. The test runs in UTC
+    // (inUtc), as a local time the app stored, read back the
+    // night the clocks go back, may be an hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -154,6 +158,7 @@ final class GroupsTest extends TestCase
 
     public function test_a_group_is_created_for_its_admin(): void
     {
+        $this->inUtc();
         $admin = $this->makeAdmin();
 
         $response = $this->signInAdmin($admin)
@@ -237,7 +242,8 @@ final class GroupsTest extends TestCase
     //
     // Every page and form that names someone else's group
     // sends a lab admin back with the permissions error, and
-    // the group stays as it was.
+    // every dialog shows the error in its modal; the group
+    // stays as it was.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -248,10 +254,12 @@ final class GroupsTest extends TestCase
         $group = $this->makeGroup(null, ['name' => 'Their Lab']);
         $challenge = $this->makeChallenge();
         $this->signInAdmin($this->makeAdmin())->from('/control-panel/users/vu-groups');
-        $pages = [
+        $dialogs = [
             "/control-panel/dialog/users/vu-groups/edit/{$group->id}",
             "/control-panel/dialog/users/vu-groups/user_add_new/{$group->id}",
             "/control-panel/dialog/users/vu-groups/challenge_add_new/{$group->id}",
+        ];
+        $pages = [
             "/control-panel/users/vu-groups/users_list/{$group->id}",
             "/control-panel/users/vu-groups/challenges_list/{$group->id}",
             "/control-panel/users/vu-groups/leaderboard/{$group->id}",
@@ -263,6 +271,9 @@ final class GroupsTest extends TestCase
             '/control-panel/dialog/users/vu-groups/challenges_store' => ['uid' => $group->id, 'challenge_id' => $challenge->id],
         ];
 
+        foreach ($dialogs as $dialog) {
+            $this->assertDialogRefused($this->get($dialog), self::REFUSAL);
+        }
         foreach ($pages as $page) {
             $this->get($page)->assertRedirect('/control-panel/users/vu-groups');
             $this->assertErrorFlashed(self::REFUSAL);
@@ -1337,28 +1348,27 @@ final class GroupsTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_a_refused_group_form_or_dialog_goes_back
+    // test_a_refused_group_form_goes_back_and_a_dialog_shows_the_refusal
     // -----------------------------------------------------------
     //
-    // A refused dialog of a group, which opens over the page
-    // it was asked from, and a refused form go back to that
-    // page — here the dashboard, so going back is told apart
-    // from going to the list — whether the group is another
-    // admin's or gone.
+    // A refused group form goes back to the page it was sent
+    // from — here the dashboard, so going back is told apart
+    // from going to the list — and a refused dialog of a
+    // group, which the panel loads into the modal of the page
+    // it was opened from, shows the error there, whether the
+    // group is another admin's or gone.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_a_refused_group_form_or_dialog_goes_back(): void
+    public function test_a_refused_group_form_goes_back_and_a_dialog_shows_the_refusal(): void
     {
         $other = $this->makeGroup($this->makeAdmin(true));
         $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
 
-        $this->get("/control-panel/dialog/users/vu-groups/user_add_new/{$other->id}")->assertRedirect('/control-panel/dashboard');
-        $this->assertErrorFlashed(self::REFUSAL);
-        $this->get('/control-panel/dialog/users/vu-groups/user_add_new/987654321')->assertRedirect('/control-panel/dashboard');
-        $this->assertErrorFlashed('No group!');
+        $this->assertDialogRefused($this->get("/control-panel/dialog/users/vu-groups/user_add_new/{$other->id}"), self::REFUSAL);
+        $this->assertDialogRefused($this->get('/control-panel/dialog/users/vu-groups/user_add_new/987654321'), 'No group!');
         $this->post("/control-panel/users/vu-groups/delete/{$other->id}")->assertRedirect('/control-panel/dashboard');
         $this->assertErrorFlashed(self::REFUSAL);
 
@@ -1400,5 +1410,130 @@ final class GroupsTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('<h3 class="h6 fw-normal text-dark">2 hours ago</h3>', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_solve_worth_no_points_never_loses_a_tie
+    // -----------------------------------------------------------
+    //
+    // The panel's group leaderboard ranks members with the
+    // same points by who got there first, as the players' does:
+    // a challenge worth nothing solved later loses no tie, and
+    // members whose solves all gave nothing rank by the first
+    // of them.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_solve_worth_no_points_never_loses_a_tie(): void
+    {
+        $early = $this->makeSsoPlayer(['username' => 'EarlyBird', 'display_name' => 'EarlyBird']);
+        $late = $this->makeSsoPlayer(['username' => 'LateComer', 'display_name' => 'LateComer']);
+        $zeroFirst = $this->makeSsoPlayer(['username' => 'ZeroFirst', 'display_name' => 'ZeroFirst']);
+        $zeroLater = $this->makeSsoPlayer(['username' => 'ZeroLater', 'display_name' => 'ZeroLater']);
+        $ten = $this->makeChallenge(['points' => 10]);
+        $rules = $this->makeChallenge(['points' => 0]);
+        $welcome = $this->makeChallenge(['points' => 0]);
+        $group = $this->makeGroup();
+        $this->assignToGroup($group, $ten);
+        $this->assignToGroup($group, $rules);
+        $this->assignToGroup($group, $welcome);
+        foreach ([$early, $late, $zeroFirst, $zeroLater] as $member) {
+            $this->joinGroup($group, $member);
+        }
+        $this->recordSolve($early, $ten);
+        $this->recordSolve($late, $ten);
+        $this->recordSolve($early, $rules);
+        $this->recordSolve($zeroFirst, $rules);
+        $this->recordSolve($zeroLater, $rules);
+        $this->recordSolve($zeroFirst, $welcome);
+
+        $page = $this->signInAdmin($this->makeAdmin(true))->get("/control-panel/users/vu-groups/leaderboard/{$group->id}")->getContent();
+
+        $this->assertMatchesRegularExpression('/EarlyBird.*LateComer.*ZeroFirst.*ZeroLater/s', $page);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_challenge_deleted_meanwhile_is_never_placed
+    // -----------------------------------------------------------
+    //
+    // A challenge another admin deletes just after the form's
+    // check found it is looked up again in the transaction:
+    // the placement goes back with "No challenge!", and the
+    // group keeps no placement of a challenge that is gone.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_challenge_deleted_meanwhile_is_never_placed(): void
+    {
+        $admin = $this->makeAdmin(true);
+        $group = $this->makeGroup($admin);
+        $challenge = $this->makeChallenge();
+        $this->signInAdmin($admin)->from("/control-panel/users/vu-groups/challenges_list/{$group->id}");
+        $interleaved = false;
+        DB::listen(function (QueryExecuted $query) use ($challenge, &$interleaved) {
+            if (!$interleaved && str_starts_with($query->sql, 'select count(*) as `aggregate` from `cyber_challenges`')) {
+                $interleaved = true;
+                app(ChallengesController::class)->destroy($challenge->id);
+            }
+        });
+
+        $this->post('/control-panel/dialog/users/vu-groups/challenges_store', ['uid' => $group->id, 'challenge_id' => $challenge->id]);
+
+        $this->assertTrue($interleaved);
+        $this->assertNull(Challenges::find($challenge->id));
+        $this->assertSame(0, GroupsChallenges::where('challenge_id', $challenge->id)->count());
+        $this->assertErrorFlashed('No challenge!');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_list_for_a_field_is_refused
+    // -----------------------------------------------------------
+    //
+    // The group forms take text and whole numbers only: a list
+    // for the name, the VU id, the challenge or the group's
+    // uid — only a hand-made request sends one — goes back
+    // with the error and changes nothing, rather than ending
+    // the save on a 500.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_list_for_a_field_is_refused(): void
+    {
+        $admin = $this->makeAdmin(true);
+        $group = $this->makeGroup($admin, ['name' => 'Kept Name']);
+        $challenge = $this->makeChallenge();
+        $this->signInAdmin($admin)->from('/control-panel/users/vu-groups');
+
+        $this->post('/control-panel/dialog/users/vu-groups/store', ['name' => ['Listed']])->assertSessionHasErrors('name');
+        $this->post('/control-panel/dialog/users/vu-groups/update', ['uid' => $group->id, 'name' => ['Listed']])->assertSessionHasErrors('name');
+        $this->post('/control-panel/dialog/users/vu-groups/users_store', ['uid' => $group->id, 'vu_id' => ['s1234567']])->assertSessionHasErrors('vu_id');
+        $this->post('/control-panel/dialog/users/vu-groups/challenges_store', ['uid' => $group->id, 'challenge_id' => [$challenge->id]])->assertSessionHasErrors('challenge_id');
+        $this->post('/control-panel/dialog/users/vu-groups/users_store', ['uid' => [$group->id], 'vu_id' => 's1234567'])->assertSessionHasErrors('uid');
+
+        $this->assertSame('Kept Name', $group->refresh()->name);
+        $this->assertSame(1, Groups::count());
+        $this->assertSame(0, GroupsUsers::where('group_id', $group->id)->count());
+        $this->assertSame(0, GroupsChallenges::where('group_id', $group->id)->count());
     }
 }

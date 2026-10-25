@@ -7,12 +7,14 @@
 //  hash of its token matches the verify_token of exactly
 //  one local account — one without a VU id, as SSO
 //  accounts are never verified by mail — and the link was
-//  mailed within the last day. Any other token is a 404.
+//  mailed within the last day. Any other token is a 404, but
+//  for a second press of the page's button, which goes to
+//  the login page.
 //
 //  Used by:
 //    - app/Http/Kernel.php — the validate.verify alias
-//    - routes/web.php — GET /verify/{verify_token}, the link
-//      of the registration mail
+//    - routes/web.php — GET and POST /verify/{verify_token},
+//      the link of the registration mail and its button
 // -----------------------------------------------------------
 
 
@@ -60,16 +62,20 @@ class ValidateVerify
     // handle
     // -----------------------------------------------------------
     //
-    // Passes the request when one local account holds the
-    // hash of the route's token, an empty or missing token
-    // never matching, and the time the token ends with is at
-    // most LIFETIME ago by Laravel's clock; answers 404
-    // otherwise, an expired link like an unknown one. A token
-    // without a time — one mailed before links expired —
-    // reads as 1970.
+    // Passes the request when one local account holds the hash
+    // of the route's token, an empty or missing token never
+    // matching, and the time the token ends with is at most
+    // LIFETIME ago by Laravel's clock; answers 404 otherwise,
+    // an expired link like an unknown one. A press of the
+    // page's button with such a token goes to the login page
+    // instead, keeping the message the session holds: a double
+    // click sends the token twice, and by the second the first
+    // press has used it. A token without a time — one mailed
+    // before links expired — reads as 1970.
     //
     // Used by:
-    //   - the validate.verify alias — GET /verify/{verify_token}
+    //   - the validate.verify alias — GET and POST
+    //     /verify/{verify_token}
     // -----------------------------------------------------------
 
     public function handle($request, Closure $next)
@@ -83,6 +89,14 @@ class ValidateVerify
         if(now()->getTimestamp() - $mailed <= self::LIFETIME && User::where(['verify_token'=>hash('sha256', $verify_token)])->where('verify_token', '<>', '')->whereNotNull('verify_token')->whereNull('vu_id')->count() == 1) {
             return $next($request);
         } else {
+            // A button pressed twice: the first press has used
+            // the link by now, and left its message
+            if ($request->isMethod('POST')) {
+                session()->reflash();
+
+                return redirect()->route('login_users');
+            }
+
             abort(404);
         }
     }

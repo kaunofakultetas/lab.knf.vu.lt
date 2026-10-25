@@ -550,11 +550,12 @@ final class PartnersTest extends TestCase
     // test_lab_admins_cannot_touch_partners
     // -----------------------------------------------------------
     //
-    // Every partner route sends a lab admin back with the
-    // permissions error, checked after each request, and
-    // nothing changes. Each form is one the route would accept
-    // from a main admin, so a refusal can only come from the
-    // permissions check.
+    // Every partner route refuses a lab admin with the
+    // permissions error, checked after each request — the
+    // dialog in its modal, the forms back on the page they
+    // were sent from — and nothing changes. Each form is one
+    // the route would accept from a main admin, so a refusal
+    // can only come from the permissions check.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -565,8 +566,7 @@ final class PartnersTest extends TestCase
         $partner = $this->makePartner(['name' => 'CERT-LT']);
         $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
 
-        $this->get("/control-panel/dialog/partners/edit/{$partner->id}")->assertRedirect('/control-panel/dashboard');
-        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->assertDialogRefused($this->get("/control-panel/dialog/partners/edit/{$partner->id}"), "You don't have permissions to do this!");
         $this->post('/control-panel/dialog/partners/store', ['name' => 'X', 'picture' => $this->upload('logo.png', self::png())])
             ->assertRedirect('/control-panel/dashboard');
         $this->assertErrorFlashed("You don't have permissions to do this!");

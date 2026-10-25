@@ -36,6 +36,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Http\Request;
 use App\Models\User;
 use App\Models\Emails;
+use App\Rules\MailableAddress;
 use Mailjet\Client;
 use Mailjet\Resources;
 
@@ -186,9 +187,10 @@ class EmailsController extends BaseController
     //
     // Adds a template, not sent yet, and goes to the list with
     // "Created!"; a form missing the name, subject or content,
-    // or with a name or subject longer than the 255
-    // characters their columns hold, goes back with the
-    // errors and what was typed.
+    // with a field that is not text — a list, which only a
+    // hand-made request sends — or with a name or subject
+    // longer than the 255 characters their columns hold, goes
+    // back with the errors and what was typed.
     //
     // Used by:
     //   - the template form, for a new template
@@ -197,9 +199,9 @@ class EmailsController extends BaseController
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|max:255',
-            'content' => 'required',
-            'subject' => 'required|max:255'
+            'name' => 'required|string|max:255',
+            'content' => 'required|string',
+            'subject' => 'required|string|max:255'
         ]);
 
         if ($validator->fails()) {
@@ -259,11 +261,12 @@ class EmailsController extends BaseController
     // POST /control-panel/emails/update
     //
     // Changes the template with the posted uid to the name,
-    // content and subject — all three required and held to
-    // the lengths of store, a refused form going back with
-    // the errors and what was typed — then goes to the list
-    // with "Updated!". A template another admin deleted in
-    // the meantime goes to the list with "No email!" instead.
+    // content and subject — all three required, text, and held
+    // to the lengths of store, the uid a whole number, a
+    // refused form going back with the errors and what was
+    // typed — then goes to the list with "Updated!". A
+    // template another admin deleted in the meantime goes to
+    // the list with "No email!" instead.
     //
     // Used by:
     //   - the template form, for an existing template
@@ -272,9 +275,10 @@ class EmailsController extends BaseController
     public function update(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|max:255',
-            'content' => 'required',
-            'subject' => 'required|max:255'
+            'uid' => 'required|integer',
+            'name' => 'required|string|max:255',
+            'content' => 'required|string',
+            'subject' => 'required|string|max:255'
         ]);
 
         if ($validator->fails()) {
@@ -363,10 +367,11 @@ class EmailsController extends BaseController
     // POST /control-panel/emails/sending_test/{email_id}
     //
     // Mails the template to the address typed in the dialog —
-    // which must be an e-mail address, or the form goes back
-    // with the error — then goes to the list with "Test email
-    // sent!". The template stays marked as not sent; an
-    // unknown template is a 404.
+    // which must be an e-mail address the mailer takes
+    // (MailableAddress), or the form goes back with the error
+    // — then goes to the list with "Test email sent!". The
+    // template stays marked as not sent; an unknown template
+    // is a 404.
     //
     // Used by:
     //   - the test dialog's form
@@ -375,7 +380,7 @@ class EmailsController extends BaseController
     public function sending_test(Request $request, $email_id)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email'
+            'email' => ['required', 'email', new MailableAddress]
         ]);
 
         if ($validator->fails()) {

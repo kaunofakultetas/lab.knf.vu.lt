@@ -13,6 +13,9 @@
 //  as no page used them; these tests keep them out, keep
 //  each .min copy equal to its bundle, and keep
 //  webpack.mix.js naming only sources the repository holds.
+//  They also keep Bootstrap to the one copy each script
+//  bundle carries, and the theme script's fix for the
+//  panel's "+" buttons in every copy of it.
 //
 //  Used by:
 //    - PHPUnit — the Unit suite (runTests.sh)
@@ -212,5 +215,64 @@ final class BundlesTest extends TestCase
             }
         }
         $this->assertFileDoesNotExist(self::path('public/assets/js/moment.min.js.map'));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_each_page_loads_bootstrap_once
+    // -----------------------------------------------------------
+    //
+    // Each script bundle carries one Bootstrap, and no layout
+    // loads another beside it: two versions on one page would
+    // each handle every click of a Bootstrap widget, the later
+    // one taking over the jQuery plugins.
+    //
+    // Used by:
+    //   - PHPUnit — the Unit suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_each_page_loads_bootstrap_once(): void
+    {
+        foreach (['public/assets/js/app.min.js', 'public/assets/js/app_admin.min.js'] as $bundle) {
+            $this->assertSame(1, substr_count(file_get_contents(self::path($bundle)), 'Bootstrap v'), "{$bundle} carries Bootstrap other than once");
+        }
+        foreach (glob(self::path('resources/views/*/layouts/*.blade.php')) as $layout) {
+            $this->assertDoesNotMatchRegularExpression('/<script[^>]*bootstrap/i', file_get_contents($layout), basename(dirname($layout, 2)) . '/layouts/' . basename($layout) . ' loads a Bootstrap of its own');
+        }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_theme_script_skips_toggles_without_a_menu
+    // -----------------------------------------------------------
+    //
+    // The theme's front.js, in its source and in every bundle,
+    // keeps to the card toggles a menu follows: the panel's
+    // "+" buttons wear the toggle class without a menu, and
+    // the script's click handler, reaching for the missing
+    // menu, failed on every click of those pages.
+    //
+    // Used by:
+    //   - PHPUnit — the Unit suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_theme_script_skips_toggles_without_a_menu(): void
+    {
+        $fixed = "Array.from(document.querySelectorAll('.card-close .dropdown-toggle')).filter((el) => el.nextElementSibling)";
+        $old = "= document.querySelectorAll('.card-close .dropdown-toggle');";
+
+        foreach (['resources/views/assets/js/front.js', 'public/assets/js/app.js', 'public/assets/js/app.min.js', 'public/assets/js/app_admin.js', 'public/assets/js/app_admin.min.js'] as $script) {
+            $content = file_get_contents(self::path($script));
+            $this->assertSame(1, substr_count($content, $fixed), "{$script} lacks the fix");
+            $this->assertStringNotContainsString($old, $content, "{$script} keeps every toggle");
+        }
     }
 }

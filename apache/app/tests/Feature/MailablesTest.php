@@ -21,6 +21,7 @@ use App\Mail\SendMail;
 use App\Mail\SendNewPass;
 use App\Mail\SendRemindLink;
 use App\Mail\UserVerifyMail;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 
@@ -144,5 +145,91 @@ final class MailablesTest extends TestCase
 
         $mail->assertHasSubject('The spring challenges are open');
         $this->assertSame('<p>New <b>challenges</b>.</p>', $mail->render());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_mailer_never_sends_without_tls
+    // -----------------------------------------------------------
+    //
+    // The SMTP mailer requires TLS: on port 587 it refuses to
+    // send when the server offers no STARTTLS, so an attacker
+    // who strips the offer reads neither the Mailjet login nor
+    // any mail.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_mailer_never_sends_without_tls(): void
+    {
+        $transport = Mail::mailer('smtp')->getSymfonyTransport();
+
+        $this->assertTrue($transport->isTlsRequired());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_only_the_environment_lifts_the_tls_requirement
+    // -----------------------------------------------------------
+    //
+    // MAIL_REQUIRE_TLS set to false lifts the requirement, for
+    // a relay that offers no TLS at all, as the README says;
+    // without it TLS stays required. The mail settings are
+    // read afresh from config/mail.php for each case.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_only_the_environment_lifts_the_tls_requirement(): void
+    {
+        $_SERVER['MAIL_REQUIRE_TLS'] = 'false';
+        try {
+            $lifted = (require config_path('mail.php'))['mailers']['smtp']['require_tls'];
+        } finally {
+            unset($_SERVER['MAIL_REQUIRE_TLS']);
+        }
+
+        $this->assertFalse($lifted);
+        $this->assertTrue((require config_path('mail.php'))['mailers']['smtp']['require_tls']);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_mailer_speaks_tls_from_its_first_byte
+    // -----------------------------------------------------------
+    //
+    // The lab's mail goes to Mailjet on port 465, the .env's
+    // MAIL_PORT, where the connection is TLS from its first
+    // byte: on 587 the mailer would wait for STARTTLS, and
+    // someone on the way who makes the server's answer to
+    // EHLO fail has Symfony fall back to HELO and send the
+    // mail in clear, require_tls or not. The exit proxy passes
+    // Mailjet on 465 alone, so a change of port fails every
+    // mail too.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_mailer_speaks_tls_from_its_first_byte(): void
+    {
+        $transport = Mail::mailer('smtp')->getSymfonyTransport();
+
+        $this->assertSame('465', (string) config('mail.mailers.smtp.port'));
+        $this->assertTrue($transport->getStream()->isTLS());
     }
 }

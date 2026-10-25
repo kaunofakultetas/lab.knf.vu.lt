@@ -121,7 +121,7 @@ final class CsrfTest extends TestCase
         $guest = $this->postRoutes(fn (string $uri) => !Str::startsWith($uri, ['user/', 'control-panel/']));
         $player = $this->postRoutes(fn (string $uri) => Str::startsWith($uri, 'user/'));
         $admin = $this->postRoutes(fn (string $uri) => Str::startsWith($uri, 'control-panel/'));
-        $this->assertEqualsCanonicalizing(['/login', '/register', '/forgot-password', '/reset/1'], $guest);
+        $this->assertEqualsCanonicalizing(['/login', '/register', '/forgot-password', '/reset/1', '/verify/1'], $guest);
 
         foreach ($guest as $address) {
             $this->post($address)->assertStatus(419);

@@ -439,4 +439,33 @@ final class CategoriesTest extends TestCase
 
         $this->assertTrue(Categories::where('name', 'Hardware Hacking')->exists());
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_list_for_a_field_is_refused
+    // -----------------------------------------------------------
+    //
+    // A category form with a list for the name, or for the uid
+    // — only a hand-made request sends one — goes back with
+    // the error and changes nothing, rather than ending the
+    // save on a 500.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_list_for_a_field_is_refused(): void
+    {
+        $category = $this->makeCategory('Kept Name');
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/categories');
+
+        $this->post('/control-panel/dialog/category/store', ['name' => ['Listed']])->assertRedirect('/control-panel/categories')->assertSessionHasErrors('name');
+        $this->post('/control-panel/dialog/category/update', ['uid' => [$category->id], 'name' => 'Listed'])->assertRedirect('/control-panel/categories')->assertSessionHasErrors('uid');
+
+        $this->assertSame('Kept Name', $category->refresh()->name);
+    }
 }

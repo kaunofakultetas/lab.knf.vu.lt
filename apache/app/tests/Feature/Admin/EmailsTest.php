@@ -378,11 +378,12 @@ final class EmailsTest extends TestCase
     // test_lab_admins_cannot_touch_emails
     // -----------------------------------------------------------
     //
-    // Every mail route sends a lab admin back with the
-    // permissions error, checked after each request; nothing
-    // is mailed or changed. The forms are ones the routes
-    // would accept from a main admin, so a refusal can only
-    // come from the permissions check.
+    // Every mail route refuses a lab admin with the
+    // permissions error, checked after each request — the
+    // test-mail dialog in its modal, the rest sending the
+    // admin back — and nothing is mailed or changed. The forms
+    // are ones the routes would accept from a main admin, so a
+    // refusal can only come from the permissions check.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -393,13 +394,9 @@ final class EmailsTest extends TestCase
         $template = $this->makeTemplate();
         $this->signInAdmin($this->makeAdmin())->from('/control-panel/dashboard');
 
-        foreach ([
-            "/control-panel/emails/edit/{$template->id}",
-            "/control-panel/dialog/emails/send_test/{$template->id}",
-        ] as $page) {
-            $this->get($page)->assertRedirect('/control-panel/dashboard');
-            $this->assertErrorFlashed("You don't have permissions to do this!");
-        }
+        $this->get("/control-panel/emails/edit/{$template->id}")->assertRedirect('/control-panel/dashboard');
+        $this->assertErrorFlashed("You don't have permissions to do this!");
+        $this->assertDialogRefused($this->get("/control-panel/dialog/emails/send_test/{$template->id}"), "You don't have permissions to do this!");
         foreach ([
             "/control-panel/emails/send/{$template->id}"         => [],
             "/control-panel/emails/delete/{$template->id}"       => [],
@@ -489,8 +486,10 @@ final class EmailsTest extends TestCase
     // -----------------------------------------------------------
     //
     // The test-mail dialog's form is refused, with the error
-    // under the field, when the address is missing or is no
-    // address at all; nothing is mailed.
+    // under the field, when the address is missing, is no
+    // address at all, or is one the mailer refuses — a comment
+    // in the local part, which the RFC allows; nothing is
+    // mailed.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -503,6 +502,7 @@ final class EmailsTest extends TestCase
 
         $this->post("/control-panel/emails/sending_test/{$template->id}", [])->assertSessionHasErrors('email');
         $this->post("/control-panel/emails/sending_test/{$template->id}", ['email' => 'not-an-address'])->assertSessionHasErrors('email');
+        $this->post("/control-panel/emails/sending_test/{$template->id}", ['email' => 'me(test)@admins.test'])->assertSessionHasErrors('email');
 
         Mail::assertNothingSent();
     }
@@ -677,5 +677,35 @@ final class EmailsTest extends TestCase
         ]);
 
         $this->assertSame('Autumn', $template->refresh()->subject);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_list_for_a_field_is_refused
+    // -----------------------------------------------------------
+    //
+    // A template form with a list for a field, or for the uid
+    // of the template it edits — only a hand-made request
+    // sends one — goes back with the error and stores nothing,
+    // rather than ending the save on a 500.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_list_for_a_field_is_refused(): void
+    {
+        $template = $this->makeTemplate();
+        $this->signInAdmin($this->makeAdmin(true))->from('/control-panel/emails/create');
+
+        $this->post('/control-panel/emails/store', ['name' => 'Listed', 'subject' => ['Listed'], 'content' => '<p>x</p>'])->assertSessionHasErrors('subject');
+        $this->post('/control-panel/emails/update', ['uid' => [$template->id], 'name' => 'Listed', 'subject' => 'Listed', 'content' => '<p>x</p>'])->assertSessionHasErrors('uid');
+
+        $this->assertSame(1, Emails::count());
+        $this->assertNotSame('Listed', $template->refresh()->name);
     }
 }

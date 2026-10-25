@@ -29,6 +29,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use PHPUnit\Framework\Attributes\DataProvider;
+use Symfony\Component\Mailer\Exception\TransportException;
 use Tests\TestCase;
 
 
@@ -501,23 +502,56 @@ final class RegistrationTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_following_the_link_activates_the_account
+    // test_opening_the_link_changes_nothing
     // -----------------------------------------------------------
     //
-    // The verification link sets the account active, empties
-    // its token and sends the player to the login form with a
-    // message.
+    // Opening the verification link — which mail scanners do
+    // before the player — only shows a page whose button posts
+    // the activation to the same address: the account stays
+    // inactive, its token in place.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_following_the_link_activates_the_account(): void
+    public function test_opening_the_link_changes_nothing(): void
     {
         $player = $this->makePlayer(['status' => 0]);
         $token = $this->verificationLink($player);
 
-        $response = $this->get("/verify/{$token}");
+        $page = $this->get("/verify/{$token}");
+
+        $page->assertOk();
+        $page->assertSee('<form method="POST" action="https://lab.knf.vu.lt/verify/' . $token . '"', false);
+        $page->assertSee('value="Activate my account"', false);
+        $player->refresh();
+        $this->assertSame(0, $player->status);
+        $this->assertSame(hash('sha256', $token), $player->verify_token);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_button_activates_the_account
+    // -----------------------------------------------------------
+    //
+    // The button of the verification page sets the account
+    // active, empties its token and sends the player to the
+    // login form with a message.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_button_activates_the_account(): void
+    {
+        $player = $this->makePlayer(['status' => 0]);
+        $token = $this->verificationLink($player);
+
+        $response = $this->post("/verify/{$token}");
 
         $response->assertRedirect('/');
         $response->assertSessionHas('success', 'User verified! Now you can login.');
@@ -535,8 +569,10 @@ final class RegistrationTest extends TestCase
     // test_a_link_works_only_once
     // -----------------------------------------------------------
     //
-    // Once used, the emptied token matches no account, and the
-    // same link answers 404.
+    // Once used, the emptied token matches no account: the
+    // same link answers 404 when opened again, and its button
+    // pressed again goes to the login page, activating
+    // nothing.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -546,9 +582,71 @@ final class RegistrationTest extends TestCase
     {
         $token = $this->verificationLink($this->makePlayer(['status' => 0]));
 
-        $this->get("/verify/{$token}")->assertRedirect('/');
+        $this->post("/verify/{$token}")->assertRedirect('/');
 
         $this->get("/verify/{$token}")->assertNotFound();
+        $this->post("/verify/{$token}")->assertRedirect('/');
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_double_click_keeps_the_activation_message
+    // -----------------------------------------------------------
+    //
+    // A button pressed twice sends the link twice, and the
+    // second press finds it used by the first: it goes to the
+    // login page as the first did, keeping the message the
+    // first left for that page, rather than ending on a 404.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_double_click_keeps_the_activation_message(): void
+    {
+        $player = $this->makePlayer(['status' => 0]);
+        $token = $this->verificationLink($player);
+
+        $this->post("/verify/{$token}")->assertRedirect('/');
+        $second = $this->post("/verify/{$token}");
+
+        $second->assertRedirect('/');
+        $second->assertSessionHas('success', 'User verified! Now you can login.');
+        $this->assertSame(1, $player->refresh()->status);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_link_a_mail_scanner_opened_first_still_serves_the_player
+    // -----------------------------------------------------------
+    //
+    // A link a mail scanner opened before the player — such as
+    // Microsoft 365's Safe Links, as the link is clicked —
+    // still shows the player the button, and the button still
+    // activates the account.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_link_a_mail_scanner_opened_first_still_serves_the_player(): void
+    {
+        $player = $this->makePlayer(['status' => 0]);
+        $token = $this->verificationLink($player);
+
+        $this->get("/verify/{$token}")->assertOk();
+        $this->get("/verify/{$token}")->assertOk();
+        $this->post("/verify/{$token}")->assertRedirect('/');
+
+        $this->assertSame(1, $player->refresh()->status);
     }
 
 
@@ -638,8 +736,9 @@ final class RegistrationTest extends TestCase
     // -----------------------------------------------------------
     //
     // The whole way in: register, be refused at the login form
-    // while unverified — which mails a fresh link — follow the
-    // newest mailed link, sign in.
+    // while unverified — which mails no second link so soon,
+    // and says to use the one mailed — press the button of the
+    // mailed link, sign in.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -652,10 +751,11 @@ final class RegistrationTest extends TestCase
         $credentials = ['email' => 'jonas@players.test', 'password' => 'long-enough-1'];
 
         $this->post('/login', $credentials)->assertRedirect('/');
-        $this->assertErrorFlashed('Your account is not verified yet. We sent you a new verification link.');
+        $this->assertErrorFlashed('Your account is not verified yet. Use the verification link we mailed you.');
 
+        Mail::assertSent(UserVerifyMail::class, 1);
         $token = Mail::sent(UserVerifyMail::class)->last()->data['uid'];
-        $this->get("/verify/{$token}")->assertRedirect('/');
+        $this->post("/verify/{$token}")->assertRedirect('/');
         $this->post('/login', $credentials)->assertRedirect('/user/dashboard');
         $this->assertAuthenticated('users');
     }
@@ -696,9 +796,11 @@ final class RegistrationTest extends TestCase
     // test_a_verification_link_expires_after_a_day
     // -----------------------------------------------------------
     //
-    // A link opened 23 hours after it was mailed activates the
-    // account; one opened after the day answers 404 and leaves
-    // the account inactive.
+    // A link pressed 23 hours after it was mailed activates the
+    // account; one pressed after the day goes to the login
+    // page and leaves the account inactive. The test runs in
+    // UTC (inUtc), as a clock travelled to the night the
+    // clocks go back may read an hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -706,16 +808,17 @@ final class RegistrationTest extends TestCase
 
     public function test_a_verification_link_expires_after_a_day(): void
     {
+        $this->inUtc();
         $early = $this->makePlayer(['status' => 0]);
         $late = $this->makePlayer(['status' => 0]);
         $earlyLink = $this->verificationLink($early);
         $lateLink = $this->verificationLink($late);
 
         $this->travel(23)->hours();
-        $this->get("/verify/{$earlyLink}")->assertRedirect('/');
+        $this->post("/verify/{$earlyLink}")->assertRedirect('/');
 
         $this->travel(2)->hours();
-        $this->get("/verify/{$lateLink}")->assertNotFound();
+        $this->post("/verify/{$lateLink}")->assertRedirect('/');
 
         $this->assertSame(1, $early->refresh()->status);
         $this->assertSame(0, $late->refresh()->status);
@@ -732,7 +835,9 @@ final class RegistrationTest extends TestCase
     //
     // The stored hash covers the time the token ends with, so
     // an expired link whose time is moved on matches no
-    // account.
+    // account. The test runs in UTC (inUtc), as a clock
+    // travelled to the night the clocks go back may read an
+    // hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -740,6 +845,7 @@ final class RegistrationTest extends TestCase
 
     public function test_a_verification_link_with_a_changed_time_is_404(): void
     {
+        $this->inUtc();
         $player = $this->makePlayer(['status' => 0]);
         $link = $this->verificationLink($player);
         $this->travel(2)->days();
@@ -804,7 +910,7 @@ final class RegistrationTest extends TestCase
         $this->assertGuest('users');
         $fresh = Mail::sent(UserVerifyMail::class, fn (UserVerifyMail $mail) => $mail->hasTo($player->email))->last()->data['uid'];
         $this->get("/verify/{$old}")->assertNotFound();
-        $this->get("/verify/{$fresh}")->assertRedirect('/');
+        $this->post("/verify/{$fresh}")->assertRedirect('/');
         $this->assertSame(1, $player->refresh()->status);
     }
 
@@ -844,9 +950,9 @@ final class RegistrationTest extends TestCase
     // test_a_verification_link_ends_on_the_login_page
     // -----------------------------------------------------------
     //
-    // An opened verification link leads to the login page with
-    // its message, whatever page an earlier visit left asked for
-    // in the session.
+    // A pressed verification button leads to the login page
+    // with its message, whatever page an earlier visit left
+    // asked for in the session.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -858,7 +964,7 @@ final class RegistrationTest extends TestCase
         $token = $this->verificationLink($player);
 
         $this->withSession(['url.intended' => 'https://lab.knf.vu.lt/user/leaderboard'])
-            ->get("/verify/{$token}")
+            ->post("/verify/{$token}")
             ->assertRedirect('/')
             ->assertSessionHas('success', 'User verified! Now you can login.');
     }
@@ -961,5 +1067,280 @@ final class RegistrationTest extends TestCase
         $response->assertRedirect('/register');
         $this->assertSame('The username has already been taken.', session('errors')?->first('username'));
         $this->assertSame(1, User::where('username', 'Jonas')->count());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_signing_in_again_and_again_mails_one_link_a_quarter_hour
+    // -----------------------------------------------------------
+    //
+    // Signing in to an account never verified mails a fresh
+    // link, but no more than one every 15 minutes: three
+    // logins in a row mail one, saying so the first time and
+    // pointing to that mail after, and a login past the quarter
+    // hour mails the next — so repeated logins cannot flood an
+    // inbox in the lab's name. The test runs in UTC (inUtc),
+    // as a clock travelled to the night the clocks go back may
+    // read an hour off.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_signing_in_again_and_again_mails_one_link_a_quarter_hour(): void
+    {
+        $this->inUtc();
+        $player = $this->makePlayer(['status' => 0]);
+        $this->verificationLink($player);
+        $credentials = ['email' => $player->email, 'password' => self::PASSWORD];
+
+        $this->post('/login', $credentials);
+        $this->assertErrorFlashed('Your account is not verified yet. We sent you a new verification link.');
+        $this->post('/login', $credentials);
+        $this->post('/login', $credentials);
+        $this->assertErrorFlashed('Your account is not verified yet. Use the verification link we mailed you.');
+        Mail::assertSent(UserVerifyMail::class, 1);
+
+        $this->travel(16)->minutes();
+        $this->post('/login', $credentials);
+
+        Mail::assertSent(UserVerifyMail::class, 2);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_link_that_failed_to_go_out_holds_back_no_next_one
+    // -----------------------------------------------------------
+    //
+    // A verification mail the mail server refused ends the
+    // login on the error page, as before, but starts no
+    // quarter hour: the next login tries to mail a link again
+    // at once.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_link_that_failed_to_go_out_holds_back_no_next_one(): void
+    {
+        $player = $this->makePlayer(['status' => 0]);
+        $this->verificationLink($player);
+        $credentials = ['email' => $player->email, 'password' => self::PASSWORD];
+        Mail::shouldReceive('to')->twice()->andThrow(new TransportException('Connection to the mail server refused'));
+
+        $this->post('/login', $credentials)->assertServerError();
+        $this->post('/login', $credentials)->assertServerError();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_form_keeps_only_its_own_fields
+    // -----------------------------------------------------------
+    //
+    // A refused registration refills the username and e-mail
+    // alone, each only as text of at most 255 characters: no
+    // field a hand-made request adds, and no megabyte-long
+    // username, is kept in the session.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_form_keeps_only_its_own_fields(): void
+    {
+        $this->post('/register', ['username' => str_repeat('J', 1000000), 'email' => 'jonas@players.test', 'password' => 'short', 'password_confirmation' => 'short', 'padding' => str_repeat('x', 1000000)]);
+
+        $this->assertSame(['email' => 'jonas@players.test'], session()->getOldInput());
+        $this->assertLessThan(65536, strlen(serialize(session()->all())));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_form_refused_with_lists_for_fields_shows_again
+    // -----------------------------------------------------------
+    //
+    // A registration sent with lists for the username and the
+    // e-mail — only a hand-made request sends them — is
+    // refused, and the registration page shows again with both
+    // boxes empty, not a 500.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_form_refused_with_lists_for_fields_shows_again(): void
+    {
+        $this->from('/register')->post('/register', ['username' => ['Jonas'], 'email' => ['jonas@players.test'], 'password' => 'long-enough-1', 'password_confirmation' => 'long-enough-1']);
+
+        $page = $this->get('/register');
+
+        $page->assertOk();
+        $page->assertSee('name="username" type="text" value=""', false);
+        $page->assertSee('name="email" type="email" value=""', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_address_the_mailer_refuses_is_refused
+    // -----------------------------------------------------------
+    //
+    // An address the RFC allows but Symfony's mailer refuses
+    // to write to — a comment in the local part — is refused
+    // as no address, before any account is made, rather than
+    // making an account whose verification mail fails.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_an_address_the_mailer_refuses_is_refused(): void
+    {
+        $this->fakeRecaptcha('register', 0.9);
+
+        $response = $this->submitRegistration(['email' => 'jonas(work)@players.test']);
+
+        $response->assertRedirect('/register');
+        $response->assertSessionHasErrors(['email' => 'The email must be a valid email address.']);
+        $this->assertSame(0, User::where('email', 'jonas(work)@players.test')->count());
+        Mail::assertNothingSent();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_an_address_smtp_cannot_take_is_refused
+    // -----------------------------------------------------------
+    //
+    // Addresses the RFC allows and Symfony's Address takes, but
+    // the mail still cannot reach — a space before the @,
+    // which SMTP's grammar does not allow, a local part beyond
+    // ASCII, which needs a relay that announces SMTPUTF8, an
+    // address literal — are refused as no address, before any
+    // account is made, rather than making an account whose
+    // verification mail fails.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    #[DataProvider('addressesSmtpCannotTake')]
+    public function test_an_address_smtp_cannot_take_is_refused(string $email): void
+    {
+        $this->fakeRecaptcha('register', 0.9);
+
+        $response = $this->submitRegistration(['email' => $email]);
+
+        $response->assertRedirect('/register');
+        $response->assertSessionHasErrors(['email' => 'The email must be a valid email address.']);
+        $this->assertSame(0, User::where('username', 'Jonas')->count());
+        Mail::assertNothingSent();
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // addressesSmtpCannotTake
+    // -----------------------------------------------------------
+    //
+    // One address of each form the mailer's own check lets
+    // through but the RFC check without warnings, or the
+    // ASCII check, refuses.
+    //
+    // Used by:
+    //   - test_an_address_smtp_cannot_take_is_refused (above)
+    // -----------------------------------------------------------
+
+    public static function addressesSmtpCannotTake(): array
+    {
+        return [
+            'a space before the @'      => ['jonas @players.test'],
+            'a local part beyond ASCII' => ['žemyna@players.test'],
+            'an address literal'        => ['jonas@[127.0.0.1]'],
+        ];
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_confirm_password_label_belongs_to_its_own_box
+    // -----------------------------------------------------------
+    //
+    // The "Confirm Password" label points at the confirmation
+    // box: the theme lays each label over its box, where it is
+    // clicked, and a label pointing at the password box would
+    // type the confirmation into the password.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_confirm_password_label_belongs_to_its_own_box(): void
+    {
+        $html = $this->get('/register')->getContent();
+
+        preg_match('/<input[^>]*name="password_confirmation"[^>]*>/', $html, $box);
+        preg_match('/\bid="([^"]+)"/', $box[0] ?? '', $id);
+        preg_match('#<label[^>]*\bfor="([^"]+)"[^>]*>\s*Confirm Password\s*</label>#', $html, $label);
+
+        $this->assertNotEmpty($id);
+        $this->assertNotEmpty($label);
+        $this->assertSame($id[1], $label[1]);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_the_form_uses_each_id_once
+    // -----------------------------------------------------------
+    //
+    // No id appears twice in the registration form: the
+    // script that renames the username's label finds it by its
+    // id, and a second label with the same id is invalid HTML
+    // a browser may pick instead.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_the_form_uses_each_id_once(): void
+    {
+        preg_match('#<form[^>]*action="https://lab.knf.vu.lt/register".*?</form>#s', $this->get('/register')->getContent(), $form);
+        preg_match_all('/\bid="([^"]+)"/', $form[0] ?? '', $ids);
+
+        $this->assertNotEmpty($ids[1]);
+        $this->assertSame([], array_keys(array_filter(array_count_values($ids[1]), fn ($count) => $count > 1)));
+        $this->assertStringContainsString('id="user-type-label">Username</label>', $form[0]);
     }
 }

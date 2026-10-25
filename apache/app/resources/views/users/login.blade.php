@@ -18,28 +18,23 @@
                             
                 <div class="d-flex align-items-center px-4 px-lg-5 h-100"> 
                   <form method="POST" action="{{ route('login') }}" accept-charset="UTF-8" class="login-form py-5 w-100">@csrf
-                      @if(session('info'))
-                          <div class="alert alert-info" role="alert">
-                              {{ session('info') }}
-                          </div>
-                      @endif
                    
                     <div class="input-material-group mb-3"> 
                       <input class="input-material" id="login-username" required="required" autofocus="autofocus" maxlength="255" name="email" type="email" value="{{ old('email') }}">
                       
-                      <label class="label-material" for="login-username">Email</label>
                       @if ($errors->has('email'))
                           <span class="text-danger">{{ $errors->first('email') }}</span>
                       @endif
+                      <label class="label-material" for="login-username">Email</label>
                     </div>
                     <div class="input-material-group mb-4"> 
                     
                       <input class="input-material" required="required" id="login-password" maxlength="255" name="password" type="password" value="">
                       
-                      <label class="label-material" for="login-password">Password</label>
                       @if ($errors->has('password'))
                           <span class="text-danger">{{ $errors->first('password') }}</span>
                       @endif
+                      <label class="label-material" for="login-password">Password</label>
                     </div>
                     <input class="btn btn-primary mb-3" login="login" type="submit" value="Login"><br><a class="text-sm text-paleBlue" href="{{ env('APP_URL') }}/forgot-password">Forgot Password?</a><br><small class="text-gray-500">Do not have an account? </small><a class="text-sm text-paleBlue" href="{{ env('APP_URL') }}/register">Signup</a>
                    

@@ -9,9 +9,10 @@
         }
 
 
-        :587 {
-            route {
-                proxy in-v3.mailjet.com:587
+        :465 {
+            @mailjet tls sni in-v3.mailjet.com
+            route @mailjet {
+                proxy in-v3.mailjet.com:465
             }
         }
 

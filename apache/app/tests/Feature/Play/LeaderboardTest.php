@@ -547,4 +547,45 @@ final class LeaderboardTest extends TestCase
         $response->assertOk();
         $this->assertStringContainsString('<h3 class="h6 fw-normal text-dark">2 hours ago</h3>', $this->pageContent($response));
     }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_solve_worth_no_points_never_loses_a_tie
+    // -----------------------------------------------------------
+    //
+    // Players with the same points rank by who got there
+    // first: a challenge worth nothing — a rules or welcome
+    // task — solved after reaching the total does not drop
+    // the player behind one who reached it later. Players
+    // whose solves all gave nothing rank by the first of them,
+    // so a second such solve loses no tie at no points either.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_solve_worth_no_points_never_loses_a_tie(): void
+    {
+        $early = $this->makeSsoPlayer(['username' => 'EarlyBird', 'display_name' => 'EarlyBird']);
+        $late = $this->makeSsoPlayer(['username' => 'LateComer', 'display_name' => 'LateComer']);
+        $zeroFirst = $this->makeSsoPlayer(['username' => 'ZeroFirst', 'display_name' => 'ZeroFirst']);
+        $zeroLater = $this->makeSsoPlayer(['username' => 'ZeroLater', 'display_name' => 'ZeroLater']);
+        $ten = $this->makeChallenge(['points' => 10]);
+        $rules = $this->makeChallenge(['points' => 0]);
+        $welcome = $this->makeChallenge(['points' => 0]);
+        $this->recordSolve($early, $ten);
+        $this->recordSolve($late, $ten);
+        $this->recordSolve($early, $rules);
+        $this->recordSolve($zeroFirst, $rules);
+        $this->recordSolve($zeroLater, $rules);
+        $this->recordSolve($zeroFirst, $welcome);
+
+        $page = $this->pageContent($this->signIn($early)->get('/user/leaderboard'));
+
+        $this->assertMatchesRegularExpression('/EarlyBird.*LateComer.*ZeroFirst.*ZeroLater/s', $page);
+    }
 }

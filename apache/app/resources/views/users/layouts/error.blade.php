@@ -24,7 +24,6 @@
      
      
     <script src="/assets/js/app.min.js"></script> 
-    <script src="/static/js/bootstrap-5.0.2.min.js"></script>
    
    
    @if(session('success'))

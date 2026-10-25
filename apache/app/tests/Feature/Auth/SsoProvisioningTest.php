@@ -121,7 +121,9 @@ final class SsoProvisioningTest extends TestCase
     // -----------------------------------------------------------
     //
     // The login time and the client address are recorded on
-    // the first visit and on every later one.
+    // the first visit and on every later one. The test runs in
+    // UTC (inUtc), as a local time the app stored, read back
+    // the night the clocks go back, may be an hour off.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -129,6 +131,7 @@ final class SsoProvisioningTest extends TestCase
 
     public function test_every_visit_stamps_the_login(): void
     {
+        $this->inUtc();
         $player = $this->makeSsoPlayer(['last_login' => '2020-01-01 00:00:00']);
         $_SERVER['REMOTE_ADDR'] = '198.51.100.23';
 

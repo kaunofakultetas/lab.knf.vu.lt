@@ -22,10 +22,10 @@
                     <div class="input-material-group mb-3"> 
                       <input class="input-material" id="login-username" required="required" autofocus="autofocus" maxlength="255" name="email" type="email" value="{{ old('email') }}">
                       
-                      <label class="label-material" for="login-username">Email</label>
                       @if ($errors->has('email'))
                           <span class="text-danger">{{ $errors->first('email') }}</span>
                       @endif
+                      <label class="label-material" for="login-username">Email</label>
                     </div>
                     <div class="input-material-group mb-2"> 
                     

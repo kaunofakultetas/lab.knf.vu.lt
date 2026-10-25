@@ -140,9 +140,10 @@ class CategoriesController extends BaseController
     // POST /control-panel/dialog/category/store
     //
     // Adds a category with the name as sent, then goes back
-    // with "Created!"; a form without a name, or with one
-    // longer than the 255 characters its column holds, goes
-    // back with the error.
+    // with "Created!"; a form without a name, with one longer
+    // than the 255 characters its column holds, or with one
+    // that is not text — a list, which only a hand-made
+    // request sends — goes back with the error.
     //
     // Used by:
     //   - the category dialog, for a new category
@@ -151,7 +152,7 @@ class CategoriesController extends BaseController
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|max:255'
+            'name' => 'required|string|max:255'
         ]);
 
         if ($validator->fails()) {
@@ -205,8 +206,9 @@ class CategoriesController extends BaseController
     // POST /control-panel/dialog/category/update
     //
     // Renames the category with the posted uid, then goes back
-    // with "Updated!"; an empty name or one longer than 255
-    // characters goes back with the error, and a category
+    // with "Updated!"; an empty name, one longer than 255
+    // characters or one that is not text, or a uid that is no
+    // whole number, goes back with the error, and a category
     // another admin deleted in the meantime with "No
     // category!".
     //
@@ -217,7 +219,8 @@ class CategoriesController extends BaseController
     public function update(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|max:255'
+            'uid' => 'required|integer',
+            'name' => 'required|string|max:255'
         ]);
 
         if ($validator->fails()) {

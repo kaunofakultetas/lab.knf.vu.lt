@@ -49,6 +49,7 @@ use Illuminate\Pagination\Paginator;
 //   __construct        — registers the sharing as a
 //                        middleware of the controller
 //   listPage           — the page a paged list opens at
+//   containing         — a LIKE pattern for a search
 //   mayChangeGroup     — whether the admin may change a group
 //   mayChangeChallenge — whether the admin may change a
 //                        challenge
@@ -123,6 +124,32 @@ class BaseController extends Controller
     protected function listPage(int $rows, int $perPage = 50): int
     {
         return max(1, min(Paginator::resolveCurrentPage(), (int) ceil($rows / $perPage)));
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // containing
+    // -----------------------------------------------------------
+    //
+    // The LIKE pattern that finds the words searched for
+    // anywhere in a column, as typed: the backslash, % and _
+    // in them are escaped, as LIKE would read % as any text
+    // and _ as any one character — a search for john_doe
+    // would list johnxdoe too, and one for % everything.
+    // MySQL's LIKE escapes with a backslash by default.
+    //
+    // Used by:
+    //   - the searches of ChallengesController::index and
+    //     UsersController::index
+    // -----------------------------------------------------------
+
+    protected function containing(string $words): string
+    {
+        return '%' . addcslashes($words, '\\%_') . '%';
     }
 
 

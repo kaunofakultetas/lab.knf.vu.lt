@@ -131,14 +131,15 @@ final class AccessTest extends TestCase
     // test_a_main_admin_opens_the_main_only_pages
     // -----------------------------------------------------------
     //
-    // Every page behind the perms middleware opens for a main
-    // admin.
+    // Every page and dialog behind the perms middleware opens
+    // for a main admin.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
     // -----------------------------------------------------------
 
     #[DataProvider('mainOnlyPages')]
+    #[DataProvider('mainOnlyDialogs')]
     public function test_a_main_admin_opens_the_main_only_pages(string $page): void
     {
         $this->signInAdmin($this->makeAdmin(true));
@@ -155,8 +156,9 @@ final class AccessTest extends TestCase
     // test_a_lab_admin_is_sent_back_from_the_main_only_pages
     // -----------------------------------------------------------
     //
-    // The same pages send a lab admin back to the page it came
-    // from with the permissions error.
+    // The same pages send a lab admin to the dashboard with
+    // the permissions error, not back to the page they were
+    // opened from, here the challenge list.
     //
     // Used by:
     //   - PHPUnit — the Feature suite (runTests.sh)
@@ -167,9 +169,39 @@ final class AccessTest extends TestCase
     {
         $this->signInAdmin($this->makeAdmin());
 
-        $this->from('/control-panel/dashboard')->get($page)->assertRedirect('/control-panel/dashboard');
+        $this->from('/control-panel/challenges')->get($page)->assertRedirect('/control-panel/dashboard');
 
         $this->assertErrorFlashed(self::REFUSAL);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_lab_admin_is_refused_inside_the_main_only_dialogs
+    // -----------------------------------------------------------
+    //
+    // The main-only dialogs answer a lab admin with the
+    // permissions error itself, which the panel shows in the
+    // modal of the page the dialog was opened from, here the
+    // challenge list: the request that loads a dialog would
+    // follow a redirect, and the whole page it led to would
+    // fill the modal.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    #[DataProvider('mainOnlyDialogs')]
+    public function test_a_lab_admin_is_refused_inside_the_main_only_dialogs(string $dialog): void
+    {
+        $this->signInAdmin($this->makeAdmin());
+
+        $response = $this->from('/control-panel/challenges')->get($dialog, ['X-Requested-With' => 'XMLHttpRequest']);
+
+        $this->assertDialogRefused($response, self::REFUSAL);
     }
 
 
@@ -193,15 +225,39 @@ final class AccessTest extends TestCase
     public static function mainOnlyPages(): array
     {
         return [
-            'categories'          => ['/control-panel/categories'],
+            'categories' => ['/control-panel/categories'],
+            'partners'   => ['/control-panel/partners'],
+            'settings'   => ['/control-panel/settings'],
+            'pages'      => ['/control-panel/pages'],
+            'new page'   => ['/control-panel/pages/create'],
+            'emails'     => ['/control-panel/emails'],
+            'new email'  => ['/control-panel/emails/create'],
+        ];
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // mainOnlyDialogs
+    // -----------------------------------------------------------
+    //
+    // The dialogs behind the perms middleware that open
+    // without naming a record.
+    //
+    // Used by:
+    //   - test_a_main_admin_opens_the_main_only_pages,
+    //     test_a_lab_admin_is_refused_inside_the_main_only_dialogs
+    //     (above)
+    // -----------------------------------------------------------
+
+    public static function mainOnlyDialogs(): array
+    {
+        return [
             'new category dialog' => ['/control-panel/dialog/category/new'],
-            'partners'            => ['/control-panel/partners'],
             'new partner dialog'  => ['/control-panel/dialog/partners/new'],
-            'settings'            => ['/control-panel/settings'],
-            'pages'               => ['/control-panel/pages'],
-            'new page'            => ['/control-panel/pages/create'],
-            'emails'              => ['/control-panel/emails'],
-            'new email'           => ['/control-panel/emails/create'],
         ];
     }
 
@@ -597,5 +653,35 @@ final class AccessTest extends TestCase
 
         $response->assertSee('class="pagination"', false);
         $response->assertSee('class="page-item', false);
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_refused_main_only_page_never_redirects_to_itself
+    // -----------------------------------------------------------
+    //
+    // A main-only page refused to a lab admin goes to the
+    // dashboard even when the browser came from that very page
+    // — as after an action on it, by an admin demoted while it
+    // was open — where going back would redirect to itself
+    // until the browser gave up; a refused form on such a page
+    // goes back to it, and from there to the dashboard.
+    //
+    // Used by:
+    //   - PHPUnit — the Feature suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_refused_main_only_page_never_redirects_to_itself(): void
+    {
+        $this->signInAdmin($this->makeAdmin());
+
+        $this->from('/control-panel/settings')->get('/control-panel/settings')->assertRedirect('/control-panel/dashboard');
+        $this->from('/control-panel/settings')->post('/control-panel/settings/reg_open', ['reg_open' => '1'])->assertRedirect('/control-panel/settings');
+
+        $this->assertErrorFlashed(self::REFUSAL);
     }
 }

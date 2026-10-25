@@ -1774,7 +1774,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // ------------------------------------------------------- //
     // Card Close dropdown
     // ------------------------------------------------------ //
-    const cardSettingsToggle = document.querySelectorAll('.card-close .dropdown-toggle');
+    // Only the toggles a menu follows: the panel's "+" buttons wear the
+    // class without one, and every click would fail on the missing menu
+    const cardSettingsToggle = Array.from(document.querySelectorAll('.card-close .dropdown-toggle')).filter((el) => el.nextElementSibling);
     cardSettingsToggle.forEach((el) => {
         el.addEventListener('click', () => {
             if (el.classList.contains('show')) {

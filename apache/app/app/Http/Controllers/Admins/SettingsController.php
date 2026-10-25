@@ -25,6 +25,7 @@ namespace App\Http\Controllers\Admins;
 use Illuminate\Support\Facades\Auth;
 use App\Http\Controllers\Admins\BaseController;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use App\Models\Settings;
 use App\Models\Admin;
 use Illuminate\Http\Request;
@@ -109,9 +110,12 @@ class SettingsController extends BaseController
     //
     // POST /control-panel/settings/reg_open
     //
-    // Stores the registration switch as sent — '1' opens the
-    // registration, anything else closes it — then goes back
-    // with "Updated!".
+    // Stores the registration switch as the form's checkbox
+    // sends it — '1', which opens the registration, or
+    // nothing, which closes it, as does a '0' — then goes back
+    // with "Updated!". Any other value, a list among them,
+    // which only a hand-made request sends, goes back with the
+    // error and changes nothing.
     //
     // Used by:
     //   - the registration form of admins/settings.blade.php
@@ -119,6 +123,14 @@ class SettingsController extends BaseController
 
     public function reg_open(Request $req)
     {
+        $validator = Validator::make($req->all(), [
+            'reg_open' => 'nullable|in:0,1'
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator);
+        }
+
         Settings::where(['id' => 2])->update(['val1'=>$req->input('reg_open')]);
 
         session()->flash('success', 'Updated!');

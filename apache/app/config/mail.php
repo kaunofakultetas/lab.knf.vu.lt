@@ -30,16 +30,24 @@ return [
     'default' => env('MAIL_MAILER', 'smtp'),
 
     // The mailers. smtp is the one in use: its host and port
-    // from the .env, its login the Mailjet API key and secret
-    // the .env refers to; the .env's encryption is a setting
-    // Laravel 13 no longer reads. mailjet names no transport,
-    // so no mailer can use it — EmailsController builds its
-    // own Mailjet API client for the list sync. The rest are
-    // Laravel's stock mailers, unused. Known bug LAB-90 (low):
-    // on port 587 Symfony's mailer turns to TLS only if the
-    // server offers STARTTLS, so an attacker on the way who
-    // strips the offer reads the Mailjet login and every mail
-    // in clear. Fix: 'require_tls' => true on smtp.
+    // from the .env — Mailjet on 465, where the mailer speaks
+    // TLS from the first byte — its login the Mailjet API key
+    // and secret the .env refers to; the .env's encryption is
+    // a setting Laravel 13 no longer reads. On 587 the mailer
+    // would start TLS with STARTTLS, and require_tls makes it
+    // refuse to send when the server offers none, so an
+    // attacker on the way who strips the offer gets no login
+    // and no mail in clear — but one who makes the server's
+    // EHLO fail still gets the mail, not the login, as Symfony
+    // then falls back to HELO and checks nothing; 465 leaves
+    // no such gap, and the exit proxy lets the lab reach
+    // Mailjet on no other port. MAIL_REQUIRE_TLS set to false
+    // lifts the requirement, for a relay that offers no TLS at
+    // all, which would fail every mail otherwise. mailjet
+    // names no transport, so no mailer can use it —
+    // EmailsController builds its own Mailjet API client for
+    // the list sync. The rest are Laravel's stock mailers,
+    // unused.
     'mailers' => [
         'smtp' => [
             'transport' => 'smtp',
@@ -50,6 +58,7 @@ return [
             'password' => env('MAIL_PASSWORD'),
             'timeout' => null,
             'local_domain' => env('MAIL_EHLO_DOMAIN'),
+            'require_tls' => env('MAIL_REQUIRE_TLS', true),
         ],
 
         'mailjet' => [

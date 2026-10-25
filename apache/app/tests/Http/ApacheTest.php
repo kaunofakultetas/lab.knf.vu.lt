@@ -15,11 +15,11 @@
 //  that uploads are served from /upload and no PHP there
 //  ever runs, that a forged client address is ignored, that
 //  no answer names the server's versions, that PHP takes no
-//  arguments from a query string, and that CSRF is enforced
-//  outside PHPUnit. Two known defects of the image are pinned
-//  here too: LAB-71, PHP running in the challenge-file
-//  folder, and LAB-91, PHP printing its diagnostics outside
-//  Laravel.
+//  arguments from a query string and prints no diagnostics
+//  into a page, that no PHP in the challenge-file folder ever
+//  runs while its files are still handed out, that no page
+//  among them opens as one of the lab's, and that CSRF is
+//  enforced outside PHPUnit.
 //
 //  Used by:
 //    - PHPUnit — the Http suite (runTests.sh)
@@ -30,7 +30,6 @@ namespace Tests\Http;
 
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
-use Tests\Support\KnownDefects;
 use Tests\TestCase;
 
 
@@ -61,10 +60,6 @@ use Tests\TestCase;
 
 final class ApacheTest extends TestCase
 {
-
-    // assertDefectStillOpen, which reports a test incomplete
-    // while its defect is open
-    use KnownDefects;
 
     // The address the vhost listens on, from ports.conf
     private const SERVER = 'http://127.0.0.1:8080';
@@ -170,7 +165,9 @@ final class ApacheTest extends TestCase
     // removal.
     //
     // Used by:
-    //   - test_lab_71_php_in_the_challenge_file_folder_never_runs
+    //   - test_php_in_the_challenge_file_folder_never_runs,
+    //     test_challenge_files_are_served_as_files,
+    //     test_a_challenge_page_is_handed_out_never_opened
     // -----------------------------------------------------------
 
     private function plantDownload(string $name, string $content): void
@@ -646,47 +643,44 @@ final class ApacheTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_lab_71_php_in_the_challenge_file_folder_never_runs
+    // test_php_in_the_challenge_file_folder_never_runs
     // -----------------------------------------------------------
     //
-    // Known bug LAB-71 (medium): /downloads, the challenge
-    // files the admins copy into _DATA/apache/downloads, which
-    // docker-compose.yml mounts at public/downloads, is served
-    // like the rest of public/ — the PHP engine on, .htaccess
-    // files obeyed (AllowOverride All) — while the lockdown of
-    // 000-default.conf covers the upload folder alone. A
-    // challenge whose file is a PHP script — the source of a
-    // web challenge, handed out to be read — runs when a player
-    // opens its link, as the app's user and with the app's
-    // environment, the database password and APP_KEY among
-    // it, instead of being downloaded. Here PHP scripts are put
-    // into the folder, and one beside an .htaccess that turns
-    // PHP back on. Fix: the upload folder's lockdown for
-    // public/downloads too, with AllowOverride None.
+    // A script among the challenge files — a web challenge's
+    // source, copied into _DATA/apache/downloads, which the
+    // live container mounts at public/downloads — is never run
+    // as the app, whose environment holds the database
+    // password and APP_KEY: .php, .phtml and .phar files under
+    // /downloads answer 403, the PHP engine is off there, and
+    // an .htaccess in the folder is not read, so none can
+    // switch PHP back on. The .htaccess planted here would
+    // have a text file run as PHP, which the denied script
+    // names could not show: the file comes back as its text.
     //
     // Used by:
     //   - PHPUnit — the Http suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_lab_71_php_in_the_challenge_file_folder_never_runs(): void
+    public function test_php_in_the_challenge_file_folder_never_runs(): void
     {
         $script = '<?php echo "EXECUTED-" . (6 * 7);';
         foreach (['shell.php', 'shell.phtml', 'shell.phar'] as $name) {
             $this->plantDownload($name, $script);
         }
-        $this->plantDownload('switched-on/.htaccess', "php_flag engine on\n");
+        $this->plantDownload('switched-on/.htaccess', "php_flag engine on\nAddHandler application/x-httpd-php .txt\n");
         $this->plantDownload('switched-on/shell.php', $script);
+        $this->plantDownload('switched-on/shell.txt', $script);
 
-        $bodies = [];
         foreach (['shell.php', 'shell.phtml', 'shell.phar', 'switched-on/shell.php'] as $name) {
-            $bodies[$name] = $this->fetch('GET', "/downloads/{$name}")->body();
-        }
+            $response = $this->fetch('GET', "/downloads/{$name}");
 
-        $this->assertDefectStillOpen('LAB-71', function () use ($bodies) {
-            foreach ($bodies as $name => $body) {
-                $this->assertStringNotContainsString('EXECUTED-42', $body, "/downloads/{$name} was executed");
-            }
-        });
+            $this->assertSame(403, $response->status(), "/downloads/{$name} was answered {$response->status()}");
+            $this->assertStringNotContainsString('EXECUTED-42', $response->body(), "/downloads/{$name} was executed");
+        }
+        $text = $this->fetch('GET', '/downloads/switched-on/shell.txt');
+        $this->assertSame(200, $text->status());
+        $this->assertStringStartsWith('text/plain', $text->header('Content-Type'));
+        $this->assertSame($script, $text->body(), 'The .htaccess under /downloads was read');
     }
 
 
@@ -695,36 +689,103 @@ final class ApacheTest extends TestCase
 
 
     // -----------------------------------------------------------
-    // test_lab_91_php_prints_no_diagnostics_outside_laravel
+    // test_challenge_files_are_served_as_files
     // -----------------------------------------------------------
     //
-    // Known bug LAB-91 (low): the image sets no display_errors,
-    // and PHP without a php.ini prints its warnings into the
-    // page. Laravel switches that off for its own pages, but
-    // SimpleSAMLphp's under /simplesaml are not Laravel's, and
-    // its error handler leaves warnings to PHP: a malformed
-    // SAML message, such as a SAMLRequest that does not
-    // inflate, prints the warning, with the server's file
-    // paths, above SimpleSAMLphp's error page. The image's PHP
-    // settings are read here, as for register_argc_argv, the
-    // later file winning as in PHP. Fix: display_errors = Off
-    // in an ini file of the Dockerfile; PHP still logs the
-    // warnings to Apache's error log.
+    // The lockdown of the challenge-file folder leaves its
+    // files alone: a file there is handed out as it is, with
+    // its type, and an address naming no file there still
+    // reaches the app, whose 404 page answers it.
     //
     // Used by:
     //   - PHPUnit — the Http suite (runTests.sh)
     // -----------------------------------------------------------
 
-    public function test_lab_91_php_prints_no_diagnostics_outside_laravel(): void
+    public function test_challenge_files_are_served_as_files(): void
+    {
+        // An empty zip archive: its end record alone
+        $zip = "PK\x05\x06" . str_repeat("\x00", 18);
+        $this->plantDownload('task.zip', $zip);
+
+        $served = $this->fetch('GET', '/downloads/task.zip');
+        $missing = $this->fetch('GET', '/downloads/missing.zip');
+
+        $this->assertSame(200, $served->status());
+        $this->assertSame('application/zip', $served->header('Content-Type'));
+        $this->assertSame($zip, $served->body());
+        $this->assertSame(404, $missing->status());
+        $this->assertStringContainsString('Page not found', $missing->body());
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_a_challenge_page_is_handed_out_never_opened
+    // -----------------------------------------------------------
+    //
+    // A page among the challenge files — HTML, or an SVG
+    // image, which can carry scripts as well — goes out as a
+    // file to save, application/octet-stream, so it never
+    // opens as a page of the lab's own site, where its
+    // scripts would run with a signed-in player's session.
+    // Its bytes are unchanged, and a name in capitals or with
+    // a further extension after the page's is caught too.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_a_challenge_page_is_handed_out_never_opened(): void
+    {
+        $page = '<!DOCTYPE html><title>Sign in</title><script>document.title = "ran"</script>';
+        $image = '<svg xmlns="http://www.w3.org/2000/svg"><script>document.title = "ran"</script></svg>';
+        $files = ['phish.html' => $page, 'PHISH.HTM' => $page, 'phish.html.bak' => $page, 'logo.svg' => $image];
+        foreach ($files as $name => $content) {
+            $this->plantDownload($name, $content);
+        }
+
+        foreach ($files as $name => $content) {
+            $response = $this->fetch('GET', "/downloads/{$name}");
+
+            $this->assertSame(200, $response->status(), $name);
+            $this->assertSame('application/octet-stream', $response->header('Content-Type'), $name);
+            $this->assertSame($content, $response->body(), $name);
+        }
+    }
+
+
+
+
+
+
+    // -----------------------------------------------------------
+    // test_php_prints_no_diagnostics_outside_laravel
+    // -----------------------------------------------------------
+    //
+    // The image's PHP settings switch display_errors off.
+    // Laravel does so for its own pages, but SimpleSAMLphp's
+    // under /simplesaml are not Laravel's, and its error
+    // handler leaves warnings to PHP, which without a php.ini
+    // prints them — the server's file paths among them — into
+    // the page; PHP still logs them to Apache's error log. The
+    // settings files are read here, as for register_argc_argv,
+    // the later file winning as in PHP.
+    //
+    // Used by:
+    //   - PHPUnit — the Http suite (runTests.sh)
+    // -----------------------------------------------------------
+
+    public function test_php_prints_no_diagnostics_outside_laravel(): void
     {
         $settings = [];
         foreach (array_filter(array_map('trim', explode(',', (string) php_ini_scanned_files()))) as $file) {
             $settings = array_merge($settings, parse_ini_file($file));
         }
 
-        $this->assertDefectStillOpen('LAB-91', function () use ($settings) {
-            $this->assertArrayHasKey('display_errors', $settings, "the image leaves display_errors at PHP's own default, on");
-            $this->assertContains($settings['display_errors'], ['', '0'], 'the image switches display_errors on');
-        });
+        $this->assertArrayHasKey('display_errors', $settings);
+        $this->assertContains($settings['display_errors'], ['', '0']);
     }
 }

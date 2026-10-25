@@ -226,22 +226,18 @@ class ChallengesController extends BaseController
     // The users.challenge view: the challenge — its content
     // printed as HTML, a lab admin's cleaned of scripts when
     // it was saved — its partner, file links and votes. An
-    // unknown challenge goes back to the dashboard with
-    // "Challenge doesn't exists!", an unknown group back with
-    // "Error!". A hidden challenge — one kept for groups —
+    // unknown challenge goes to the dashboard with "Challenge
+    // doesn't exists!", an unknown group — one deleted while
+    // the page was open, say — to the dashboard with "Error!",
+    // never back: back is the page itself after an answer
+    // sent from it, which would redirect to itself for ever.
+    // A hidden challenge — one kept for groups —
     // answers as an unknown one, whatever group the address
     // names, unless the player is a member of a group it is
     // placed in (hiddenFromPlayer). The validate.ifsolved
     // middleware has sent solved ones to the dashboard
     // already. A challenge whose partner was deleted shows
     // without the partner card.
-    //
-    // Known bug LAB-77 (low): an unknown group goes back(),
-    // which for a page sent from itself — an answer posted
-    // after its group was deleted — is that page again, so it
-    // redirects to itself until the browser gives up;
-    // submit_answer the same. Fix: send an unknown group to
-    // the dashboard.
     //
     // Used by:
     //   - the challenge cards of the dashboard and of a
@@ -260,7 +256,7 @@ class ChallengesController extends BaseController
 
         if($public_group_id != NULL){
             if(Groups::groupExists($public_group_id) == false){
-                return back()->withErrors(['Error!']);
+                return redirect(route('user_dashboard'))->withErrors(['Error!']);
             }
         }
 
@@ -322,7 +318,9 @@ class ChallengesController extends BaseController
     // group's page, but to the dashboard when the player is
     // not in the group (memberOf) — a link a member shared, or
     // a membership removed while the page was open — as the
-    // group's page would answer 404.
+    // group's page would answer 404. An answer sent through a
+    // group that no longer exists goes to the dashboard, as in
+    // show.
     //
     // By design answers have no rate limit.
     //
@@ -345,7 +343,7 @@ class ChallengesController extends BaseController
 
         if($public_group_id != NULL){
             if(Groups::groupExists($public_group_id) == false){
-                return back()->withErrors(['Error!']);
+                return redirect(route('user_dashboard'))->withErrors(['Error!']);
             }
         }
 
@@ -518,17 +516,16 @@ class ChallengesController extends BaseController
     //
     // POST /user/feedback
     //
-    // Stores the feedback text as given, then goes back with
-    // "Thank you for your feedback!". The text may be empty;
-    // a field that is not text — only a hand-made request
-    // sends one — goes back with the error and stores
-    // nothing. The text is read as the rule reads it, the
-    // form's body before the address, so the text stored is
-    // always the one checked.
-    //
-    // Known bug LAB-75 (low): the text has no length limit, so
-    // a player may store up to PHP's 8 MB a message, again and
-    // again. Fix: a limit of a few thousand characters.
+    // Stores the feedback text, its line breaks as \n, then
+    // goes back with "Thank you for your feedback!". The text
+    // may be empty and is at most 5000 characters long, a line
+    // break counting one, as the box counts it, though the
+    // form sends two, so no player can fill the database with
+    // messages of PHP's 8 MB; a longer one, or a field that is
+    // not text — only a hand-made request sends one — goes
+    // back with the error and stores nothing. The text is read
+    // as the rule reads it, the form's body before the
+    // address, so the text stored is always the one checked.
     //
     // Used by:
     //   - the form of the feedback dialog
@@ -536,8 +533,15 @@ class ChallengesController extends BaseController
 
     public function feedback_save(Request $req)
     {
-        $validator = Validator::make($req->all(), [
-            'feedback' => 'nullable|string'
+        // The box counts a line break as one character, as the
+        // limit should, but the form sends it as \r\n
+        $feedback = $req->input('feedback');
+        if (is_string($feedback)) {
+            $feedback = str_replace("\r\n", "\n", $feedback);
+        }
+
+        $validator = Validator::make(['feedback' => $feedback], [
+            'feedback' => 'nullable|string|max:5000'
         ]);
 
         if ($validator->fails()) {
@@ -546,7 +550,7 @@ class ChallengesController extends BaseController
 
         Feedback::create([
             'user_id'=>Auth::guard('users')->id(),
-            'feedback'=>$req->input('feedback'),
+            'feedback'=>$feedback,
             'created'=>date("Y-m-d H:i:s")
         ]);
 
